@@ -1,9 +1,9 @@
-import { getWordBoundaries, getTextPosition } from '/static/js/utils.js';
+import { getWordBoundaries } from './utils.js';
+import { fetchSuggestions } from './translit.js';
+import { getDocuments, saveDocument, deleteDocument, previewText } from './store.js';
 
 const input = document.getElementById('hinglish-input');
 const suggestionsBox = document.getElementById('suggestions');
-let prefetchCache = {};
-let lastTranslation = '';
 
 const STORAGE_KEY = 'biharPolice_autosave';
 
@@ -122,24 +122,6 @@ document.addEventListener('click', function (e) {
         suggestionsBox.style.display = 'none';
     }
 });
-
-async function fetchSuggestions(word) {
-    if (!word.trim()) return [];
-    if (prefetchCache[word]) return prefetchCache[word];
-    try {
-        const res = await fetch('/api/transliterate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ word })
-        });
-        const data = await res.json();
-        prefetchCache[word] = data.suggestions;
-        return data.suggestions;
-    } catch (error) {
-        console.error('Error fetching suggestions:', error);
-        return [];
-    }
-}
 
 function showSuggestions(suggestions, wordStart, wordEnd, targetEl = input) {
     suggestionsBox.innerHTML = '';
@@ -291,15 +273,9 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         try {
-            const saveRoute = type === 'letter' ? '/api/save_letter' : '/api/save_diary';
-            const resp = await fetch(saveRoute, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ filename, content })
-            });
-            if (!resp.ok) throw new Error(`Server error ${resp.status}`);
+            await saveDocument(type, filename, content);
             showNotification('Document saved!');
-            await loadHistoryFromServer();
+            await loadHistory();
         } catch (err) {
             alert('Failed to save document: ' + err);
         }
@@ -340,8 +316,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             // Sort docs in group by created_at descending (latest first)
             groups[dateKey].sort((a, b) => b.date - a.date).forEach(doc => {
-                const contentStr = typeof doc.content === 'string' ? doc.content : Object.values(doc.content || {}).join(' ');
-                const firstLine = contentStr.split('\n')[0].slice(0, 40);
+                const firstLine = previewText(doc);
                 const created = new Date(doc.created_at || doc.date || Date.now());
                 const updated = doc.updated_at ? new Date(doc.updated_at) : created;
                 const createdStr = created.toLocaleString([], { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -352,10 +327,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 item.innerHTML = `
                     <i class="fas fa-file-alt"></i>
                     <div class="history-item-details">
-                        <span class="history-item-name">${doc.filename}</span>
+                        <span class="history-item-name">${escapeHtml(doc.filename)}</span>
                         <span class="history-item-time">Created: ${createdStr}</span>
                         <span class="history-item-time">Last update: ${updatedStr}</span>
-                        <span class="history-item-preview">${firstLine}</span>
+                        <span class="history-item-preview">${escapeHtml(firstLine)}</span>
                     </div>
                     <div class="history-item-actions">
                         <button class="edit-btn" title="Edit"><i class="fas fa-edit"></i></button>
@@ -363,8 +338,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     </div>
                 `;
 
-                // Load document on click (history item)
-                item.querySelector('.history-item-details').onclick = () => {
+                function loadDoc() {
                     filenameInput.value = doc.filename;
                     if (doc.type === 'diary') {
                         document.querySelector('.editor-letter').style.display = 'none';
@@ -378,39 +352,21 @@ document.addEventListener('DOMContentLoaded', function () {
                         input.value = doc.content;
                         input.focus();
                     }
-                };
+                }
 
-                // Edit button
+                item.querySelector('.history-item-details').onclick = loadDoc;
                 item.querySelector('.edit-btn').onclick = (e) => {
                     e.stopPropagation();
-                    filenameInput.value = doc.filename;
-                    if (doc.type === 'diary') {
-                        document.querySelector('.editor-letter').style.display = 'none';
-                        document.querySelector('.editor-diary').style.display = '';
-                        document.querySelector('.template-filter .filter-text').textContent = 'Diary';
-                        setDiaryContent(doc.content);
-                    } else {
-                        document.querySelector('.editor-letter').style.display = '';
-                        document.querySelector('.editor-diary').style.display = 'none';
-                        document.querySelector('.template-filter .filter-text').textContent = 'Letter';
-                        input.value = doc.content;
-                        input.focus();
-                    }
+                    loadDoc();
                 };
 
-                // Delete button
                 item.querySelector('.delete-btn').onclick = async (e) => {
                     e.stopPropagation();
                     if (confirm(`Delete "${doc.filename}"?`)) {
-                        const delRoute = doc.type === 'letter' ? '/api/delete_letter' : '/api/delete_diary';
-                        const delResp = await fetch(delRoute, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ filename: doc.filename })
-                        });
-                        if (!delResp.ok) { alert('Failed to delete document.'); return; }
+                        const ok = await deleteDocument(doc.type, doc.filename);
+                        if (!ok) { alert('Failed to delete document.'); return; }
                         showNotification('Document deleted.');
-                        await loadHistoryFromServer();
+                        await loadHistory();
                     }
                 };
 
@@ -429,23 +385,20 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    // Load history from server
-    async function loadHistoryFromServer() {
+    async function loadHistory() {
         try {
-            const [lettersResp, diariesResp] = await Promise.all([
-                fetch('/api/letters'),
-                fetch('/api/diaries')
+            const [letters, diaries] = await Promise.all([
+                getDocuments('letter'),
+                getDocuments('diary'),
             ]);
-            const lettersData = await lettersResp.json();
-            const diariesData = await diariesResp.json();
-            renderHistory([...lettersData.documents, ...diariesData.documents]);
+            renderHistory([...letters, ...diaries]);
         } catch (err) {
             console.error('Failed to load history:', err);
         }
     }
 
     // Initial render
-    loadHistoryFromServer();
+    loadHistory();
     restoreSavedContent();
 
     // Close modal handlers
@@ -707,17 +660,6 @@ document.addEventListener('DOMContentLoaded', function () {
     async function transliterateOnInput(e) {
         // Only transliterate if not in Hindi mode
         if (isHindi) return;
-        const value = input.value;
-        // Optionally, you can transliterate the whole text or just the last word
-        // Here, we transliterate the whole text for live preview (optional)
-        // You can remove this if you want only on space
-        // const resp = await fetch('/api/transliterate_text', {
-        //     method: 'POST',
-        //     headers: { 'Content-Type': 'application/json' },
-        //     body: JSON.stringify({ text: value })
-        // });
-        // const data = await resp.json();
-        // input.value = data.result;
     }
 
     async function transliterateOnSpace(e) {

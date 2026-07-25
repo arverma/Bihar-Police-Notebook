@@ -1,26 +1,20 @@
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
-
-# Nuitka build files
-/build/
-/dist/
-
-# Virtual Environments
-/venv/
-.venv/
-ENV/
-env/
-venv/
-env.bak/
-venv.bak/
-
 # macOS
 .DS_Store
 
-# Logs folder
-/logs/
-
-db.json
+# Editors / IDEs
 .idea/
+.vscode/
+
+# Local / build leftovers
+venv/
+.venv/
+ENV/
+env/
+dist/
+build/
+*.zip
+node_modules/
+
+# Logs
+/logs/
+*.log

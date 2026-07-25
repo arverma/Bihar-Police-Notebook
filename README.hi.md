@@ -1,97 +1,52 @@
-# 📝 बिहार पुलिस नोटबुक टूल
+# बिहार पुलिस नोटबुक टूल (BP Writing Tool)
 
-[![Build Status](https://github.com/ayushrskiaa/BP-writingTool/workflows/Build%20and%20Release%20Application/badge.svg)](https://github.com/ayushrskiaa/BP-writingTool/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-lightgrey.svg)](https://github.com/ayushrskiaa/BP-writingTool/releases)
-[![Security Status](https://img.shields.io/badge/Security-CodeQL%20Active-brightgreen.svg)](https://github.com/ayushrskiaa/BP-writingTool/security/code-scanning)
+[![Chrome Extension](https://img.shields.io/badge/Chrome-MV3%20Extension-blue.svg)](https://developer.chrome.com/docs/extensions/mv3/)
+[![English](https://img.shields.io/badge/EN-English%20README-blue.svg)](README.md)
 
-## About
+**बिहार पुलिस नोटबुक टूल** — Chrome extension जिससे Hinglish में type करके हिंदी (Devanagari) documents बना सकते हैं। Letter और FIR केस-डायरी templates, local history, और print/export support।
 
-**बिहार पुलिस नोटबुक टूल** एक specialized desktop application है जो **बिहार पुलिस** के लिए बनाया गया है। इस tool से officers और staff Hindi में documents create और manage कर सकते हैं।
+**Live editor:** [https://arverma.github.io/Bihar-Police-Notebook/](https://arverma.github.io/Bihar-Police-Notebook/)
 
-## Screenshots
+## मुख्य विशेषताएँ
 
-<table>
-  <tr>
-    <td><img src="doc/1.png" alt="Main Interface" width="600"/></td>
-    <td><img src="doc/2.png" alt="Document Editor" width="600"/></td>
-  </tr>
-  <tr>
-    <td><img src="doc/3.png" alt="History View" width="600"/></td>
-    <td><img src="doc/4.png" alt="Export Options" width="600"/></td>
-  </tr>
-</table>
+- **Instant transliteration** — Hinglish type करें, हिंदी suggestions चुनें (Google Input Tools; internet जरूरी)
+- **Letter और Diary** — सादा letter editor और FIR केस-डायरी form
+- **Document history** — save / open / delete (IndexedDB, आपके browser में)
+- **Export & print** — browser से print
+- **Website की तरह भी** — Pages URL सीधे खोल सकते हैं, या extension icon से
 
----
+## Extension install करें
 
-### Main Features:
-- 🚀 **Instant Transliteration** - Hinglish में type करें, Hindi output real-time में देखें
-- 📄 **Document Management** - Multiple documents create, edit, save और delete करें
-- 📚 **History Sidebar** - आपके document history को date-wise browse करें
-- 📤 **Export & Print** - Hindi documents को styled format में download या print करें
-- 💻 **Cross-Platform** - Windows और macOS पर available
-- 🔒 **Local Data Storage** - सभी documents आपके device पर locally store होते हैं
+1. इस repository को clone या download करें।
+2. Chrome में `chrome://extensions` खोलें → **Developer mode** on करें।
+3. **Load unpacked** पर क्लिक करके वह folder चुनें जिसमें `manifest.json` है।
+4. **BP Writing Tool** icon pin करें और क्लिक करें — editor tab खुल जाएगी।
 
----
+GitHub Pages सक्षम करें (Settings → Pages → Source: GitHub Actions) ताकि `editor/` deploy हो सके।
 
-## Installation
+## बिना extension के उपयोग
 
-### Quick Download:
-Visit our [Releases page](https://github.com/ayushrskiaa/BP-writingTool/releases) to download latest version:
+[https://arverma.github.io/Bihar-Police-Notebook/](https://arverma.github.io/Bihar-Police-Notebook/) किसी भी modern browser में खोलें। Documents उसी origin के IndexedDB में रहते हैं।
 
-- **Windows**: `BP-writing tool.exe` download करें
-- **macOS**: `BP-writing-tool-macos.zip` download करें, extract करें, फिर `MyApp.app` को Applications folder में drag करें
+## गोपनीयता (Privacy)
 
-### Browser Extensions (For Hindi Typing):
-Full functionality के लिए Google Chrome browser में ये extensions install करें:
+- Documents **केवल आपके browser** में store होते हैं — यह app उन्हें upload नहीं करता।
+- Transliteration के लिए Google Input Tools को network request जाता है; saved documents उस request में नहीं जाते।
+- Suggestions के लिए internet चाहिए। Offline भी type कर सकते हैं (बिना suggestions)।
 
-1. **[Google Input Tools](https://chromewebstore.google.com/detail/google-input-tools/mclkkofklkfljcocdinagocijmpgbhab)** - 90+ languages के लिए virtual keyboards
-2. **[Voice In](https://chromewebstore.google.com/detail/voice-in-speech-to-text-d/pjnefijmagpdjfhhkpljicbbpicelgko)** - Voice typing के लिए
+## उपयोग
 
----
+1. Extension icon या Pages URL से editor खोलें
+2. Hinglish में type करें (जैसे: `namaste` → `नमस्ते`)
+3. Save करें — History sidebar में दिखेगा
+4. Export / Print करें
 
-## 🔧 Usage
+## सहायता
 
-### Basic Steps:
-1. **Application open** करें
-2. **Hinglish में type** करें (जैसे: "namaste" → "नमस्ते")
-3. **Documents save** करें
-4. **Export या print** करें
+1. [Issues](https://github.com/arverma/Bihar-Police-Notebook/issues) देखें
+2. नया issue बनाएँ — browser version और steps लिखें
 
-### Data Privacy:
-- आपके documents internet पर नहीं जाते
-- सब कुछ आपके device पर locally store होता है
-- Chrome extensions internet connectivity require करते हैं
+## License
 
----
-
-## 🔒 Security
-
-### CodeQL Analysis:
-हमारा project automatically security scanned होता है:
-- **Python code** security check
-- **JavaScript code** security check  
-- **Regular updates** security के लिए
-
-### Current Status:
-- ✅ **Security scanning** active
-- ✅ **Automated checks** enabled
-- ✅ **Vulnerability monitoring** real-time
-
-[View Security Details →](https://github.com/ayushrskiaa/BP-writingTool/security/code-scanning)
-
----
-
-## 📞 Support
-
-### Issues या Questions के लिए:
-1. [Issues page](https://github.com/ayushrskiaa/BP-writingTool/issues) check करें
-2. New issue create करें
-3. आपका operating system, Python version और error messages mention करें
-
----
-
-## 📄 License
-
-MIT License के under यह project available है - [LICENSE](LICENSE) file देखें।
+MIT — [LICENSE](LICENSE) देखें।

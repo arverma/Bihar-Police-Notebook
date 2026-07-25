@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "BP Writing Tool",
+  "version": "2.0.0",
+  "description": "Bihar Police notebook — type Hinglish, get Hindi. Letter and FIR diary templates with local document history.",
+  "action": {
+    "default_title": "Open BP Writing Tool",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": ["tabs"],
+  "icons": {
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
+}
