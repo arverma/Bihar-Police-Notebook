@@ -73,7 +73,8 @@ export function previewText(doc) {
             try { data = JSON.parse(data); } catch (_) { data = {}; }
         }
         if (data && typeof data === 'object') {
-            return `FIR ${data.fir_number || ''} · Case ${data.case_diary_no || ''}`.trim();
+            const header = data.header && typeof data.header === 'object' ? data.header : data;
+            return `FIR ${header.fir_number || ''} · Case ${header.case_diary_no || ''}`.trim();
         }
     }
     return stripHtml(doc.content).slice(0, 40);
@@ -92,45 +93,69 @@ export async function getAllDocuments() {
 }
 
 /**
+ * Save (upsert by id when present so rename does not duplicate).
+ * @param {'letter'|'diary'} type
+ * @param {{ id?: number|null, filename: string, content: string, created_at?: string }} doc
+ * @returns {Promise<number>} document id
+ */
+export async function saveDocumentById(type, doc) {
+    const db = await openDb();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(type, 'readwrite');
+        const store = tx.objectStore(type);
+        const now = new Date().toISOString();
+        const filename = (doc.filename || '').trim() || 'Untitled';
+        const content = doc.content ?? '';
+
+        if (doc.id != null) {
+            const getReq = store.get(doc.id);
+            getReq.onsuccess = () => {
+                const existing = getReq.result;
+                if (!existing) {
+                    // Stale id — fall through to add
+                    const created = doc.created_at || now;
+                    const addReq = store.add({
+                        filename,
+                        content,
+                        type,
+                        created_at: created,
+                        updated_at: now,
+                    });
+                    addReq.onsuccess = () => resolve(addReq.result);
+                    addReq.onerror = () => reject(addReq.error);
+                    return;
+                }
+                existing.filename = filename;
+                existing.content = content;
+                existing.updated_at = now;
+                const putReq = store.put(existing);
+                putReq.onsuccess = () => resolve(existing.id);
+                putReq.onerror = () => reject(putReq.error);
+            };
+            getReq.onerror = () => reject(getReq.error);
+            return;
+        }
+
+        const addReq = store.add({
+            filename,
+            content,
+            type,
+            created_at: doc.created_at || now,
+            updated_at: now,
+        });
+        addReq.onsuccess = () => resolve(addReq.result);
+        addReq.onerror = () => reject(addReq.error);
+    });
+}
+
+/**
  * Save (upsert by filename) a document.
  * @param {'letter'|'diary'} type
  * @param {string} filename
  * @param {string} content
  */
 export async function saveDocument(type, filename, content) {
-    const db = await openDb();
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(type, 'readwrite');
-        const store = tx.objectStore(type);
-        const idx = store.index('filename');
-        const findReq = idx.getAll(filename);
-
-        findReq.onsuccess = () => {
-            const matches = findReq.result || [];
-            const now = new Date().toISOString();
-            if (matches.length > 0) {
-                const existing = matches[0];
-                existing.content = content;
-                existing.filename = filename;
-                existing.updated_at = now;
-                const putReq = store.put(existing);
-                putReq.onsuccess = () => resolve(existing.id);
-                putReq.onerror = () => reject(putReq.error);
-            } else {
-                const doc = {
-                    filename,
-                    content,
-                    type,
-                    created_at: now,
-                    updated_at: now,
-                };
-                const addReq = store.add(doc);
-                addReq.onsuccess = () => resolve(addReq.result);
-                addReq.onerror = () => reject(addReq.error);
-            }
-        };
-        findReq.onerror = () => reject(findReq.error);
-    });
+    return saveDocumentById(type, { id: null, filename, content });
 }
 
 /**

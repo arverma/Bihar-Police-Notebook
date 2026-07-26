@@ -1,11 +1,197 @@
 import { getWordBoundaries } from './utils.js';
 import { fetchSuggestions } from './translit.js';
-import { getDocuments, saveDocument, deleteDocument, previewText } from './store.js';
+import { getDocuments, saveDocumentById, deleteDocument, previewText } from './store.js';
+import { initPagedSheet, letterPrintCss, letterPagesHtml } from './paged-sheet.js';
+import {
+    initDiarySheet,
+    diaryPrintCss,
+    diaryPagesHtml,
+    diaryHasMeaningfulContent,
+    emptyModel,
+} from './diary-sheet.js';
+import { initDictation } from './dictation-ui.js';
 
-const input = document.getElementById('hinglish-input');
+const letterPagesEl = document.getElementById('letterPages');
 const suggestionsBox = document.getElementById('suggestions');
+const pageIndicator = document.getElementById('pageIndicator');
+const filenameInput = document.getElementById('filenameInput');
+const saveStatusEl = document.getElementById('save-status');
 
-const STORAGE_KEY = 'biharPolice_autosave';
+/** @type {ReturnType<typeof initPagedSheet> | null} */
+let letterSheet = null;
+
+/** @type {ReturnType<typeof initDiarySheet> | null} */
+let diarySheet = null;
+
+/** @type {{ id: number|null, type: 'letter'|'diary', createdAt: string }} */
+let currentDoc = { id: null, type: 'diary', createdAt: new Date().toISOString() };
+
+let saveTimer = null;
+const AUTOSAVE_DELAY_MS = 600;
+/** @type {(() => Promise<void>) | null} */
+let loadHistoryFn = null;
+
+/** When true, skip Hinglish transliteration (direct Devanagari typing). */
+let isHindiMode = false;
+
+/** When true, skip transliteration suggestions for a programmatic dictated insert. */
+let isDictatedInput = false;
+
+/**
+ * Last focused editable inside the letter/diary editors (for dictation target).
+ * @type {{ el: HTMLInputElement|HTMLTextAreaElement, start: number, end: number } | null}
+ */
+let dictationTarget = null;
+
+function formatDocFilename(date = new Date()) {
+    return date.toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+    });
+}
+
+function setSaveStatus(state) {
+    if (!saveStatusEl) return;
+    saveStatusEl.dataset.state = state;
+    saveStatusEl.textContent = state === 'saving' ? 'Saving…' : 'Saved';
+}
+
+function getActiveTemplate() {
+    return document.querySelector('.editor-letter').style.display !== 'none' ? 'letter' : 'diary';
+}
+
+function setTemplateSegmentUI(type) {
+    document.querySelectorAll('#templateSegment .segment-btn').forEach((btn) => {
+        const active = btn.dataset.template === type;
+        btn.classList.toggle('is-active', active);
+        btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+}
+
+function setLangSegmentUI(hindi) {
+    document.querySelectorAll('#langSegment .segment-btn').forEach((btn) => {
+        const active = hindi ? btn.dataset.lang === 'hindi' : btn.dataset.lang === 'hinglish';
+        btn.classList.toggle('is-active', active);
+        btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+    const placeholder = hindi
+        ? 'यहाँ हिंदी में टाइप करें...'
+        : 'यहाँ Hinglish में टाइप करें...';
+    document.querySelectorAll('.letter-page-input').forEach((ta, i) => {
+        if (i === 0) ta.placeholder = placeholder;
+        else ta.placeholder = '';
+    });
+}
+
+function updateDocumentTitle() {
+    const name = (filenameInput?.value || '').trim() || formatDocFilename(new Date(currentDoc.createdAt));
+    const kind = currentDoc.type === 'diary' ? 'Diary' : 'Letter';
+    document.title = `${name} · ${kind} — Bihar Police`;
+}
+
+function getActiveContent() {
+    if (getActiveTemplate() === 'letter') return letterSheet?.getText() ?? '';
+    return getDiaryContent();
+}
+
+function hasMeaningfulContent() {
+    const type = getActiveTemplate();
+    if (type === 'letter') return Boolean((letterSheet?.getText() ?? '').trim());
+    return diaryHasMeaningfulContent(diarySheet?.getModel() ?? emptyModel());
+}
+
+function updatePageIndicator(current, total) {
+    if (!pageIndicator) return;
+    pageIndicator.hidden = false;
+    pageIndicator.textContent = `Page ${current} of ${total}`;
+}
+
+async function flushSave() {
+    saveTimer = null;
+    if (!hasMeaningfulContent() && currentDoc.id == null) {
+        setSaveStatus('saved');
+        return;
+    }
+    const type = getActiveTemplate();
+    const filename = (filenameInput?.value || '').trim() || formatDocFilename(new Date(currentDoc.createdAt));
+    if (filenameInput && !filenameInput.value.trim()) filenameInput.value = filename;
+
+    try {
+        const id = await saveDocumentById(type, {
+            id: currentDoc.id,
+            filename,
+            content: getActiveContent(),
+            created_at: currentDoc.createdAt,
+        });
+        currentDoc = { id, type, createdAt: currentDoc.createdAt };
+        setSaveStatus('saved');
+        updateDocumentTitle();
+        if (loadHistoryFn) await loadHistoryFn();
+    } catch (err) {
+        console.error('Autosave failed:', err);
+        setSaveStatus('saved');
+    }
+}
+
+function scheduleSave() {
+    setSaveStatus('saving');
+    if (saveTimer !== null) clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => { void flushSave(); }, AUTOSAVE_DELAY_MS);
+}
+
+function startNewDocument(type = getActiveTemplate()) {
+    if (saveTimer !== null) {
+        clearTimeout(saveTimer);
+        saveTimer = null;
+    }
+    const createdAt = new Date().toISOString();
+    currentDoc = { id: null, type, createdAt };
+    if (filenameInput) filenameInput.value = formatDocFilename(new Date(createdAt));
+
+    if (type === 'letter') {
+        document.querySelector('.editor-letter').style.display = '';
+        document.querySelector('.editor-diary').style.display = 'none';
+        setTemplateSegmentUI('letter');
+        letterSheet?.clear();
+        updatePageIndicator(1, letterSheet?.pageCount || 1);
+        letterSheet?.focus();
+    } else {
+        document.querySelector('.editor-letter').style.display = 'none';
+        document.querySelector('.editor-diary').style.display = '';
+        setTemplateSegmentUI('diary');
+        diarySheet?.clear();
+        updatePageIndicator(1, diarySheet?.pageCount || 1);
+    }
+    setSaveStatus('saved');
+    updateDocumentTitle();
+}
+
+function requestNewDocument(type = getActiveTemplate()) {
+    if (hasMeaningfulContent()) {
+        const ok = confirm('Start a new document? Current work is already saved in History.');
+        if (!ok) return;
+    }
+    startNewDocument(type);
+}
+
+function switchTemplate(template) {
+    if (template !== 'letter' && template !== 'diary') return;
+    const current = getActiveTemplate();
+    if (current === template && currentDoc.type === template) {
+        setTemplateSegmentUI(template);
+        return;
+    }
+    void (async () => {
+        if (saveTimer !== null) {
+            clearTimeout(saveTimer);
+            saveTimer = null;
+        }
+        await flushSave();
+        startNewDocument(template);
+        void loadHistoryFn?.();
+    })();
+}
 
 function getCaretPosition(input) {
     // Get the bounding rectangle of the textarea
@@ -46,8 +232,25 @@ function getCaretPosition(input) {
 let typingTimer;
 const doneTypingInterval = 50; // Reduced delay to 50ms for faster response
 
+function notifyLetterChanged(el) {
+    if (!el?.closest?.('.letter-page')) return;
+    // Fires autosave + spill via existing input listeners.
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
 function attachTransliteration(el) {
     el.addEventListener('input', function () {
+        if (el.closest('.letter-page') || el.closest('.editor-diary')) {
+            scheduleSave();
+        }
+        if (isDictatedInput) {
+            suggestionsBox.style.display = 'none';
+            return;
+        }
+        if (isHindiMode) {
+            suggestionsBox.style.display = 'none';
+            return;
+        }
         clearTimeout(typingTimer);
         const value = el.value;
         const cursor = el.selectionStart;
@@ -56,6 +259,7 @@ function attachTransliteration(el) {
 
         if (currentWord.trim()) {
             typingTimer = setTimeout(async () => {
+                if (isHindiMode) return;
                 const suggestions = await fetchSuggestions(currentWord);
                 if (suggestions && suggestions.length > 0) {
                     showSuggestions(suggestions, start, end, el);
@@ -64,42 +268,40 @@ function attachTransliteration(el) {
         } else {
             suggestionsBox.style.display = 'none';
         }
-
-        if (el === input) {
-            clearTimeout(autoSaveTimer);
-            autoSaveTimer = setTimeout(saveToLocalStorage, AUTOSAVE_DELAY);
-        }
     });
 
     el.addEventListener('keydown', async function (e) {
-        if (e.key === ' ') {
-            e.preventDefault();
-            const value = el.value;
-            const cursor = el.selectionStart;
-            const [start, end] = getWordBoundaries(value, cursor - 1);
-            const word = value.slice(start, end);
+        if (e.key !== ' ') return;
+        if (isHindiMode) return;
+        e.preventDefault();
+        const value = el.value;
+        const cursor = el.selectionStart;
+        const [start, end] = getWordBoundaries(value, cursor - 1);
+        const word = value.slice(start, end);
 
-            if (!word.trim()) {
-                el.value = value.slice(0, cursor) + ' ' + value.slice(cursor);
-                el.selectionStart = el.selectionEnd = cursor + 1;
-                return;
-            }
-
-            let suggestions = await fetchSuggestions(word);
-            if (suggestions && suggestions.length > 0) {
-                const suggestion = suggestions[0];
-                const newValue = value.slice(0, start) + suggestion + ' ' + value.slice(end);
-                el.value = newValue;
-                el.selectionStart = el.selectionEnd = start + suggestion.length + 1;
-            } else {
-                el.value = value.slice(0, cursor) + ' ' + value.slice(cursor);
-                el.selectionStart = el.selectionEnd = cursor + 1;
-            }
-            suggestionsBox.style.display = 'none';
+        if (!word.trim()) {
+            el.value = value.slice(0, cursor) + ' ' + value.slice(cursor);
+            el.selectionStart = el.selectionEnd = cursor + 1;
+            notifyLetterChanged(el);
+            return;
         }
+
+        let suggestions = await fetchSuggestions(word);
+        if (suggestions && suggestions.length > 0) {
+            const suggestion = suggestions[0];
+            const newValue = value.slice(0, start) + suggestion + ' ' + value.slice(end);
+            el.value = newValue;
+            el.selectionStart = el.selectionEnd = start + suggestion.length + 1;
+        } else {
+            el.value = value.slice(0, cursor) + ' ' + value.slice(cursor);
+            el.selectionStart = el.selectionEnd = cursor + 1;
+        }
+        suggestionsBox.style.display = 'none';
+        notifyLetterChanged(el);
     });
 
     el.addEventListener('click', async function () {
+        if (isHindiMode) return;
         const value = el.value;
         const cursor = el.selectionStart;
         const [start, end] = getWordBoundaries(value, cursor);
@@ -114,8 +316,6 @@ function attachTransliteration(el) {
     });
 }
 
-attachTransliteration(input);
-
 document.addEventListener('click', function (e) {
     const tag = e.target.tagName;
     if (!suggestionsBox.contains(e.target) && tag !== 'INPUT' && tag !== 'TEXTAREA') {
@@ -123,9 +323,9 @@ document.addEventListener('click', function (e) {
     }
 });
 
-function showSuggestions(suggestions, wordStart, wordEnd, targetEl = input) {
+function showSuggestions(suggestions, wordStart, wordEnd, targetEl) {
     suggestionsBox.innerHTML = '';
-    if (!suggestions || suggestions.length === 0) {
+    if (!suggestions || suggestions.length === 0 || !targetEl) {
         suggestionsBox.style.display = 'none';
         return;
     }
@@ -153,7 +353,9 @@ function showSuggestions(suggestions, wordStart, wordEnd, targetEl = input) {
             targetEl.value = value.slice(0, wordStart) + suggestion + value.slice(wordEnd);
             targetEl.selectionStart = targetEl.selectionEnd = wordStart + suggestion.length;
             suggestionsBox.style.display = 'none';
+            notifyLetterChanged(targetEl);
         };
+        div.title = `Insert “${suggestion}”`;
         suggestionsBox.appendChild(div);
     });
 
@@ -220,19 +422,13 @@ const observer = new MutationObserver((mutations) => {
     });
 });
 
-observer.observe(suggestionsBox, { attributes: true });
+if (suggestionsBox) {
+    observer.observe(suggestionsBox, { attributes: true });
+}
 
-// Wait for DOM to load before adding event listeners
-document.addEventListener('DOMContentLoaded', function () {
+function initApp() {
     const addTemplateBtn = document.querySelector('.add-template-btn');
-    const newFileModal = document.getElementById('newFileModal');
-    const closeNewFile = document.getElementById('closeNewFile');
-    const cancelNewFile = document.getElementById('cancelNewFile');
-    const createNewFile = document.getElementById('createNewFile');
-    const newFileName = document.getElementById('newFileName');
     const exportBtn = document.getElementById('exportBtn');
-    const saveBtn = document.getElementById('saveBtn');
-    const filenameInput = document.querySelector('.filename-input');
     const historyList = document.querySelector('.history-list');
 
     // Helper to get today's date string
@@ -253,37 +449,19 @@ document.addEventListener('DOMContentLoaded', function () {
         return date.toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' });
     }
 
-    function getActiveTemplate() {
-        return document.querySelector('.editor-letter').style.display !== 'none' ? 'letter' : 'diary';
-    }
-
-    // Save document to server
-    saveBtn.addEventListener('click', async function () {
-        const filename = filenameInput.value.trim() || 'Untitled';
-        const type = getActiveTemplate();
-        let content = '';
-        if (type === 'letter') {
-            content = input.value;
-            if (!content.trim()) return alert('Cannot save empty document!');
-        } else {
-            content = getDiaryContent();
-            let parsed = {};
-            try { parsed = JSON.parse(content); } catch (e) { parsed = {}; }
-            if (!Object.values(parsed).some(v => String(v).trim())) return alert('Cannot save empty document!');
-        }
-
-        try {
-            await saveDocument(type, filename, content);
-            showNotification('Document saved!');
-            await loadHistory();
-        } catch (err) {
-            alert('Failed to save document: ' + err);
-        }
-    });
-
     // Render history in sidebar
     function renderHistory(docs = []) {
-        // Group by date
+        historyList.innerHTML = '';
+
+        if (!docs.length) {
+            const empty = document.createElement('div');
+            empty.className = 'history-empty';
+            const kind = getActiveTemplate() === 'diary' ? 'diaries' : 'letters';
+            empty.innerHTML = `<strong>No ${kind} yet</strong><span>Create one with the + button in the header.</span>`;
+            historyList.appendChild(empty);
+            return;
+        }
+
         const groups = {};
         docs.forEach(doc => {
             const dateObj = new Date(doc.created_at || doc.timestamp || doc.date || Date.now());
@@ -292,14 +470,8 @@ document.addEventListener('DOMContentLoaded', function () {
             groups[dateKey].push({ ...doc, date: dateObj });
         });
 
-        historyList.innerHTML = '';
-
-        // Sort date keys by latest date first
         const sortedDateKeys = Object.keys(groups).sort((a, b) => {
-            // Parse the first doc's date in each group for sorting
-            const aDate = groups[a][0].date;
-            const bDate = groups[b][0].date;
-            return bDate - aDate; // Descending order
+            return groups[b][0].date - groups[a][0].date;
         });
 
         sortedDateKeys.forEach(dateKey => {
@@ -308,13 +480,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
             const header = document.createElement('div');
             header.className = 'date-header collapsible-header';
+            header.title = 'Expand or collapse this day';
             header.innerHTML = `<span class="collapse-arrow">&#9660;</span> ${dateKey}`;
             groupDiv.appendChild(header);
 
             const itemsContainer = document.createElement('div');
             itemsContainer.className = 'history-items-container';
 
-            // Sort docs in group by created_at descending (latest first)
             groups[dateKey].sort((a, b) => b.date - a.date).forEach(doc => {
                 const firstLine = previewText(doc);
                 const created = new Date(doc.created_at || doc.date || Date.now());
@@ -324,6 +496,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 const item = document.createElement('div');
                 item.className = 'history-item';
+                item.title = 'Open this document';
+                if (currentDoc.id != null && doc.id === currentDoc.id) {
+                    item.classList.add('is-active');
+                }
                 item.innerHTML = `
                     <i class="fas fa-file-alt"></i>
                     <div class="history-item-details">
@@ -333,41 +509,55 @@ document.addEventListener('DOMContentLoaded', function () {
                         <span class="history-item-preview">${escapeHtml(firstLine)}</span>
                     </div>
                     <div class="history-item-actions">
-                        <button class="edit-btn" title="Edit"><i class="fas fa-edit"></i></button>
-                        <button class="delete-btn" title="Delete"><i class="fas fa-trash"></i></button>
+                        <button class="delete-btn" type="button" title="Delete this document" aria-label="Delete this document"><i class="fas fa-trash"></i></button>
                     </div>
                 `;
 
                 function loadDoc() {
+                    if (saveTimer !== null) {
+                        clearTimeout(saveTimer);
+                        saveTimer = null;
+                    }
+                    currentDoc = {
+                        id: doc.id ?? null,
+                        type: doc.type,
+                        createdAt: doc.created_at || new Date().toISOString(),
+                    };
                     filenameInput.value = doc.filename;
                     if (doc.type === 'diary') {
                         document.querySelector('.editor-letter').style.display = 'none';
                         document.querySelector('.editor-diary').style.display = '';
-                        document.querySelector('.template-filter .filter-text').textContent = 'Diary';
+                        setTemplateSegmentUI('diary');
                         setDiaryContent(doc.content);
+                        updatePageIndicator(1, diarySheet?.pageCount || 1);
                     } else {
                         document.querySelector('.editor-letter').style.display = '';
                         document.querySelector('.editor-diary').style.display = 'none';
-                        document.querySelector('.template-filter .filter-text').textContent = 'Letter';
-                        input.value = doc.content;
-                        input.focus();
+                        setTemplateSegmentUI('letter');
+                        letterSheet?.setText(doc.content || '');
+                        letterSheet?.focus();
+                        updatePageIndicator(1, letterSheet?.pageCount || 1);
                     }
+                    setSaveStatus('saved');
+                    updateDocumentTitle();
+                    void loadHistory();
                 }
 
-                item.querySelector('.history-item-details').onclick = loadDoc;
-                item.querySelector('.edit-btn').onclick = (e) => {
-                    e.stopPropagation();
+                item.addEventListener('click', (e) => {
+                    if (e.target.closest('.delete-btn')) return;
                     loadDoc();
-                };
+                });
 
                 item.querySelector('.delete-btn').onclick = async (e) => {
                     e.stopPropagation();
-                    if (confirm(`Delete "${doc.filename}"?`)) {
-                        const ok = await deleteDocument(doc.type, doc.filename);
-                        if (!ok) { alert('Failed to delete document.'); return; }
-                        showNotification('Document deleted.');
-                        await loadHistory();
+                    if (!confirm(`Delete "${doc.filename}" permanently? This cannot be undone.`)) return;
+                    const ok = await deleteDocument(doc.type, doc.filename);
+                    if (!ok) { alert('Failed to delete document.'); return; }
+                    if (currentDoc.id != null && currentDoc.id === doc.id) {
+                        startNewDocument(doc.type);
                     }
+                    showNotification('Document deleted.');
+                    await loadHistory();
                 };
 
                 itemsContainer.appendChild(item);
@@ -387,157 +577,93 @@ document.addEventListener('DOMContentLoaded', function () {
 
     async function loadHistory() {
         try {
-            const [letters, diaries] = await Promise.all([
-                getDocuments('letter'),
-                getDocuments('diary'),
-            ]);
-            renderHistory([...letters, ...diaries]);
+            const type = getActiveTemplate();
+            const docs = await getDocuments(type);
+            const title = document.querySelector('.sidebar-header h3');
+            if (title) title.textContent = type === 'diary' ? 'Diary History' : 'Letter History';
+            renderHistory(docs);
         } catch (err) {
             console.error('Failed to load history:', err);
         }
     }
+    loadHistoryFn = loadHistory;
 
-    // Initial render
-    loadHistory();
-    restoreSavedContent();
-
-    // Close modal handlers
-    [closeNewFile, cancelNewFile].forEach(btn => {
-        btn.addEventListener('click', function () {
-            newFileModal.style.display = 'none';
-            newFileName.value = '';
+    if (letterPagesEl) {
+        letterSheet = initPagedSheet(letterPagesEl, pageIndicator, {
+            onChange: scheduleSave,
+            onAttachField: (el) => {
+                attachTransliteration(el);
+            },
+            onPageFocus: (current, total) => {
+                if (getActiveTemplate() === 'letter') {
+                    updatePageIndicator(current, total);
+                }
+            },
+            onSpill: ({ toPage }) => {
+                showNotification(`Continued on page ${toPage}`);
+            },
         });
+    }
+
+    const diaryPagesEl = document.getElementById('diaryPages');
+    const diaryTemplate = document.getElementById('diaryPageTemplate');
+    if (diaryPagesEl && diaryTemplate) {
+        diarySheet = initDiarySheet(diaryPagesEl, diaryTemplate, {
+            onChange: scheduleSave,
+            onAttachField: (el) => {
+                if (el.matches('input:not([type="date"]), textarea')) {
+                    attachTransliteration(el);
+                }
+                if (el.type === 'date') {
+                    el.addEventListener('change', scheduleSave);
+                }
+            },
+            onPageFocus: (current, total) => {
+                if (getActiveTemplate() === 'diary') {
+                    updatePageIndicator(current, total);
+                }
+            },
+            onSpill: ({ toPage }) => {
+                showNotification(`Continued on page ${toPage}`);
+            },
+        });
+    }
+
+    startNewDocument('diary');
+    void loadHistory();
+    try {
+        letterSheet?.update();
+    } catch (err) {
+        console.error('letterSheet.update failed:', err);
+    }
+
+    filenameInput?.addEventListener('change', () => {
+        scheduleSave();
+        updateDocumentTitle();
+    });
+    filenameInput?.addEventListener('blur', () => {
+        if (!(filenameInput.value || '').trim()) {
+            filenameInput.value = formatDocFilename(new Date(currentDoc.createdAt));
+        }
+        scheduleSave();
+        updateDocumentTitle();
+    });
+    filenameInput?.addEventListener('input', () => {
+        updateDocumentTitle();
     });
 
-    // Update the export button handler
-    exportBtn.addEventListener('click', async function () {
+    async function runPdfExport() {
+        const activeTemplate = getActiveTemplate();
         let content = '';
-        if (getActiveTemplate() === 'letter') {
-            content = `<pre style="font-family: 'Noto Sans Devanagari', Arial, sans-serif; font-size: 18px; margin: 0; padding: 0; background: #fff; border: none; white-space: pre-wrap; word-break: break-word;">${escapeHtml(input.value)}</pre>`;
+        if (activeTemplate === 'letter') {
+            content = letterPagesHtml(letterSheet?.getPages() ?? ['']);
         } else {
-            const container = document.getElementById('diaryExportLayout');
-            const get = field => container.querySelector(`[data-field="${field}"]`)?.value || '';
-
-            // --- PAGINATION LOGIC ---
-            // Adjust this limit for your print size/font
-            const CHARS_PER_PAGE = 500; // First page
-            const CHARS_PER_PAGE_SECONDARY = 900; // Subsequent pages
-
-            function paginateColumns(left, right, limitFirst, limitRest) {
-                const leftPages = [];
-                const rightPages = [];
-                let i = 0, j = 0;
-                let first = true;
-                while (i < left.length || j < right.length) {
-                    const limit = first ? limitFirst : limitRest;
-                    leftPages.push(left.slice(i, i + limit));
-                    rightPages.push(right.slice(j, j + limit));
-                    i += limit;
-                    j += limit;
-                    first = false;
-                }
-                return [leftPages, rightPages];
-            }
-
-            const [leftPages, rightPages] = paginateColumns(
-                get('left_box'),
-                get('right_box'),
-                CHARS_PER_PAGE,
-                CHARS_PER_PAGE_SECONDARY
-            );
-            const maxPages = leftPages.length;
-
-            // Header HTML (repeat on every page)
-            function getHeader(get) {
-                return `
-                <div style="font-family: 'Noto Sans Devanagari', Arial, sans-serif; font-size: 15px; max-width: 900px; margin:auto; margin-bottom: 8px;">
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                        <div style="font-size:13px; line-height:1.4;">
-                            अनुसूची 47, प सं0 120 अ<br>
-                            आ0 ह0 प सं0 30 अ
-                        </div>
-                        <div style="text-align:center; flex:1; margin-top:2px;">
-                            <span style="font-size:17px;font-weight:bold;">
-                                केस-दैनिकी सं0
-                                <span style="display:inline-block; min-width:80px; border-bottom:1px dotted #333; text-align:center;">
-                                    ${escapeHtml(get('case_diary_no'))}
-                                </span>
-                            </span>
-                            <div style="font-size:14px; margin-top:2px;">
-                                (नियम-${escapeHtml(get('rule_no'))})
-                            </div>
-                        </div>
-                        <div style="font-size:13px; min-width:110px; text-align:right;">
-                            &nbsp;
-                        </div>
-                    </div>
-                    <div style="text-align:right; margin-top: 2px;">
-                        <span style="display:inline-block; min-width:120px; border-bottom:1px dotted #333;">${escapeHtml(get('against_1'))}</span>
-                        <span style="margin:0 10px;">बनाम</span>
-                        <span style="display:inline-block; min-width:120px; border-bottom:1px dotted #333;">${escapeHtml(get('against_2'))}</span>
-                    </div>
-                    <div style="display: flex; justify-content: flex-end; margin-top: 2px;">
-                        <div style="text-align:right;">
-                            <span>विशेष रिपोर्ट केस सं.</span>
-                            <span style="display:inline-block; min-width:100px; border-bottom:1px dotted #333;">${escapeHtml(get('special_report_no'))}</span>
-                        </div>
-                    </div>
-                    <div style="margin-top: 12px; font-size:15px;">
-                        थाना&nbsp;<b>${escapeHtml(get('thana')) || '....................'}</b>&nbsp;&nbsp;
-                        जिला&nbsp;<b>${escapeHtml(get('district')) || '....................'}</b>&nbsp;&nbsp;
-                        प्रथम इत्तिला रिपोर्ट सं.&nbsp;<b>${escapeHtml(get('fir_number')) || '....................'}</b>&nbsp;&nbsp;
-                        तिथि&nbsp;<b>${escapeHtml(get('fir_date')) || '....................'}</b>&nbsp;&nbsp;
-                        घटना की तिथि और स्थान&nbsp;<b>${escapeHtml(get('event_date_place')) || '....................................................'}</b>&nbsp;&nbsp;
-                        धाराः&nbsp;<b>${escapeHtml(get('sections')) || '....................................................'}</b>
-                    </div>
-                    <div style="margin-top:12px; border-top:1px solid #333;"></div>
-                </div>
-                `;
-            }
-
-            // Table HTML for each page
-            function getTable(left, right, showHeader = false) {
-                return `
-                    <table style="width:100%;margin-top:20px;border-collapse:collapse;table-layout:fixed;">
-                        ${showHeader ? `
-                        <tr>
-                            <td style="width:32%;border-top:1px solid #000;border-bottom:1px solid #000;border-left:none;border-right:1px solid #000;vertical-align:top;padding:8px;">
-                                <b>किन तिथि को (समय सहित )<br>कार्रवाई की गई, और किन-किन स्थानों को जाकर देखा गया |</b>
-                            </td>
-                            <td style="width:68%;border-top:1px solid #000;border-bottom:1px solid #000;border-left:none;border-right:none;vertical-align:top;padding:8px;">
-                                <b>अन्वेषण का अभिलेख</b><br>
-                                <div>(01)</div>
-                            </td>
-                        </tr>
-                        ` : ''}
-                        <tr>
-                            <td style="width:32%;border-top:none;border-bottom:1px solid #000;border-left:none;border-right:1px solid #000;vertical-align:top;padding:8px;">
-                                <div style="min-height:400px;margin-top:8px;white-space:pre-wrap;">${escapeHtml(left || '')}</div>
-                            </td>
-                            <td style="width:68%;border-top:none;border-bottom:1px solid #000;border-left:none;border-right:none;vertical-align:top;padding:8px;">
-                                <div style="min-height:400px;margin-top:8px;white-space:pre-wrap;">${escapeHtml(right || '')}</div>
-                            </td>
-                        </tr>
-                    </table>
-                    </div>
-                    <div style="page-break-after:always"></div>
-                `;
-            }
-
-            // Build all pages
-            let pagesHtml = '';
-            for (let i = 0; i < maxPages; i++) {
-                if (i === 0) {
-                    pagesHtml += getHeader(get) + getTable(leftPages[i], rightPages[i], true);
-                } else {
-                    pagesHtml += getTable(leftPages[i], rightPages[i], false);
-                }
-            }
-            content = pagesHtml;
+            const model = diarySheet?.getModel() ?? emptyModel();
+            content = diaryPagesHtml(model);
         }
         if (!content) return alert('Cannot export empty document!');
 
-        // Open print window with the formatted content
+        const printStyles = activeTemplate === 'letter' ? letterPrintCss() : diaryPrintCss();
         const printWindow = window.open('', '_blank');
         printWindow.document.write(`
             <!DOCTYPE html>
@@ -545,24 +671,9 @@ document.addEventListener('DOMContentLoaded', function () {
             <head>
                 <meta charset="UTF-8">
                 <title>Print Document</title>
+                <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;500;700&display=swap" rel="stylesheet">
                 <style>
-                    @media print {
-                        body { margin: 20mm 15mm 20mm 15mm; }
-                    }
-                    body {
-                        margin: 20mm 15mm 20mm 15mm;
-                        background: #fff;
-                    }
-                    pre {
-                        font-family: 'Noto Sans Devanagari', Arial, sans-serif;
-                        font-size: 18px;
-                        margin: 0;
-                        padding: 0;
-                        background: #fff;
-                        border: none;
-                        white-space: pre-wrap;
-                        word-break: break-word;
-                    }
+                    ${printStyles}
                 </style>
             </head>
             <body>
@@ -577,192 +688,127 @@ document.addEventListener('DOMContentLoaded', function () {
                 printWindow.close();
             };
         };
-    });
+    }
 
-    // Add New Doc logic (clear the correct editor)
-    createNewFile.addEventListener('click', function () {
-        const fileName = newFileName.value.trim();
-        if (fileName) {
-            filenameInput.value = fileName;
-            newFileModal.style.display = 'none';
-            if (getActiveTemplate() === 'letter') {
-                input.value = '';
-                input.focus();
-            } else {
-                // Clear all FIR Diary fields
-                const container = document.getElementById('diaryExportLayout');
-                container.querySelectorAll('input, textarea').forEach(el => el.value = '');
-            }
-        }
-    });
+    exportBtn?.addEventListener('click', () => { void runPdfExport(); });
 
     const switchBtn = document.querySelector('.switch-btn');
     const sidebar = document.getElementById('sidebar');
     const mainContent = document.querySelector('.main-content');
     let isToggled = false;
 
-    switchBtn.addEventListener('click', function () {
-        isToggled = !isToggled;
-        this.classList.toggle('active');
-        sidebar.classList.toggle('open');
-        mainContent.classList.toggle('shifted');
+    function setSidebarOpen(open) {
+        isToggled = open;
+        switchBtn?.classList.toggle('active', open);
+        switchBtn?.setAttribute('aria-pressed', open ? 'true' : 'false');
+        const label = open ? 'Hide document history' : 'Show document history';
+        switchBtn?.setAttribute('aria-label', label);
+        switchBtn?.setAttribute('title', label);
+        sidebar?.classList.toggle('open', open);
+        mainContent?.classList.toggle('shifted', open);
+        const switchIcon = switchBtn?.querySelector('.switch-icon');
+        if (switchIcon) switchIcon.style.transform = open ? 'rotate(180deg)' : 'rotate(0)';
+    }
 
-        // Rotate switch icon when sidebar is open
-        const switchIcon = this.querySelector('.switch-icon');
-        switchIcon.style.transform = isToggled ? 'rotate(180deg)' : 'rotate(0)';
+    switchBtn?.addEventListener('click', function (e) {
+        e.stopPropagation();
+        setSidebarOpen(!isToggled);
     });
 
-    // Close sidebar when clicking outside
     document.addEventListener('click', function (e) {
         if (isToggled &&
+            sidebar && switchBtn &&
             !sidebar.contains(e.target) &&
             !switchBtn.contains(e.target)) {
-            isToggled = false;
-            switchBtn.classList.remove('active');
-            sidebar.classList.remove('open');
-            mainContent.classList.remove('shifted');
-            switchBtn.querySelector('.switch-icon').style.transform = 'rotate(0)';
+            setSidebarOpen(false);
         }
     });
 
-    // Language toggle functionality
-    const langToggleBtn = document.querySelector('.lang-toggle-btn');
-    let isHindi = false;
-
-    langToggleBtn && langToggleBtn.addEventListener('click', function () {
-        isHindi = !isHindi;
-        this.classList.toggle('active');
-
-        // Toggle the icon
-        const icon = this.querySelector('i');
-        icon.classList.toggle('fa-toggle-on');
-        icon.classList.toggle('fa-toggle-off');
-
-        // Update textarea placeholder based on language
-        const textarea = document.getElementById('hinglish-input');
-        textarea.placeholder = isHindi ?
-            "यहाँ हिंदी में टाइप करें..." :
-            "यहाँ Hinglish में टाइप करें...";
-
-        // Enable/disable transliteration logic
-        if (isHindi) {
-            // Hindi mode: direct typing, no transliteration
-            textarea.removeEventListener('input', transliterateOnInput);
-            textarea.removeEventListener('keydown', transliterateOnSpace);
-        } else {
-            // Hinglish mode: enable transliteration
-            textarea.addEventListener('input', transliterateOnInput);
-            textarea.addEventListener('keydown', transliterateOnSpace);
-        }
-    });
-
-    // --- Transliteration logic for Hinglish mode ---
-    async function transliterateOnInput(e) {
-        // Only transliterate if not in Hindi mode
-        if (isHindi) return;
-    }
-
-    async function transliterateOnSpace(e) {
-        if (isHindi) return;
-        if (e.key === ' ') {
-            e.preventDefault();
-            const value = input.value;
-            const cursor = input.selectionStart;
-            const [start, end] = getWordBoundaries(value, cursor - 1);
-            const word = value.slice(start, end);
-
-            if (!word.trim()) {
-                input.value = value.slice(0, cursor) + ' ' + value.slice(cursor);
-                input.selectionStart = input.selectionEnd = cursor + 1;
-                return;
-            }
-
-            let suggestions = await fetchSuggestions(word);
-            if (suggestions && suggestions.length > 0) {
-                // Auto-replace with first suggestion
-                const suggestion = suggestions[0];
-                const newValue = value.slice(0, start) + suggestion + ' ' + value.slice(end);
-                input.value = newValue;
-                input.selectionStart = input.selectionEnd = start + suggestion.length + 1;
-            } else {
-                input.value = value.slice(0, cursor) + ' ' + value.slice(cursor);
-                input.selectionStart = input.selectionEnd = cursor + 1;
-            }
-            suggestionsBox.style.display = 'none';
-        }
-    }
-
-    function updateLogoBg() {
-        if (input.value.trim() === '') {
-            input.classList.add('bg-logo');
-        } else {
-            input.classList.remove('bg-logo');
-        }
-    }
-    updateLogoBg();
-    input.addEventListener('input', updateLogoBg);
-
-    document.querySelectorAll('.template-filter .dropdown-content a').forEach(link => {
-        link.addEventListener('click', function (e) {
-            e.preventDefault();
-            const template = this.getAttribute('data-template');
-            // Toggle editor visibility
-            document.querySelector('.editor-letter').style.display = (template === 'letter') ? '' : 'none';
-            document.querySelector('.editor-diary').style.display = (template === 'diary') ? '' : 'none';
-            
-            // Optionally update dropdown label
-            document.querySelector('.template-filter .filter-text').textContent = this.textContent;
+    document.querySelectorAll('#templateSegment .segment-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            switchTemplate(btn.dataset.template);
         });
     });
 
-    addTemplateBtn.addEventListener('click', function () {
-        newFileModal.style.display = 'flex';
-        document.getElementById('newFileName').focus();
+    document.querySelectorAll('#langSegment .segment-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            isHindiMode = btn.dataset.lang === 'hindi';
+            setLangSegmentUI(isHindiMode);
+            suggestionsBox.style.display = 'none';
+        });
+    });
+    setLangSegmentUI(false);
+
+    addTemplateBtn?.addEventListener('click', function () {
+        requestNewDocument(getActiveTemplate());
     });
 
-    // Attach transliteration to all diary inputs and textareas (skip date pickers)
-    document.querySelectorAll('.editor-diary input:not([type="date"]), .editor-diary textarea').forEach(el => {
-        attachTransliteration(el);
+    document.addEventListener('keydown', (e) => {
+        const meta = e.metaKey || e.ctrlKey;
+        const tag = (e.target && e.target.tagName) || '';
+        const typing = tag === 'INPUT' || tag === 'TEXTAREA';
+
+        if (e.key === 'Escape') {
+            // Dictation Esc is handled in capture phase by dictation-ui.
+            if (isToggled) setSidebarOpen(false);
+            return;
+        }
+
+        if (!meta) return;
+
+        if (e.key === 'p' || e.key === 'P') {
+            e.preventDefault();
+            void runPdfExport();
+            return;
+        }
+        if (e.key === 'n' || e.key === 'N') {
+            if (typing && tag === 'INPUT' && e.target === filenameInput) return;
+            e.preventDefault();
+            requestNewDocument(getActiveTemplate());
+            return;
+        }
+        if (e.key === 'h' || e.key === 'H' || e.key === 'b' || e.key === 'B') {
+            if (typing) return;
+            e.preventDefault();
+            setSidebarOpen(!isToggled);
+        }
     });
 
-    // Sync diary textarea heights
-    const leftTextarea = document.querySelector('textarea[data-field="left_box"]');
-    const rightTextarea = document.querySelector('textarea[data-field="right_box"]');
-    if (leftTextarea && rightTextarea) {
-        leftTextarea.addEventListener('input', syncDiaryTextareaHeights);
-        rightTextarea.addEventListener('input', syncDiaryTextareaHeights);
-        syncDiaryTextareaHeights();
-    }
-});
+    // Track focus/selection for voice dictation insertion target
+    document.addEventListener('focusin', (e) => {
+        const el = e.target;
+        if (!(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)) return;
+        if (el === filenameInput) return;
+        if (!el.closest('.editor-letter') && !el.closest('.editor-diary')) return;
+        if (el.type === 'date') return;
+        dictationTarget = {
+            el,
+            start: el.selectionStart ?? el.value.length,
+            end: el.selectionEnd ?? el.value.length,
+        };
+    });
+    document.addEventListener('selectionchange', () => {
+        const el = document.activeElement;
+        if (!(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)) return;
+        if (!dictationTarget || dictationTarget.el !== el) return;
+        dictationTarget.start = el.selectionStart ?? el.value.length;
+        dictationTarget.end = el.selectionEnd ?? el.value.length;
+    });
 
-let autoSaveTimer;
-const AUTOSAVE_DELAY = 1000; // Save after 1 second of inactivity
+    initDictation({
+        getTarget: getDictationTarget,
+        insertText: insertDictatedText,
+        notify: showNotification,
+    });
 
-// Auto-save functionality
-function saveToLocalStorage() {
-    const contentToSave = {
-        mainInput: input.value,
-        timestamp: new Date().getTime()
-    };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(contentToSave));
+    window.__uxInitComplete = true;
 }
 
-// Restore saved content
-function restoreSavedContent() {
-    try {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) {
-            const { mainInput, timestamp } = JSON.parse(saved);
-            input.value = mainInput;
 
-            // Show restoration message
-            const timeDiff = Math.round((new Date().getTime() - timestamp) / 60000);
-            const message = `पिछला कार्य पुनर्स्थापित किया गया (${timeDiff} मिनट पहले का)`;
-            showNotification(message);
-        }
-    } catch (error) {
-        console.error('Error restoring saved content:', error);
-    }
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initApp);
+} else {
+    initApp();
 }
 
 // Show notification message
@@ -777,43 +823,93 @@ function showNotification(message) {
         setTimeout(() => document.body.removeChild(messageDiv), 500);
     }, 2000);
 }
-// Serialize all FIR Diary fields as JSON keyed by data-field
-function getDiaryContent() {
-    const container = document.getElementById('diaryExportLayout');
-    const data = {};
-    container.querySelectorAll('[data-field]').forEach(el => {
-        data[el.dataset.field] = el.value || '';
-    });
-    return JSON.stringify(data);
-}
 
-// Restore FIR Diary fields from JSON (with legacy line-format fallback)
-function setDiaryContent(content) {
-    const container = document.getElementById('diaryExportLayout');
-    let data = {};
-    try {
-        data = typeof content === 'string' ? JSON.parse(content) : (content || {});
-    } catch (e) {
-        // Legacy line-by-line format fallback
-        const inputs = [...container.querySelectorAll('[data-field]')];
-        const lines = (content || '').split('\n');
-        inputs.forEach((el, i) => { el.value = lines[i] ? lines[i].replace(/^.*?:\s*/, '') : ''; });
-        return;
+/**
+ * Resolve the current dictation insertion target (caret + element).
+ * Falls back to the letter textarea when nothing is tracked.
+ * @returns {{ el: HTMLInputElement|HTMLTextAreaElement, start: number, end: number } | null}
+ */
+function getDictationTarget() {
+    const active = document.activeElement;
+    if (
+        (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) &&
+        active !== filenameInput &&
+        (active.closest('.editor-letter') || active.closest('.editor-diary')) &&
+        active.type !== 'date'
+    ) {
+        dictationTarget = {
+            el: active,
+            start: active.selectionStart ?? active.value.length,
+            end: active.selectionEnd ?? active.value.length,
+        };
+        return dictationTarget;
     }
-    container.querySelectorAll('[data-field]').forEach(el => {
-        if (el.dataset.field in data) el.value = data[el.dataset.field];
-    });
+
+    if (dictationTarget?.el?.isConnected) {
+        return dictationTarget;
+    }
+
+    if (getActiveTemplate() === 'letter') {
+        const field = letterSheet?.getActiveField();
+        if (field?.el) {
+            field.el.focus();
+            dictationTarget = field;
+            return dictationTarget;
+        }
+    }
+
+    return null;
 }
 
-// Sync heights of diary textareas
-function syncDiaryTextareaHeights() {
-    const left = document.querySelector('textarea[data-field="left_box"]');
-    const right = document.querySelector('textarea[data-field="right_box"]');
-    if (!left || !right) return;
-    left.style.height = 'auto';
-    right.style.height = 'auto';
-    const maxHeight = Math.max(left.scrollHeight, right.scrollHeight);
-    left.style.height = right.style.height = maxHeight + 'px';
+/**
+ * Insert finalized dictated text at the tracked caret and fire input
+ * so autosave / page layout / diary spill all run as usual.
+ * @param {string} text
+ */
+function insertDictatedText(text) {
+    if (!text) return;
+    const target = getDictationTarget();
+    if (!target?.el) return;
+
+    const el = target.el;
+    const start = target.start ?? el.selectionStart ?? el.value.length;
+    const end = target.end ?? el.selectionEnd ?? el.value.length;
+    const value = el.value;
+    const next = value.slice(0, start) + text + value.slice(end);
+    const caret = start + text.length;
+
+    isDictatedInput = true;
+    try {
+        el.value = next;
+        el.focus();
+        el.selectionStart = el.selectionEnd = caret;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+    } finally {
+        isDictatedInput = false;
+    }
+
+    // Diary spill may move focus to another textarea — adopt it
+    const active = document.activeElement;
+    if (
+        (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) &&
+        (active.closest('.editor-letter') || active.closest('.editor-diary'))
+    ) {
+        dictationTarget = {
+            el: active,
+            start: active.selectionStart ?? active.value.length,
+            end: active.selectionEnd ?? active.value.length,
+        };
+    } else {
+        dictationTarget = { el, start: caret, end: caret };
+    }
 }
 
+// Serialize diary model as JSON
+function getDiaryContent() {
+    return JSON.stringify(diarySheet?.getModel() ?? emptyModel());
+}
 
+// Restore diary model from JSON (legacy flat format handled in normalizeDiaryModel)
+function setDiaryContent(content) {
+    diarySheet?.setModel(content);
+}

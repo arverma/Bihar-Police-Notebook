@@ -11,6 +11,7 @@
 ## Features
 
 - **Instant transliteration** — type Hinglish, pick Hindi suggestions (Google Input Tools; requires internet)
+- **Voice dictation (बोलकर लिखें)** — speak Hindi or English (India) via a draggable mic button; prefers on-device recognition in Chrome after a one-time language-pack download
 - **Letter & Diary templates** — plain letter editor and FIR case-diary form
 - **Document history** — browse, open, and delete saved documents (IndexedDB, stays on your device)
 - **Export & print** — print styled Hindi documents from the browser
@@ -31,9 +32,12 @@ Open [https://arverma.github.io/Bihar-Police-Notebook/](https://arverma.github.i
 
 ## Privacy
 
+Full policy and developer info: [editor/privacy.html](https://arverma.github.io/Bihar-Police-Notebook/privacy.html) (shield icon in the editor).
+
 - Documents are stored **only in your browser** (IndexedDB). They are not uploaded by this app.
 - Transliteration calls Google Input Tools over the network; your saved documents are not sent with those requests.
-- Internet is required for transliteration. Offline typing still works (without suggestions).
+- Voice dictation prefers on-device recognition; if unavailable, we ask before using Google’s online speech service. Audio is never stored by this app.
+- Internet is required for transliteration. Offline typing still works (without suggestions). Dictation works offline once the Chrome language pack is installed.
 
 ## Development
 
@@ -46,7 +50,7 @@ icons/                 # Toolbar icons
 editor/                # Static editor site (deployed to GitHub Pages)
   index.html
   css/
-  js/                  # main.js, translit.js, store.js, …
+  js/                  # main.js, dictation*.js, translit.js, store.js, …
   images/
 ```
 

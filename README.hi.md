@@ -11,6 +11,7 @@
 ## मुख्य विशेषताएँ
 
 - **Instant transliteration** — Hinglish type करें, हिंदी suggestions चुनें (Google Input Tools; internet जरूरी)
+- **बोलकर लिखें (Voice dictation)** — हिंदी या English (India) में बोलकर लिखें; Chrome में on-device recognition पसंद (एक बार language pack)
 - **Letter और Diary** — सादा letter editor और FIR केस-डायरी form
 - **Document history** — save / open / delete (IndexedDB, आपके browser में)
 - **Export & print** — browser से print
@@ -31,9 +32,12 @@ GitHub Pages सक्षम करें (Settings → Pages → Source: GitHub
 
 ## गोपनीयता (Privacy)
 
+पूरी नीति और developers: [privacy.html](https://arverma.github.io/Bihar-Police-Notebook/privacy.html) (editor में shield icon)।
+
 - Documents **केवल आपके browser** में store होते हैं — यह app उन्हें upload नहीं करता।
 - Transliteration के लिए Google Input Tools को network request जाता है; saved documents उस request में नहीं जाते।
-- Suggestions के लिए internet चाहिए। Offline भी type कर सकते हैं (बिना suggestions)।
+- बोलकर लिखने में जहाँ संभव हो on-device recognition; pack न हो तो पहले पूछकर Google online speech। Audio इस app में store नहीं होता।
+- Suggestions के लिए internet चाहिए। Offline भी type कर सकते हैं (बिना suggestions)। Language pack लगने के बाद dictation offline चल सकता है।
 
 ## उपयोग
 
