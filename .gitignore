@@ -5,7 +5,7 @@
 .idea/
 .vscode/
 
-# Local / build leftovers
+# Local leftovers (no Python/Node build for this project)
 venv/
 .venv/
 ENV/

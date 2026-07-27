@@ -4,44 +4,42 @@
 [![Chrome Extension](https://img.shields.io/badge/Chrome-MV3%20Extension-blue.svg)](https://developer.chrome.com/docs/extensions/mv3/)
 [![Hindi](https://img.shields.io/badge/ह-Hindi%20Documentation-orange.svg)](README.hi.md)
 
-**Bihar Police Notebook Tool** — a Chrome extension for Hindi document creation. Type in Hinglish (Romanized Hindi) and get Devanagari suggestions instantly. Create letters and FIR case diaries, save history locally, and export/print.
+**Bihar Police Notebook Tool** — type Hinglish (Romanized Hindi) and get Devanagari suggestions. Create letters and FIR case diaries, save history locally, and print/export. Use it as a website, or open it from the Chrome extension toolbar.
 
 **Live editor:** [https://arverma.github.io/Bihar-Police-Notebook/](https://arverma.github.io/Bihar-Police-Notebook/)
 
 ## Features
 
 - **Instant transliteration** — type Hinglish, pick Hindi suggestions (Google Input Tools; requires internet)
-- **Voice dictation (बोलकर लिखें)** — speak Hindi or English (India) via a draggable mic button; prefers on-device recognition in Chrome after a one-time language-pack download
+- **Voice dictation (बोलकर लिखें)** — speak Hindi or English (India) via a draggable mic; prefers on-device recognition in Chrome after a one-time language-pack download
 - **Letter & Diary templates** — plain letter editor and FIR case-diary form
-- **Document history** — browse, open, and delete saved documents (IndexedDB, stays on your device)
+- **Document history** — browse, open, and delete saved documents (IndexedDB on your device)
 - **Export & print** — print styled Hindi documents from the browser
-- **Works as a website** — open the Pages URL directly, or via the extension toolbar icon
+- **Website or extension** — open the Pages URL directly, or via the toolbar icon
 
 ## Install the extension
 
 1. Clone or download this repository.
 2. Open Chrome → `chrome://extensions` → enable **Developer mode**.
-3. Click **Load unpacked** and select the `extension/` folder (the folder that contains `manifest.json`).
-4. Pin the **BP Writing Tool** icon and click it — it opens (or focuses) the editor tab.
+3. Click **Load unpacked** and select the `extension/` folder (it contains `manifest.json`).
+4. Pin **BP Writing Tool** and click it — it opens (or focuses) the editor tab.
 
-The editor is a separate static site served from GitHub Pages. Enable **Pages** for this repo (Settings → Pages → Source: GitHub Actions) so the first deploy from `.github/workflows/pages.yml` publishes `editor/`. The extension package does not include editor files.
+The extension is only a launcher. The editor is a separate static site on GitHub Pages. Enable **Pages** for this repo (Settings → Pages → Source: GitHub Actions) so `.github/workflows/pages.yml` can publish `editor/`.
 
 ## Use without the extension
 
-Open [https://arverma.github.io/Bihar-Police-Notebook/](https://arverma.github.io/Bihar-Police-Notebook/) in Chrome (or any modern browser). Documents are stored in that origin’s IndexedDB.
+Open [https://arverma.github.io/Bihar-Police-Notebook/](https://arverma.github.io/Bihar-Police-Notebook/) in any modern browser. Documents are stored in that origin’s IndexedDB.
 
 ## Privacy
 
-Full policy and developer info: [editor/privacy.html](https://arverma.github.io/Bihar-Police-Notebook/privacy.html) (shield icon in the editor).
+Full policy: [privacy.html](https://arverma.github.io/Bihar-Police-Notebook/privacy.html) (shield icon in the editor).
 
-- Documents are stored **only in your browser** (IndexedDB). They are not uploaded by this app.
-- Transliteration calls Google Input Tools over the network; your saved documents are not sent with those requests.
-- Voice dictation prefers on-device recognition; if unavailable, we ask before using Google’s online speech service. Audio is never stored by this app.
-- Internet is required for transliteration. Offline typing still works (without suggestions). Dictation works offline once the Chrome language pack is installed.
+- Documents stay **only in your browser** (IndexedDB). This app does not upload them.
+- Transliteration calls Google Input Tools; saved documents are not sent with those requests.
+- Dictation prefers on-device recognition; if unavailable, we ask before using Google’s online speech service. Audio is never stored by this app.
+- Internet is required for transliteration suggestions. Offline typing still works. Dictation works offline once the Chrome language pack is installed.
 
-## Development
-
-Editor and extension are separate packages in this repository:
+## Repository layout
 
 ```text
 extension/             # Chrome MV3 package only (Load unpacked from here)
@@ -50,19 +48,25 @@ extension/             # Chrome MV3 package only (Load unpacked from here)
   icons/
 editor/                # Static editor site (deployed to GitHub Pages)
   index.html
+  privacy.html
   css/
-  js/                  # main.js, dictation*.js, translit.js, store.js, …
+  js/
   images/
+.github/workflows/     # Pages deploy for editor/
 ```
 
-No build step for the editor — edit files under `editor/` and refresh.
+There is no Python backend, virtualenv, or Node build step.
+
+## Development
+
+Edit files under `editor/` and refresh. Preview locally:
 
 ```bash
 cd editor && python3 -m http.server 8080
 # open http://127.0.0.1:8080/
 ```
 
-To point a local extension build at a local server, temporarily change `ORIGIN` / `BASE` in `extension/background.js`, then reload the extension at `chrome://extensions`.
+To point the extension at a local preview, temporarily change `ORIGIN` / `BASE` in `extension/background.js`, then reload the extension at `chrome://extensions`.
 
 ## Issues
 
@@ -77,6 +81,6 @@ To point a local extension build at a local server, temporarily change `ORIGIN` 
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE). Copyright 2025–2026 Bihar Police Notebook.
 
 Made for Bihar Police Hindi documentation workflows.

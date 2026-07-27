@@ -1,6 +1,6 @@
 /**
  * IndexedDB document store for letters and diaries.
- * Replaces the Flask/TinyDB backend.
+ * All documents stay in the browser; nothing is uploaded.
  */
 
 const DB_NAME = 'bp-writing-tool';
