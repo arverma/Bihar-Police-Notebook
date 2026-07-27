@@ -1,7 +1,7 @@
-// Opens the editor as a normal https tab (GitHub Pages). The editor is a
-// standalone static site so it also works when opened directly in a browser.
-const ORIGIN = 'https://arverma.github.io';
-const BASE = '/Bihar-Police-Notebook';
+// Opens the editor as a normal https tab. The editor is a standalone static
+// site so it also works when opened directly in a browser.
+const ORIGIN = 'https://bpdiary.arverma.dev';
+const BASE = '';
 const EDITOR_URL = `${ORIGIN}${BASE}/`;
 
 function isEditorTabUrl(url) {

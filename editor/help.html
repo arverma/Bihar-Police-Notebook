@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Help — Bihar Police Notebook</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="images/favicon.png">
+    <link rel="apple-touch-icon" sizes="128x128" href="images/icon128.png">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;500;700&family=Roboto:wght@400;500;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        body.help-body {
+            min-height: 100vh;
+            margin: 0;
+            background: var(--color-background-gradient);
+        }
+
+        .help-page {
+            max-width: 40rem;
+            margin: 0 auto;
+            padding: 2.5rem 1.5rem 4rem;
+            line-height: 1.55;
+        }
+
+        .help-page h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--brand-primary);
+            margin: 0 0 0.35rem;
+        }
+
+        .help-page .updated {
+            color: var(--color-text-muted);
+            font-size: 0.875rem;
+            margin: 0 0 1.75rem;
+        }
+
+        .help-back {
+            display: inline-block;
+            margin-bottom: 1.5rem;
+            font-size: 0.875rem;
+            color: var(--color-text-muted);
+            text-decoration: none;
+        }
+
+        .help-back:hover {
+            color: var(--brand-primary);
+        }
+
+        .help-section {
+            margin: 0 0 0.75rem;
+            background: var(--brand-white);
+            border: 1px solid var(--color-border-medium);
+            border-radius: 8px;
+            box-shadow: var(--shadow-light);
+            overflow: hidden;
+        }
+
+        .help-section > summary {
+            list-style: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 0.9rem 1rem;
+            font-size: 1.05rem;
+            font-weight: 600;
+            color: var(--brand-primary);
+            user-select: none;
+        }
+
+        .help-section > summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .help-section > summary::after {
+            content: '';
+            width: 0.45rem;
+            height: 0.45rem;
+            border-right: 2px solid var(--color-text-muted);
+            border-bottom: 2px solid var(--color-text-muted);
+            transform: rotate(45deg);
+            transition: transform 0.15s ease;
+            flex-shrink: 0;
+        }
+
+        .help-section[open] > summary::after {
+            transform: rotate(-135deg);
+        }
+
+        .help-section-body {
+            padding: 0 1rem 1rem;
+            border-top: 1px solid var(--color-border-lighter);
+        }
+
+        .help-section-body h3 {
+            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--brand-primary);
+            margin: 1rem 0 0.4rem;
+        }
+
+        .help-section-body h3:first-child {
+            margin-top: 0.85rem;
+        }
+
+        .help-section-body p,
+        .help-section-body li {
+            color: var(--color-text-primary);
+            font-size: 0.95rem;
+            margin: 0 0 0.75rem;
+        }
+
+        .help-section-body ul {
+            margin: 0 0 0.75rem;
+            padding-left: 1.25rem;
+        }
+
+        .help-section-body a {
+            color: var(--brand-primary);
+        }
+
+        .dev-list {
+            list-style: none;
+            padding: 0;
+            margin: 0.85rem 0 0.75rem;
+        }
+
+        .dev-list li {
+            margin: 0 0 0.75rem;
+            padding: 0.85rem 1rem;
+            background: var(--color-surface-secondary);
+            border: 1px solid var(--color-border-lighter);
+            border-radius: 8px;
+        }
+
+        .dev-list strong {
+            display: block;
+            margin-bottom: 0.35rem;
+            color: var(--brand-primary);
+        }
+
+        .dev-list .dev-links {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem 1rem;
+            font-size: 0.9rem;
+        }
+
+        .shortcuts-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 0.85rem 0 0.75rem;
+            font-size: 0.95rem;
+            background: var(--color-surface-secondary);
+            border: 1px solid var(--color-border-lighter);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .shortcuts-table th,
+        .shortcuts-table td {
+            text-align: left;
+            padding: 0.65rem 0.85rem;
+            border-bottom: 1px solid var(--color-border-lighter);
+            vertical-align: top;
+        }
+
+        .shortcuts-table th {
+            background: var(--brand-white);
+            color: var(--brand-primary);
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+
+        .shortcuts-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .shortcuts-table kbd {
+            display: inline-block;
+            padding: 0.12rem 0.4rem;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-size: 0.8rem;
+            background: var(--brand-white);
+            border: 1px solid var(--color-border-medium);
+            border-radius: 4px;
+            color: var(--color-text-primary);
+        }
+    </style>
+</head>
+
+<body class="help-body">
+    <main class="help-page">
+        <a class="help-back" href="index.html">← Bihar Police Notebook</a>
+        <h1>Help</h1>
+        <p class="updated">Last updated: July 27, 2026</p>
+
+        <details class="help-section" open id="privacy">
+            <summary>Privacy policy</summary>
+            <div class="help-section-body">
+                <p>
+                    This policy covers the Bihar Police Notebook Chrome extension and the
+                    website editor. They ship as separate packages: the extension only launches
+                    the editor tab; the editor is the static site where you write. Your documents
+                    stay on your device — we do not collect them.
+                </p>
+
+                <h3>Data collection</h3>
+                <p>
+                    We collect no personal data. There is no account, no sign-in, and no cloud sync.
+                </p>
+                <ul>
+                    <li>No analytics, tracking, cookies, or fingerprinting</li>
+                    <li>No ads</li>
+                    <li>No selling or sharing of your data</li>
+                </ul>
+
+                <h3>Local storage</h3>
+                <p>
+                    Letters and diaries are stored only in your browser (IndexedDB) on this device.
+                    They never leave your computer as part of how this app is built.
+                </p>
+                <p>
+                    The Chrome extension package contains only a toolbar launcher (manifest,
+                    background script, icons). It opens or focuses the editor tab. It does not
+                    read other websites, and it does not see or send your documents. The host
+                    that serves the editor files does not receive your notes.
+                </p>
+
+                <h3>Transliteration</h3>
+                <p>
+                    When you type in Hinglish mode, suggestion requests go to Google Input Tools
+                    over the network so Devanagari candidates can be shown. Only the text you are
+                    typing for suggestions is sent in those requests — not your saved document
+                    history. Offline typing still works without suggestions.
+                </p>
+
+                <h3>बोलकर लिखें (Dictation)</h3>
+                <p>
+                    The floating microphone lets you write by speaking (Hindi or English–India).
+                    The mic is on only while dictation is listening — you will see a clear
+                    indicator on the button.
+                </p>
+                <ul>
+                    <li>
+                        Whenever Chrome’s offline language pack is installed, speech is converted
+                        <strong>on your computer</strong>. Audio does not leave the device.
+                    </li>
+                    <li>
+                        If an offline pack is not available, we ask you first before using Google’s
+                        online recognition. Only if you allow it is audio sent for recognition.
+                    </li>
+                    <li>
+                        This app does not record, store, or upload your audio. Recognition text is
+                        inserted into your document on this device like normal typing.
+                    </li>
+                </ul>
+                <p>
+                    Note: Hinglish typing suggestions already use Google Input Tools over the
+                    network, so the app is not fully offline in that mode either.
+                </p>
+
+                <h3>Data deletion</h3>
+                <ul>
+                    <li>Delete a document from History anytime.</li>
+                    <li>
+                        Clear all documents by clearing this site’s data in your browser settings.
+                        Uninstalling the extension does not remove notes stored by the website
+                        origin — clear site data for that.
+                    </li>
+                </ul>
+
+                <h3>Your rights (GDPR)</h3>
+                <p>
+                    Because we do not collect or store your personal data on our servers,
+                    there is nothing for us to access, export, or delete on your behalf.
+                    You control everything that lives in your browser.
+                </p>
+            </div>
+        </details>
+
+        <details class="help-section" id="shortcuts">
+            <summary>Shortcuts</summary>
+            <div class="help-section-body">
+                <p>Keyboard shortcuts in the editor (macOS: use ⌘ instead of Ctrl):</p>
+                <table class="shortcuts-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">Shortcut</th>
+                            <th scope="col">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>D</kbd></td>
+                            <td>Start / pause / resume dictation (बोलकर लिखें)</td>
+                        </tr>
+                        <tr>
+                            <td><kbd>Esc</kbd></td>
+                            <td>End dictation if active; otherwise close History</td>
+                        </tr>
+                        <tr>
+                            <td><kbd>Ctrl</kbd> + <kbd>P</kbd></td>
+                            <td>Export / print PDF</td>
+                        </tr>
+                        <tr>
+                            <td><kbd>Ctrl</kbd> + <kbd>N</kbd></td>
+                            <td>New document</td>
+                        </tr>
+                        <tr>
+                            <td><kbd>Ctrl</kbd> + <kbd>H</kbd> or <kbd>B</kbd></td>
+                            <td>Toggle History sidebar</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </details>
+
+        <details class="help-section" id="about">
+            <summary>App info</summary>
+            <div class="help-section-body">
+                <p>
+                    <strong>Bihar Police Notebook</strong> is a browser tool for writing Hindi
+                    letters and FIR case diaries. Type in Hinglish for Devanagari suggestions,
+                    or use बोलकर लिखें to dictate.
+                </p>
+                <ul>
+                    <li><strong>Letter</strong> and <strong>Diary</strong> templates with print-ready layout</li>
+                    <li>Document history stored locally in your browser (IndexedDB)</li>
+                    <li>Optional Chrome extension — toolbar icon that opens this editor only</li>
+                    <li>
+                        Live editor:
+                        <a href="https://bpdiary.arverma.dev/">bpdiary.arverma.dev</a>
+                    </li>
+                </ul>
+            </div>
+        </details>
+
+        <details class="help-section" id="data-loss">
+            <summary>When data can be lost or corrupted</summary>
+            <div class="help-section-body">
+                <p>
+                    There is <strong>no cloud backup</strong>. History lives only in this browser
+                    for this website’s origin. If that storage goes away, documents cannot be
+                    recovered from our servers — we never had them.
+                </p>
+                <ul>
+                    <li>
+                        <strong>Domain or URL change</strong> — IndexedDB is tied to the site origin
+                        (e.g. a custom domain vs GitHub Pages). Opening a new address looks like an
+                        empty History even if old docs still exist on the previous origin.
+                    </li>
+                    <li>
+                        <strong>Clearing site data</strong> — browser settings that clear cookies /
+                        site data for this site also wipe letters and diaries.
+                    </li>
+                    <li>
+                        <strong>Private / Incognito</strong> — storage is temporary and is discarded
+                        when the private window closes.
+                    </li>
+                    <li>
+                        <strong>Another device or Chrome profile</strong> — history does not sync
+                        across devices or profiles unless you use a separate backup method.
+                    </li>
+                    <li>
+                        <strong>Storage full or browser bugs</strong> — rare IndexedDB failures or
+                        quota limits can prevent saves or leave data unreadable.
+                    </li>
+                </ul>
+                <p>
+                    Tip: use Export / Print (PDF) for important documents so you have a copy outside
+                    the browser.
+                </p>
+            </div>
+        </details>
+
+        <details class="help-section" id="developers">
+            <summary>Developers</summary>
+            <div class="help-section-body">
+                <ul class="dev-list">
+                    <li>
+                        <strong>Aman Ranjan Verma</strong>
+                        <div class="dev-links">
+                            <a href="https://www.linkedin.com/in/ar-verma/" target="_blank" rel="noopener noreferrer">LinkedIn</a>
+                            <a href="https://github.com/arverma/Bihar-Police-Notebook" target="_blank" rel="noopener noreferrer">GitHub</a>
+                        </div>
+                    </li>
+                    <li>
+                        <strong>Ayush Kumar</strong>
+                        <div class="dev-links">
+                            <a href="https://www.ayushrskiaa.tech/" target="_blank" rel="noopener noreferrer">Website</a>
+                            <a href="https://www.linkedin.com/in/ayush-kumar-iiitm" target="_blank" rel="noopener noreferrer">LinkedIn</a>
+                        </div>
+                    </li>
+                </ul>
+                <p>
+                    Project repository:
+                    <a href="https://github.com/arverma/Bihar-Police-Notebook" target="_blank" rel="noopener noreferrer">github.com/arverma/Bihar-Police-Notebook</a>
+                </p>
+                <p>
+                    Questions or issues?
+                    <a href="https://github.com/arverma/Bihar-Police-Notebook/issues" target="_blank" rel="noopener noreferrer">Open an issue on GitHub</a>.
+                </p>
+            </div>
+        </details>
+    </main>
+</body>
+
+</html>

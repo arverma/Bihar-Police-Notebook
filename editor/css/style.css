@@ -1213,8 +1213,8 @@ body {
     white-space: nowrap;
 }
 
-/* Privacy FAB — bottom-left so it clears the page pill */
-.privacy-fab {
+/* Help FAB — bottom-left so it clears the page pill */
+.help-fab {
     position: fixed;
     left: 16px;
     bottom: 16px;
@@ -1231,10 +1231,13 @@ body {
     color: var(--color-text-muted);
     box-shadow: var(--shadow-medium);
     text-decoration: none;
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1;
     transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
 }
 
-.privacy-fab:hover {
+.help-fab:hover {
     background: var(--color-hover-brand);
     color: var(--brand-primary);
     border-color: var(--brand-primary);
@@ -1694,7 +1697,7 @@ body {
     .header-frame,
     .sidebar,
     .switch-btn,
-    .privacy-fab,
+    .help-fab,
     .page-indicator,
     .dictation-fab,
     .dictation-interim,

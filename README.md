@@ -6,7 +6,7 @@
 
 **Bihar Police Notebook Tool** — type Hinglish (Romanized Hindi) and get Devanagari suggestions. Create letters and FIR case diaries, save history locally, and print/export. Use it as a website, or open it from the Chrome extension toolbar.
 
-**Live editor:** [https://arverma.github.io/Bihar-Police-Notebook/](https://arverma.github.io/Bihar-Police-Notebook/)
+**Live editor:** [https://bpdiary.arverma.dev/](https://bpdiary.arverma.dev/)
 
 ## Features
 
@@ -28,11 +28,11 @@ The extension is only a launcher. The editor is a separate static site on GitHub
 
 ## Use without the extension
 
-Open [https://arverma.github.io/Bihar-Police-Notebook/](https://arverma.github.io/Bihar-Police-Notebook/) in any modern browser. Documents are stored in that origin’s IndexedDB.
+Open [https://bpdiary.arverma.dev/](https://bpdiary.arverma.dev/) in any modern browser. Documents are stored in that origin’s IndexedDB.
 
-## Privacy
+## Help & privacy
 
-Full policy: [privacy.html](https://arverma.github.io/Bihar-Police-Notebook/privacy.html) (shield icon in the editor).
+Help page (privacy, shortcuts, about): [help.html](https://bpdiary.arverma.dev/help.html) (`?` button in the editor).
 
 - Documents stay **only in your browser** (IndexedDB). This app does not upload them.
 - Transliteration calls Google Input Tools; saved documents are not sent with those requests.
@@ -48,7 +48,7 @@ extension/             # Chrome MV3 package only (Load unpacked from here)
   icons/
 editor/                # Static editor site (deployed to GitHub Pages)
   index.html
-  privacy.html
+  help.html
   css/
   js/
   images/

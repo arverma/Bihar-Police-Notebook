@@ -6,7 +6,7 @@
 
 **बिहार पुलिस नोटबुक टूल** — Hinglish में type करके हिंदी (Devanagari) documents बनाएँ। Letter और FIR केस-डायरी, local history, और print/export। Website की तरह खोलें, या Chrome extension icon से।
 
-**Live editor:** [https://arverma.github.io/Bihar-Police-Notebook/](https://arverma.github.io/Bihar-Police-Notebook/)
+**Live editor:** [https://bpdiary.arverma.dev/](https://bpdiary.arverma.dev/)
 
 ## मुख्य विशेषताएँ
 
@@ -28,11 +28,11 @@ Extension केवल launcher है। Editor अलग static site है।
 
 ## बिना extension के उपयोग
 
-[https://arverma.github.io/Bihar-Police-Notebook/](https://arverma.github.io/Bihar-Police-Notebook/) किसी भी modern browser में खोलें। Documents उसी origin के IndexedDB में रहते हैं।
+[https://bpdiary.arverma.dev/](https://bpdiary.arverma.dev/) किसी भी modern browser में खोलें। Documents उसी origin के IndexedDB में रहते हैं।
 
-## गोपनीयता (Privacy)
+## सहायता और गोपनीयता
 
-पूरी नीति: [privacy.html](https://arverma.github.io/Bihar-Police-Notebook/privacy.html) (editor में shield icon)।
+Help page (privacy, shortcuts, about): [help.html](https://bpdiary.arverma.dev/help.html) (editor में `?` button)।
 
 - Documents **केवल आपके browser** में store होते हैं — यह app उन्हें upload नहीं करता।
 - Transliteration के लिए Google Input Tools को network request जाता है; saved documents उस request में नहीं जाते।
