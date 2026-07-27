@@ -610,9 +610,171 @@ body {
     color: var(--brand-white);
 }
 
-#exportBtn span {
+#exportBtn span:not(.btn-icon) {
     font-size: 14px;
     font-weight: 500;
+}
+
+.btn-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1em;
+    height: 1em;
+}
+
+@keyframes header-icon-spin {
+    to { transform: rotate(360deg); }
+}
+
+.is-busy .btn-icon i {
+    animation: header-icon-spin 0.8s linear infinite;
+}
+
+.drive-control {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.doc-name-cluster {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    flex: 1 1 200px;
+    max-width: 320px;
+}
+
+#driveConnectBtn,
+#driveAccountBtn {
+    background: var(--brand-white);
+    color: var(--brand-primary);
+    border: 1px solid var(--color-border-light);
+    border-radius: 8px;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    font-size: 0.9em;
+    cursor: pointer;
+    box-shadow: var(--shadow-light);
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+/* ID display rules override the UA [hidden] stylesheet — force hide */
+#driveConnectBtn[hidden],
+#driveAccountBtn[hidden] {
+    display: none !important;
+}
+
+#driveConnectBtn:hover,
+#driveAccountBtn:hover {
+    background: var(--color-hover-brand);
+    box-shadow: var(--shadow-medium);
+}
+
+#driveConnectBtn i,
+#driveAccountBtn i {
+    color: var(--brand-primary);
+    font-size: 15px;
+}
+
+#driveAccountBtn[data-sync="error"] {
+    border-color: var(--color-error);
+}
+
+#driveAccountBtn[data-sync="error"] i {
+    color: var(--color-error);
+}
+
+#driveAccountBtn[data-sync="syncing"] {
+    cursor: wait;
+}
+
+.drive-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    min-width: 180px;
+    background: var(--brand-white);
+    border: 1px solid var(--color-border-light);
+    border-radius: 8px;
+    box-shadow: var(--shadow-medium);
+    z-index: 1100;
+    padding: 4px;
+    display: flex;
+    flex-direction: column;
+}
+
+.drive-menu[hidden] {
+    display: none !important;
+}
+
+.drive-menu-email {
+    padding: 8px 12px 4px;
+    font-size: 12px;
+    color: var(--color-text-muted);
+    word-break: break-all;
+    border-bottom: 1px solid var(--color-border-lighter);
+    margin-bottom: 2px;
+}
+
+.drive-menu-email[hidden] {
+    display: none !important;
+}
+
+.drive-menu-item {
+    appearance: none;
+    border: none;
+    background: transparent;
+    text-align: left;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    color: var(--brand-primary);
+    cursor: pointer;
+}
+
+.drive-menu-item:hover {
+    background: var(--color-hover-brand);
+}
+
+.sidebar-header {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.sidebar-header h3 {
+    margin: 0;
+    font-size: 16px;
+    color: var(--brand-primary);
+}
+
+.history-sync-badge {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 4px;
+    font-size: 11px;
+    vertical-align: middle;
+}
+
+.history-sync-badge.is-synced {
+    color: #2e7d32;
+}
+
+.history-sync-badge.is-pending {
+    color: #c47a00;
+}
+
+.history-sync-badge.is-error {
+    color: var(--color-error);
 }
 
 .brand-mark-hindi {
@@ -713,45 +875,30 @@ body {
 
 .filename-input {
     height: 36px;
-    width: 200px;
-    max-width: 260px;
+    width: 100%;
     min-width: 100px;
-    flex: 1 1 160px;
-    padding: 0 10px;
-    border: none;
-    border-bottom: 1px solid transparent;
-    border-radius: 0;
+    flex: 1 1 auto;
+    padding: 0 12px;
+    border: 1px solid var(--color-border-light);
+    border-radius: 8px;
     font-family: "Roboto", Helvetica, sans-serif;
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 500;
     color: var(--color-text-primary);
-    background: transparent;
-    transition: border-color 0.2s ease;
+    background: var(--brand-white);
+    box-shadow: var(--shadow-light);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
     box-sizing: border-box;
 }
 
 .filename-input:hover {
-    border-bottom-color: var(--color-border-light);
+    border-color: var(--color-border);
 }
 
 .filename-input:focus {
     outline: none;
-    border-bottom-color: var(--brand-primary);
-    background: transparent;
-}
-
-.save-status {
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--color-text-muted);
-    white-space: nowrap;
-    transition: color 0.2s ease;
-    min-width: 4.5em;
-    text-align: right;
-}
-
-.save-status[data-state="saving"] {
-    color: var(--brand-primary);
+    border-color: var(--brand-primary);
+    box-shadow: var(--shadow-medium);
 }
 
 .header-frame {

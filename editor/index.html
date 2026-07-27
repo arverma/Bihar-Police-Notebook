@@ -25,9 +25,32 @@
                 <img src="images/bihar-police-logo.svg" alt=""
                     class="bihar-police-logo-header" width="32" height="32">
                 <span class="brand-mark-hindi" aria-hidden="true">बिहार पुलिस</span>
-                <input type="text" class="filename-input" id="filenameInput"
-                    placeholder="Document name…" aria-label="Document name"
-                    title="Document name">
+                <div class="doc-name-cluster">
+                    <div class="drive-control" id="driveControl">
+                        <button type="button" class="action-btn drive-btn" id="driveConnectBtn"
+                            title="Connect Google Drive for backup" aria-label="Connect Google Drive for backup">
+                            <span class="btn-icon"><i class="fab fa-google-drive" aria-hidden="true"></i></span>
+                        </button>
+                        <button type="button" class="drive-account" id="driveAccountBtn" hidden
+                            data-sync="idle"
+                            title="Google Drive connected" aria-label="Google Drive account" aria-haspopup="true"
+                            aria-expanded="false">
+                            <span class="btn-icon"><i class="fab fa-google-drive" aria-hidden="true"></i></span>
+                        </button>
+                        <div class="drive-menu" id="driveMenu" hidden>
+                            <div class="drive-menu-email" id="driveEmailLabel" hidden></div>
+                            <button type="button" class="drive-menu-item" id="driveSyncNowBtn">
+                                Sync all
+                            </button>
+                            <button type="button" class="drive-menu-item" id="driveDisconnectBtn">
+                                Disconnect
+                            </button>
+                        </div>
+                    </div>
+                    <input type="text" class="filename-input" id="filenameInput"
+                        placeholder="Document name…" aria-label="Document name"
+                        title="Document name">
+                </div>
                 <button class="add-template-btn" type="button" title="Start a new document"
                     aria-label="Start a new document">
                     <div class="plus-icon">
@@ -50,10 +73,9 @@
                     <button type="button" class="segment-btn" data-lang="hindi"
                         title="Type in Hindi (Devanagari)" aria-pressed="false">Hindi</button>
                 </div>
-                <div id="save-status" class="save-status" data-state="saved" title="Save status">Saved</div>
                 <button class="action-btn export-btn" id="exportBtn" type="button"
                     title="Print or save as PDF" aria-label="Print or save as PDF">
-                    <i class="fas fa-file-pdf"></i>
+                    <span class="btn-icon"><i class="fas fa-file-pdf" aria-hidden="true"></i></span>
                     <span>PDF</span>
                 </button>
             </div>

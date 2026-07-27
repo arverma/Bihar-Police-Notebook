@@ -206,23 +206,26 @@
                     This policy covers the Bihar Police Notebook Chrome extension and the
                     website editor. They ship as separate packages: the extension only launches
                     the editor tab; the editor is the static site where you write. Your documents
-                    stay on your device — we do not collect them.
+                    stay on your device by default. Optional Google Drive backup is off until you
+                    choose to connect.
                 </p>
 
                 <h3>Data collection</h3>
                 <p>
-                    We collect no personal data. There is no account, no sign-in, and no cloud sync.
+                    We do not run our own accounts or analytics for your notes. There is no
+                    mandatory sign-in. If you connect Google Drive, authentication is handled by
+                    Google; this app only receives an access token to write/read files it creates
+                    in your Drive (`drive.file` scope).
                 </p>
                 <ul>
-                    <li>No analytics, tracking, cookies, or fingerprinting</li>
+                    <li>No analytics, tracking, cookies, or fingerprinting by this app</li>
                     <li>No ads</li>
                     <li>No selling or sharing of your data</li>
                 </ul>
 
                 <h3>Local storage</h3>
                 <p>
-                    Letters and diaries are stored only in your browser (IndexedDB) on this device.
-                    They never leave your computer as part of how this app is built.
+                    Letters and diaries are stored in your browser (IndexedDB) on this device.
                 </p>
                 <p>
                     The Chrome extension package contains only a toolbar launcher (manifest,
@@ -230,6 +233,28 @@
                     read other websites, and it does not see or send your documents. The host
                     that serves the editor files does not receive your notes.
                 </p>
+
+                <h3>Google Drive backup (optional)</h3>
+                <p>
+                    Use the <strong>Drive</strong> button in the header to sign in with Google.
+                    The app creates or reuses a folder named <strong>BP Writing Tool</strong> in
+                    your My Drive and syncs each document as a JSON file. Local edits save quickly
+                    in the browser; Drive backup is infrequent — after ~45 seconds of idle typing,
+                    when you leave the tab, or when you use Backup / Sync all — not on every
+                    keystroke. Opening the editor pulls newer or missing files from Drive, then
+                    pushes any pending locals.
+                </p>
+                <ul>
+                    <li>History items show whether each document is backed up; you can back up one
+                        item, the current list, or sync all.</li>
+                    <li><strong>Disconnect</strong> revokes access from this browser. It does not
+                        delete the folder or files already in your Drive.</li>
+                    <li>After you connect, a short-lived access token is stored in this browser
+                        (IndexedDB) for up to one day so refresh does not always ask you to sign
+                        in again. Google may still require a quiet re-check when that token expires
+                        (~1 hour).</li>
+                    <li>Data stays in <em>your</em> Google account. We do not host your notes.</li>
+                </ul>
 
                 <h3>Transliteration</h3>
                 <p>
@@ -331,6 +356,7 @@
                 <ul>
                     <li><strong>Letter</strong> and <strong>Diary</strong> templates with print-ready layout</li>
                     <li>Document history stored locally in your browser (IndexedDB)</li>
+                    <li>Optional Google Drive backup (sign in; sync to your Drive folder)</li>
                     <li>Optional Chrome extension — toolbar icon that opens this editor only</li>
                     <li>
                         Live editor:
@@ -344,27 +370,31 @@
             <summary>When data can be lost or corrupted</summary>
             <div class="help-section-body">
                 <p>
-                    There is <strong>no cloud backup</strong>. History lives only in this browser
-                    for this website’s origin. If that storage goes away, documents cannot be
-                    recovered from our servers — we never had them.
+                    Local History lives in this browser for this website’s origin. Clearing site
+                    data or using another origin can empty History. Optional Google Drive backup
+                    (when connected) keeps copies in your Drive folder so you can restore on the
+                    same or another browser after signing in again.
                 </p>
                 <ul>
                     <li>
                         <strong>Domain or URL change</strong> — IndexedDB is tied to the site origin
                         (e.g. a custom domain vs GitHub Pages). Opening a new address looks like an
-                        empty History even if old docs still exist on the previous origin.
+                        empty History even if old docs still exist on the previous origin. Connect
+                        Drive and use Sync all to restore from your Drive folder if you had backed up.
                     </li>
                     <li>
                         <strong>Clearing site data</strong> — browser settings that clear cookies /
-                        site data for this site also wipe letters and diaries.
+                        site data for this site also wipe local letters and diaries (Drive copies
+                        remain if you had connected).
                     </li>
                     <li>
                         <strong>Private / Incognito</strong> — storage is temporary and is discarded
                         when the private window closes.
                     </li>
                     <li>
-                        <strong>Another device or Chrome profile</strong> — history does not sync
-                        across devices or profiles unless you use a separate backup method.
+                        <strong>Another device or Chrome profile</strong> — local history does not
+                        sync by itself; use Drive backup and Sync all after connecting on the other
+                        device.
                     </li>
                     <li>
                         <strong>Storage full or browser bugs</strong> — rare IndexedDB failures or
@@ -373,7 +403,7 @@
                 </ul>
                 <p>
                     Tip: use Export / Print (PDF) for important documents so you have a copy outside
-                    the browser.
+                    the browser. Drive backup is an additional safety net when enabled.
                 </p>
             </div>
         </details>

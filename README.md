@@ -14,6 +14,7 @@
 - **Voice dictation (बोलकर लिखें)** — speak Hindi or English (India) via a draggable mic; prefers on-device recognition in Chrome after a one-time language-pack download
 - **Letter & Diary templates** — plain letter editor and FIR case-diary form
 - **Document history** — browse, open, and delete saved documents (IndexedDB on your device)
+- **Optional Google Drive backup** — sign in once; documents sync to a `BP Writing Tool` folder in your Drive (incremental backup + restore)
 - **Export & print** — print styled Hindi documents from the browser
 - **Website or extension** — open the Pages URL directly, or via the toolbar icon
 
@@ -34,10 +35,10 @@ Open [https://bpdiary.arverma.dev/](https://bpdiary.arverma.dev/) in any modern 
 
 Help page (privacy, shortcuts, about): [help.html](https://bpdiary.arverma.dev/help.html) (`?` button in the editor).
 
-- Documents stay **only in your browser** (IndexedDB). This app does not upload them.
+- Documents stay **in your browser** (IndexedDB). Optional Google Drive backup is off until you click **Drive** and sign in; then copies sync to **your** Drive only (`drive.file` scope).
 - Transliteration calls Google Input Tools; saved documents are not sent with those requests.
 - Dictation prefers on-device recognition; if unavailable, we ask before using Google’s online speech service. Audio is never stored by this app.
-- Internet is required for transliteration suggestions. Offline typing still works. Dictation works offline once the Chrome language pack is installed.
+- Internet is required for transliteration suggestions and for Drive sync. Offline typing still works. Dictation works offline once the Chrome language pack is installed.
 
 ## Repository layout
 
@@ -51,11 +52,19 @@ editor/                # Static editor site (deployed to GitHub Pages)
   help.html
   css/
   js/
+    store.js           # IndexedDB documents
+    drive-config.js    # Google OAuth client ID + Drive settings
+    drive-auth.js      # Google Identity Services token client
+    drive-sync.js      # Incremental Drive backup / restore
   images/
 .github/workflows/     # Pages deploy for editor/
 ```
 
 There is no Python backend, virtualenv, or Node build step.
+
+### Google Drive (maintainers)
+
+OAuth Web client ID lives in `editor/js/drive-config.js`. Enable the Drive API, add authorized JavaScript origins (`https://bpdiary.arverma.dev` and local preview if needed), and while the consent screen is in Testing, add your Google account as a test user. Do not commit a client secret.
 
 ## Development
 

@@ -14,6 +14,7 @@
 - **बोलकर लिखें (Voice dictation)** — हिंदी या English (India) में बोलकर लिखें; Chrome में on-device recognition पसंद (एक बार language pack)
 - **Letter और Diary** — सादा letter editor और FIR केस-डायरी form
 - **Document history** — save / open / delete (IndexedDB, आपके browser में)
+- **वैकल्पिक Google Drive backup** — sign in करके `BP Writing Tool` folder में incremental sync (backup + restore)
 - **Export & print** — browser से print
 - **Website या extension** — Pages URL सीधे, या toolbar icon से
 
@@ -34,10 +35,10 @@ Extension केवल launcher है। Editor अलग static site है।
 
 Help page (privacy, shortcuts, about): [help.html](https://bpdiary.arverma.dev/help.html) (editor में `?` button)।
 
-- Documents **केवल आपके browser** में store होते हैं — यह app उन्हें upload नहीं करता।
+- Documents **आपके browser** में रहते हैं। **Drive** पर click करके sign in करने पर ही backup चालू होता है — copies **आपके** Google Drive में जाती हैं।
 - Transliteration के लिए Google Input Tools को network request जाता है; saved documents उस request में नहीं जाते।
 - बोलकर लिखने में जहाँ संभव हो on-device recognition; pack न हो तो पहले पूछकर Google online speech। Audio इस app में store नहीं होता।
-- Suggestions के लिए internet चाहिए। Offline भी type कर सकते हैं (बिना suggestions)। Language pack लगने के बाद dictation offline चल सकता है।
+- Suggestions और Drive sync के लिए internet चाहिए। Offline भी type कर सकते हैं (बिना suggestions)। Language pack लगने के बाद dictation offline चल सकता है।
 
 ## Repository संरचना
 

@@ -1,6 +1,13 @@
 import { getWordBoundaries } from './utils.js';
 import { fetchSuggestions } from './translit.js';
-import { getDocuments, saveDocumentById, deleteDocument, previewText } from './store.js';
+import {
+    getDocuments,
+    saveDocumentById,
+    softDeleteDocument,
+    hardDeleteById,
+    previewText,
+    backupStatus,
+} from './store.js';
 import { initPagedSheet, letterPrintCss, letterPagesHtml } from './paged-sheet.js';
 import {
     initDiarySheet,
@@ -10,12 +17,28 @@ import {
     emptyModel,
 } from './diary-sheet.js';
 import { initDictation } from './dictation-ui.js';
+import {
+    initDriveAuth,
+    connectDrive,
+    disconnectDrive,
+    isConnected,
+    getConnectedEmail,
+    onAuthChange,
+} from './drive-auth.js';
+import {
+    syncAll,
+    pushDocById,
+    scheduleDriveBackup,
+    flushDriveBackupSoon,
+    onSyncStatusChange,
+    getSyncState,
+} from './drive-sync.js';
 
 const letterPagesEl = document.getElementById('letterPages');
 const suggestionsBox = document.getElementById('suggestions');
 const pageIndicator = document.getElementById('pageIndicator');
 const filenameInput = document.getElementById('filenameInput');
-const saveStatusEl = document.getElementById('save-status');
+const exportBtnEl = document.getElementById('exportBtn');
 
 /** @type {ReturnType<typeof initPagedSheet> | null} */
 let letterSheet = null;
@@ -51,10 +74,33 @@ function formatDocFilename(date = new Date()) {
     });
 }
 
+/**
+ * @param {HTMLElement|null} btn
+ * @param {string} iconClass e.g. "fab fa-google-drive" or "fas fa-spinner"
+ */
+function setBtnIcon(btn, iconClass) {
+    const icon = btn?.querySelector('.btn-icon i');
+    if (!icon) return;
+    icon.className = iconClass;
+}
+
+/**
+ * Local autosave busy state on the PDF button (spinner = saving, not exporting).
+ * @param {'saving'|'saved'} state
+ */
 function setSaveStatus(state) {
-    if (!saveStatusEl) return;
-    saveStatusEl.dataset.state = state;
-    saveStatusEl.textContent = state === 'saving' ? 'Saving…' : 'Saved';
+    if (!exportBtnEl) return;
+    if (state === 'saving') {
+        exportBtnEl.classList.add('is-busy');
+        exportBtnEl.setAttribute('aria-busy', 'true');
+        exportBtnEl.title = 'Saving…';
+        setBtnIcon(exportBtnEl, 'fas fa-spinner');
+        return;
+    }
+    exportBtnEl.classList.remove('is-busy');
+    exportBtnEl.removeAttribute('aria-busy');
+    exportBtnEl.title = 'Print or save as PDF';
+    setBtnIcon(exportBtnEl, 'fas fa-file-pdf');
 }
 
 function getActiveTemplate() {
@@ -128,6 +174,7 @@ async function flushSave() {
         setSaveStatus('saved');
         updateDocumentTitle();
         if (loadHistoryFn) await loadHistoryFn();
+        scheduleDriveBackup();
     } catch (err) {
         console.error('Autosave failed:', err);
         setSaveStatus('saved');
@@ -430,6 +477,82 @@ function initApp() {
     const addTemplateBtn = document.querySelector('.add-template-btn');
     const exportBtn = document.getElementById('exportBtn');
     const historyList = document.querySelector('.history-list');
+    const driveConnectBtn = document.getElementById('driveConnectBtn');
+    const driveAccountBtn = document.getElementById('driveAccountBtn');
+    const driveEmailLabel = document.getElementById('driveEmailLabel');
+    const driveMenu = document.getElementById('driveMenu');
+    const driveSyncNowBtn = document.getElementById('driveSyncNowBtn');
+    const driveDisconnectBtn = document.getElementById('driveDisconnectBtn');
+
+    function updateDriveChrome() {
+        const connected = isConnected();
+        const email = getConnectedEmail();
+        if (driveConnectBtn) driveConnectBtn.hidden = connected;
+        if (driveAccountBtn) {
+            driveAccountBtn.hidden = !connected;
+            driveAccountBtn.title = email
+                ? `Connected as ${email}`
+                : 'Google Drive connected';
+            driveAccountBtn.setAttribute(
+                'aria-label',
+                email ? `Google Drive: ${email}` : 'Google Drive account',
+            );
+        }
+        if (driveEmailLabel) {
+            if (email) {
+                driveEmailLabel.hidden = false;
+                driveEmailLabel.textContent = email;
+            } else {
+                driveEmailLabel.hidden = true;
+                driveEmailLabel.textContent = '';
+            }
+        }
+        if (!connected && driveMenu) {
+            driveMenu.hidden = true;
+            driveAccountBtn?.setAttribute('aria-expanded', 'false');
+            if (driveAccountBtn) {
+                driveAccountBtn.dataset.sync = 'idle';
+                driveAccountBtn.classList.remove('is-busy');
+                driveAccountBtn.removeAttribute('aria-busy');
+                setBtnIcon(driveAccountBtn, 'fab fa-google-drive');
+            }
+        }
+        updateDriveSyncStatus();
+    }
+
+    function updateDriveSyncStatus() {
+        if (!driveAccountBtn || !isConnected()) return;
+        const { state, error } = getSyncState();
+        driveAccountBtn.dataset.sync = state;
+        const email = getConnectedEmail();
+        const emailBit = email ? ` (${email})` : '';
+
+        if (state === 'syncing') {
+            driveAccountBtn.classList.add('is-busy');
+            driveAccountBtn.setAttribute('aria-busy', 'true');
+            setBtnIcon(driveAccountBtn, 'fas fa-spinner');
+            driveAccountBtn.title = `Syncing with Google Drive${emailBit}`;
+        } else if (state === 'error') {
+            driveAccountBtn.classList.remove('is-busy');
+            driveAccountBtn.removeAttribute('aria-busy');
+            setBtnIcon(driveAccountBtn, 'fab fa-google-drive');
+            driveAccountBtn.title = error
+                ? `Sync error: ${error}`
+                : `Sync error${emailBit}`;
+        } else {
+            driveAccountBtn.classList.remove('is-busy');
+            driveAccountBtn.removeAttribute('aria-busy');
+            setBtnIcon(driveAccountBtn, 'fab fa-google-drive');
+            driveAccountBtn.title = email
+                ? `Connected as ${email}`
+                : 'Google Drive connected';
+        }
+    }
+
+    function closeDriveMenu() {
+        if (driveMenu) driveMenu.hidden = true;
+        driveAccountBtn?.setAttribute('aria-expanded', 'false');
+    }
 
     // Helper to get today's date string
     function getDateString(date) {
@@ -491,8 +614,26 @@ function initApp() {
                 const firstLine = previewText(doc);
                 const created = new Date(doc.created_at || doc.date || Date.now());
                 const updated = doc.updated_at ? new Date(doc.updated_at) : created;
-                const createdStr = created.toLocaleString([], { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-                const updatedStr = updated.toLocaleString([], { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                const updatedStr = updated.toLocaleString([], {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                });
+
+                const status = backupStatus(doc);
+                const connected = isConnected();
+                let syncIcon = '';
+                if (connected) {
+                    if (status === 'synced') {
+                        syncIcon = `<span class="history-sync-badge is-synced" title="Backed up to Drive"><i class="fas fa-cloud" aria-hidden="true"></i></span>`;
+                    } else if (status === 'error') {
+                        syncIcon = `<span class="history-sync-badge is-error" title="${escapeHtml(doc.syncError || 'Backup failed')}"><i class="fas fa-cloud" aria-hidden="true"></i></span>`;
+                    } else {
+                        syncIcon = `<span class="history-sync-badge is-pending" title="Not backed up yet"><i class="fas fa-cloud" aria-hidden="true"></i></span>`;
+                    }
+                }
 
                 const item = document.createElement('div');
                 item.className = 'history-item';
@@ -503,9 +644,8 @@ function initApp() {
                 item.innerHTML = `
                     <i class="fas fa-file-alt"></i>
                     <div class="history-item-details">
-                        <span class="history-item-name">${escapeHtml(doc.filename)}</span>
-                        <span class="history-item-time">Created: ${createdStr}</span>
-                        <span class="history-item-time">Last update: ${updatedStr}</span>
+                        <span class="history-item-name">${escapeHtml(doc.filename)} ${syncIcon}</span>
+                        <span class="history-item-time">${updatedStr}</span>
                         <span class="history-item-preview">${escapeHtml(firstLine)}</span>
                     </div>
                     <div class="history-item-actions">
@@ -551,12 +691,18 @@ function initApp() {
                 item.querySelector('.delete-btn').onclick = async (e) => {
                     e.stopPropagation();
                     if (!confirm(`Delete "${doc.filename}" permanently? This cannot be undone.`)) return;
-                    const ok = await deleteDocument(doc.type, doc.filename);
-                    if (!ok) { alert('Failed to delete document.'); return; }
+                    const row = await softDeleteDocument(doc.type, doc.filename);
+                    if (!row) { alert('Failed to delete document.'); return; }
                     if (currentDoc.id != null && currentDoc.id === doc.id) {
                         startNewDocument(doc.type);
                     }
                     showNotification('Document deleted.');
+                    if (isConnected()) {
+                        void pushDocById(row.type, row.id).then(() => loadHistory());
+                    } else if (!row.driveFileId) {
+                        // Never synced — purge locally; no Drive tombstone needed
+                        await hardDeleteById(row.type, row.id);
+                    }
                     await loadHistory();
                 };
 
@@ -631,6 +777,96 @@ function initApp() {
 
     startNewDocument('diary');
     void loadHistory();
+    updateDriveChrome();
+
+    void (async () => {
+        try {
+            await initDriveAuth();
+            updateDriveChrome();
+            if (isConnected()) {
+                const result = await syncAll();
+                if (!result.ok && result.error) {
+                    console.warn('Drive sync on open:', result.error);
+                }
+                await loadHistory();
+                updateDriveSyncStatus();
+            }
+        } catch (err) {
+            console.warn('Drive auth init failed:', err);
+        }
+    })();
+
+    onAuthChange(() => {
+        updateDriveChrome();
+        void loadHistory();
+    });
+    onSyncStatusChange(() => {
+        updateDriveSyncStatus();
+        void loadHistory();
+    });
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+            void flushDriveBackupSoon().then(() => loadHistory());
+        }
+    });
+    window.addEventListener('pagehide', () => {
+        void flushDriveBackupSoon();
+    });
+
+    driveConnectBtn?.addEventListener('click', async () => {
+        try {
+            await connectDrive();
+            updateDriveChrome();
+            showNotification('Google Drive connected.');
+            const result = await syncAll();
+            if (!result.ok && result.error) {
+                showNotification('Connected, but sync had an error.');
+            } else {
+                showNotification('Synced with Drive.');
+            }
+            await loadHistory();
+        } catch (err) {
+            console.error(err);
+            showNotification(err?.message || 'Could not connect to Drive.');
+        }
+    });
+
+    driveAccountBtn?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!driveMenu) return;
+        const open = driveMenu.hidden;
+        driveMenu.hidden = !open;
+        driveAccountBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+
+    driveSyncNowBtn?.addEventListener('click', async () => {
+        closeDriveMenu();
+        const result = await syncAll();
+        await loadHistory();
+        updateDriveSyncStatus();
+        showNotification(result.ok ? 'Synced with Drive.' : (result.error || 'Sync failed.'));
+    });
+
+    driveDisconnectBtn?.addEventListener('click', async () => {
+        closeDriveMenu();
+        await disconnectDrive();
+        updateDriveChrome();
+        await loadHistory();
+        showNotification('Drive disconnected. Local files are unchanged.');
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!driveMenu || driveMenu.hidden) return;
+        if (driveControlContains(e.target)) return;
+        closeDriveMenu();
+    });
+
+    function driveControlContains(target) {
+        const root = document.getElementById('driveControl');
+        return Boolean(root && target instanceof Node && root.contains(target));
+    }
+
     try {
         letterSheet?.update();
     } catch (err) {
@@ -665,6 +901,10 @@ function initApp() {
 
         const printStyles = activeTemplate === 'letter' ? letterPrintCss() : diaryPrintCss();
         const printWindow = window.open('', '_blank');
+        if (!printWindow) {
+            alert('Pop-up blocked. Allow pop-ups to export PDF.');
+            return;
+        }
         printWindow.document.write(`
             <!DOCTYPE html>
             <html>
