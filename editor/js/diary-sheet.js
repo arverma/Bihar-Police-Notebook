@@ -17,7 +17,7 @@ const PAGE_H_MM = 297;
 const MARGIN_MM = 12.7; // half of Google Docs 1in
 const FONT_PX = 15;
 const LINE_HEIGHT_PX = 24;
-const LEFT_COL_PCT = 30;
+const LEFT_COL_PCT = 25;
 
 const PAGE_W_PX = mmToPx(PAGE_W_MM);
 const PAGE_H_PX = mmToPx(PAGE_H_MM);
