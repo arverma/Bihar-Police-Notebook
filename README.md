@@ -21,10 +21,10 @@
 
 1. Clone or download this repository.
 2. Open Chrome → `chrome://extensions` → enable **Developer mode**.
-3. Click **Load unpacked** and select this repository root (the folder that contains `manifest.json`).
+3. Click **Load unpacked** and select the `extension/` folder (the folder that contains `manifest.json`).
 4. Pin the **BP Writing Tool** icon and click it — it opens (or focuses) the editor tab.
 
-The editor is served from GitHub Pages. Enable **Pages** for this repo (Settings → Pages → Source: GitHub Actions) so the first deploy from `.github/workflows/pages.yml` publishes `editor/`.
+The editor is a separate static site served from GitHub Pages. Enable **Pages** for this repo (Settings → Pages → Source: GitHub Actions) so the first deploy from `.github/workflows/pages.yml` publishes `editor/`. The extension package does not include editor files.
 
 ## Use without the extension
 
@@ -41,12 +41,13 @@ Full policy and developer info: [editor/privacy.html](https://arverma.github.io/
 
 ## Development
 
-No build step for the editor — edit files under `editor/` and refresh.
+Editor and extension are separate packages in this repository:
 
 ```text
-manifest.json          # MV3 extension shell
-background.js          # Opens / focuses the Pages editor tab
-icons/                 # Toolbar icons
+extension/             # Chrome MV3 package only (Load unpacked from here)
+  manifest.json
+  background.js        # Opens / focuses the Pages editor tab
+  icons/
 editor/                # Static editor site (deployed to GitHub Pages)
   index.html
   css/
@@ -54,14 +55,14 @@ editor/                # Static editor site (deployed to GitHub Pages)
   images/
 ```
 
-Local preview of the editor:
+No build step for the editor — edit files under `editor/` and refresh.
 
 ```bash
 cd editor && python3 -m http.server 8080
 # open http://127.0.0.1:8080/
 ```
 
-To point a local extension build at a local server, temporarily change `ORIGIN` / `BASE` in `background.js`, then reload the extension at `chrome://extensions`.
+To point a local extension build at a local server, temporarily change `ORIGIN` / `BASE` in `extension/background.js`, then reload the extension at `chrome://extensions`.
 
 ## Issues
 

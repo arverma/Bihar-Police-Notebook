@@ -21,10 +21,10 @@
 
 1. इस repository को clone या download करें।
 2. Chrome में `chrome://extensions` खोलें → **Developer mode** on करें।
-3. **Load unpacked** पर क्लिक करके वह folder चुनें जिसमें `manifest.json` है।
+3. **Load unpacked** पर क्लिक करके `extension/` folder चुनें (जिसमें `manifest.json` है)।
 4. **BP Writing Tool** icon pin करें और क्लिक करें — editor tab खुल जाएगी।
 
-GitHub Pages सक्षम करें (Settings → Pages → Source: GitHub Actions) ताकि `editor/` deploy हो सके।
+Editor अलग static site है। GitHub Pages सक्षम करें (Settings → Pages → Source: GitHub Actions) ताकि `editor/` deploy हो सके। Extension package में editor files शामिल नहीं हैं।
 
 ## बिना extension के उपयोग
 
