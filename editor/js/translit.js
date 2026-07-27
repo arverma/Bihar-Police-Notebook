@@ -1,9 +1,23 @@
 /**
  * Hindi transliteration via Google Input Tools API.
  * Requires internet connectivity.
+ * Western digits (0–9) are kept as ASCII; Devanagari numerals in results are normalized.
  */
 
 const cache = Object.create(null);
+
+const DEV_DIGITS = '०१२३४५६७८९';
+
+/** Pure number tokens (digits + common separators) — do not transliterate. */
+const PURE_NUMBER_RE = /^[\d.,\-\/]+$/;
+
+/**
+ * @param {string} s
+ * @returns {string}
+ */
+function toAsciiDigits(s) {
+    return String(s).replace(/[०-९]/g, (ch) => String(DEV_DIGITS.indexOf(ch)));
+}
 
 /**
  * Fetch up to 5 Devanagari suggestions for a Hinglish word.
@@ -13,6 +27,7 @@ const cache = Object.create(null);
 export async function fetchSuggestions(word) {
     if (!word || !word.trim()) return [];
     const key = word.trim();
+    if (PURE_NUMBER_RE.test(key)) return [];
     if (cache[key]) return cache[key];
 
     try {
@@ -34,7 +49,7 @@ export async function fetchSuggestions(word) {
             Array.isArray(data[1][0]) &&
             Array.isArray(data[1][0][1])
         ) {
-            suggestions = data[1][0][1].slice(0, 5);
+            suggestions = data[1][0][1].slice(0, 5).map(toAsciiDigits);
         }
 
         cache[key] = suggestions;
