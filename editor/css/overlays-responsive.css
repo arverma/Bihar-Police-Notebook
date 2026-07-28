@@ -29,6 +29,14 @@
     bottom: calc(var(--overlay-bottom) + 48px);
 }
 
+/* Mobile keyboards already expose a mic — hide in-app dictation chrome */
+@media (max-width: 768px) {
+    .dictation-fab,
+    .dictation-interim {
+        display: none !important;
+    }
+}
+
 @media (max-width: 1024px) {
     .page-indicator {
         right: calc(16px + var(--safe-right));

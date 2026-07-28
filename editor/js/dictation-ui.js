@@ -116,7 +116,32 @@ export function initDictation(hooks) {
     // Sync initial lang into engine
     void engine.setLanguage(currentLang);
 
-    root.hidden = false;
+    const mobileMq = window.matchMedia('(max-width: 768px)');
+
+    function isMobileUi() {
+        return mobileMq.matches;
+    }
+
+    function syncFabVisibility() {
+        if (isMobileUi()) {
+            engine.stop?.();
+            root.hidden = true;
+            if (interimEl) {
+                interimEl.hidden = true;
+                interimEl.textContent = '';
+            }
+            return;
+        }
+        root.hidden = false;
+    }
+
+    syncFabVisibility();
+    if (typeof mobileMq.addEventListener === 'function') {
+        mobileMq.addEventListener('change', syncFabVisibility);
+    } else if (typeof mobileMq.addListener === 'function') {
+        mobileMq.addListener(syncFabVisibility);
+    }
+
     applyFabPosition(loadFabPos());
     updateLangChip();
     updateFabState('idle');
@@ -204,11 +229,13 @@ export function initDictation(hooks) {
     });
 
     window.addEventListener('resize', () => {
+        if (isMobileUi()) return;
         const rect = root.getBoundingClientRect();
         placeFab(rect.left, rect.top);
     });
 
     document.addEventListener('keydown', (e) => {
+        if (isMobileUi()) return;
         const meta = e.metaKey || e.ctrlKey;
         if (meta && e.shiftKey && (e.key === 'd' || e.key === 'D')) {
             e.preventDefault();
@@ -223,6 +250,7 @@ export function initDictation(hooks) {
     }, true);
 
     async function handleMicTap() {
+        if (isMobileUi()) return;
         const onboarded = Boolean(getPref(DICTATION_ONBOARDED_KEY, false));
         if (!onboarded) {
             const ok = await runOnboarding(currentLang);

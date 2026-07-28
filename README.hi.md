@@ -1,66 +1,48 @@
-# बिहार पुलिस नोटबुक टूल (BP Writing Tool)
+# बिहार पुलिस नोटबुक (Bihar Police Notebook)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Chrome Extension](https://img.shields.io/badge/Chrome-MV3%20Extension-blue.svg)](https://developer.chrome.com/docs/extensions/mv3/)
 [![English](https://img.shields.io/badge/EN-English%20README-blue.svg)](README.md)
 
-**बिहार पुलिस नोटबुक टूल** — Hinglish में type करके हिंदी (Devanagari) documents बनाएँ। Letter और FIR केस-डायरी, local history, और print/export। Website की तरह खोलें, या Chrome extension icon से।
+**बिहार पुलिस नोटबुक** ब्राउज़र में हिंदी पत्र और FIR केस-डायरी लिखने में मदद करता है। कंप्यूटर पर Hinglish में टाइप करें; फ़ोन पर अपने कीबोर्ड का उपयोग करें। काम इसी डिवाइस पर सेव होता है; चाहें तो अपने Google Drive पर बैकअप भी कर सकते हैं।
 
-**Live editor:** [https://bpdiary.arverma.dev/](https://bpdiary.arverma.dev/)
+**ऐप खोलें:** [https://bpdiary.arverma.dev/](https://bpdiary.arverma.dev/)  
+(*bpdiary* बिहार पुलिस नोटबुक का वेब पता है।)
 
-## मुख्य विशेषताएँ
+## आप क्या कर सकते हैं
 
-- **Instant transliteration** — Hinglish type करें, हिंदी suggestions चुनें (Google Input Tools; internet जरूरी)
-- **बोलकर लिखें (Voice dictation)** — हिंदी या English (India) में बोलकर लिखें; Chrome में on-device recognition पसंद (एक बार language pack)
-- **Letter और Diary** — सादा letter editor और FIR केस-डायरी form
-- **Document history** — save / open / delete (IndexedDB, आपके browser में)
-- **वैकल्पिक Google Drive backup** — History में backup icon से sign in और sync (`BP Writing Tool` folder; manual)
-- **Export & print** — browser से print
-- **Website या extension** — Pages URL सीधे, या toolbar icon से
+- **पत्र** और **केस-डायरी** लिखें जो A4 जैसे प्रिंट हों
+- इसी कंप्यूटर/फ़ोन पर दस्तावेज़ों का **इतिहास** रखें
+- ब्राउज़र से **प्रिंट** या **PDF सेव** करें
+- वैकल्पिक **Google Drive बैकअप** (जब आप खुद कनेक्ट और सिंक करें)
+- कंप्यूटर पर: **Hinglish सुझाव** और वैकल्पिक **बोलकर लिखें** माइक
+- फ़ोन पर: **कीबोर्ड** (और उसका माइक) — ऐप का माइक जानबूझकर छिपा रहता है
 
-## Extension install करें
+## कैसे खोलें
 
-1. इस repository को clone या download करें।
-2. Chrome में `chrome://extensions` खोलें → **Developer mode** on करें।
-3. **Load unpacked** पर क्लिक करके `extension/` folder चुनें (जिसमें `manifest.json` है)।
-4. **BP Writing Tool** icon pin करें और क्लिक करें — editor tab खुल जाएगी।
+**सबसे आसान:** [bpdiary.arverma.dev](https://bpdiary.arverma.dev/) Chrome या किसी आधुनिक ब्राउज़र में खोलें।
 
-Extension केवल launcher है। Editor अलग static site है। GitHub Pages सक्षम करें (Settings → Pages → Source: GitHub Actions) ताकि `editor/` deploy हो सके।
+**वैकल्पिक Chrome आइकन:**
 
-## बिना extension के उपयोग
+1. यह प्रोजेक्ट डाउनलोड या clone करें।
+2. Chrome में `chrome://extensions` खोलें → **Developer mode** ऑन करें।
+3. **Load unpacked** से `extension` फ़ोल्डर चुनें।
+4. **Bihar Police Notebook** पिन करें और क्लिक करें — एडिटर खुल जाएगा।
 
-[https://bpdiary.arverma.dev/](https://bpdiary.arverma.dev/) किसी भी modern browser में खोलें। Documents उसी origin के IndexedDB में रहते हैं।
+आइकन सिर्फ वेबसाइट खोलता है। यह आपके अन्य टैब या फ़ाइलें नहीं पढ़ता।
 
-## सहायता और गोपनीयता
+## फ़ोन बनाम कंप्यूटर
 
-Help page (privacy, shortcuts, about): [help.html](https://bpdiary.arverma.dev/help.html) (editor में `?` button)।
+एक ही वेबसाइट दोनों पर चलती है। **फ़ोन** पर कुछ कंप्यूटर-कंट्रोल छिपे रहते हैं (Hinglish टॉगल और ऐप का माइक) ताकि स्क्रीन साफ़ रहे — कीबोर्ड का उपयोग करें। **कंप्यूटर** पर Hinglish सुझाव और बोलकर लिखने का बटन मिलता है। तकनीकी विवरण: [Desktop vs mobile](docs/desktop-vs-mobile.md)।
 
-- Documents **आपके browser** में रहते हैं। **Drive** पर click करके sign in करने पर ही backup चालू होता है — copies **आपके** Google Drive में जाती हैं।
-- Transliteration के लिए Google Input Tools को network request जाता है; saved documents उस request में नहीं जाते।
-- बोलकर लिखने में जहाँ संभव हो on-device recognition; pack न हो तो पहले पूछकर Google online speech। Audio इस app में store नहीं होता।
-- Suggestions और Drive sync के लिए internet चाहिए। Offline भी type कर सकते हैं (बिना suggestions)। Language pack लगने के बाद dictation offline चल सकता है।
+## आपका डेटा, सादे शब्दों में
 
-## Repository संरचना
+- नोट्स **आपके डिवाइस** के ब्राउज़र में रहते हैं।
+- **Drive बैकअप वैकल्पिक है।** History से साइन-इन और सिंक करने तक Google पर कुछ नहीं जाता। कॉपी **आपके** Drive फ़ोल्डर *Bihar Police Notebook Backup — do not delete* में जाती है।
+- और गोपनीयता व शॉर्टकट: ऐप में **Help** (`?`), या [help.html](https://bpdiary.arverma.dev/help.html)।
 
-```text
-extension/             # केवल Chrome MV3 package (Load unpacked यहाँ से)
-editor/                # Static editor (GitHub Pages पर deploy)
-.github/workflows/     # Pages deploy
-```
+## डेवलपर्स के लिए
 
-कोई Python backend, virtualenv, या Node build step नहीं है।
-
-## उपयोग
-
-1. Extension icon या Pages URL से editor खोलें
-2. Hinglish में type करें (जैसे: `namaste` → `नमस्ते`)
-3. Save करें — History sidebar में दिखेगा
-4. Export / Print करें
-
-## सहायता
-
-1. [Issues](https://github.com/arverma/Bihar-Police-Notebook/issues) देखें
-2. नया issue बनाएँ — browser version और steps लिखें
+आर्किटेक्चर डायग्राम और मॉड्यूल मैप: **[docs/](docs/README.md)**।
 
 ## License
 

@@ -199,7 +199,7 @@ function applyEditorPlaceholders() {
 function updateDocumentTitle() {
     const name = (filenameInput?.value || '').trim() || formatDocFilename(new Date(currentDoc.createdAt));
     const kind = currentDoc.type === 'diary' ? 'Diary' : 'Letter';
-    document.title = `${name} · ${kind} — Bihar Police`;
+    document.title = `${name} · ${kind} — Bihar Police Notebook`;
 }
 
 function getActiveContent() {

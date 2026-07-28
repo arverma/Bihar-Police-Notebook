@@ -1,95 +1,49 @@
-# BP Writing Tool
+# Bihar Police Notebook
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Chrome Extension](https://img.shields.io/badge/Chrome-MV3%20Extension-blue.svg)](https://developer.chrome.com/docs/extensions/mv3/)
 [![Hindi](https://img.shields.io/badge/ह-Hindi%20Documentation-orange.svg)](README.hi.md)
 
-**Bihar Police Notebook Tool** — type Hinglish (Romanized Hindi) and get Devanagari suggestions. Create letters and FIR case diaries, save history locally, and print/export. Use it as a website, or open it from the Chrome extension toolbar.
+**Bihar Police Notebook** helps you write Hindi letters and FIR case diaries in the browser. Type in everyday Romanized Hindi (Hinglish) on a computer, or use your phone’s keyboard. Your work is saved on this device; you can optionally back it up to your own Google Drive.
 
-**Live editor:** [https://bpdiary.arverma.dev/](https://bpdiary.arverma.dev/)
+**Open the app:** [https://bpdiary.arverma.dev/](https://bpdiary.arverma.dev/)  
+(*bpdiary* is just the web address for Bihar Police Notebook.)
 
-## Features
+## What you can do
 
-- **Instant transliteration** — type Hinglish, pick Hindi suggestions (Google Input Tools; requires internet)
-- **Voice dictation (बोलकर लिखें)** — speak Hindi or English (India) via a draggable mic; prefers on-device recognition in Chrome after a one-time language-pack download
-- **Letter & Diary templates** — plain letter editor and FIR case-diary form
-- **Document history** — browse, open, and delete saved documents (IndexedDB on your device)
-- **Optional Google Drive backup** — open History and use the backup icon to sign in and sync to a `BP Writing Tool` folder in your Drive (manual backup + restore)
-- **Export & print** — print styled Hindi documents from the browser
-- **Website or extension** — open the Pages URL directly, or via the toolbar icon
+- Write **letters** and **case diaries** that print like A4 paper
+- Keep a **history** of documents on this computer or phone
+- **Print** or **Save as PDF** from your browser
+- Optionally **back up to Google Drive** (only when you connect and sync)
+- On a computer: **Hinglish suggestions** and an optional **speak-to-type** microphone
+- On a phone: use the **keyboard** (including its mic) — the in-app mic is hidden on purpose
 
-## Install the extension
+## How to open it
 
-1. Clone or download this repository.
-2. Open Chrome → `chrome://extensions` → enable **Developer mode**.
-3. Click **Load unpacked** and select the `extension/` folder (it contains `manifest.json`).
-4. Pin **BP Writing Tool** and click it — it opens (or focuses) the editor tab.
+**Easiest:** open [bpdiary.arverma.dev](https://bpdiary.arverma.dev/) in Chrome or another modern browser.
 
-The extension is only a launcher. The editor is a separate static site on GitHub Pages. Enable **Pages** for this repo (Settings → Pages → Source: GitHub Actions) so `.github/workflows/pages.yml` can publish `editor/`.
+**Optional Chrome icon:**
 
-## Use without the extension
+1. Download or clone this project.
+2. In Chrome open `chrome://extensions` and turn on **Developer mode**.
+3. Choose **Load unpacked** and select the `extension` folder.
+4. Pin **Bihar Police Notebook** and click it to open the editor.
 
-Open [https://bpdiary.arverma.dev/](https://bpdiary.arverma.dev/) in any modern browser. Documents are stored in that origin’s IndexedDB.
+The icon only opens the website. It does not read your other tabs or files.
 
-## Help & privacy
+## Phone vs computer
 
-Help page (privacy, shortcuts, about): [help.html](https://bpdiary.arverma.dev/help.html) (`?` button in the editor).
+The same website works on both. On a **phone**, some computer-only controls are hidden (Hinglish toggle and in-app microphone) so the screen stays clear — use your keyboard instead. On a **computer**, you get Hinglish suggestions and the speak-to-type button. Details for developers: [Desktop vs mobile](docs/desktop-vs-mobile.md).
 
-- Documents stay **in your browser** (IndexedDB). Optional Google Drive backup is off until you click **Drive** and sign in; then copies sync to **your** Drive only (`drive.file` scope).
-- Transliteration calls Google Input Tools; saved documents are not sent with those requests.
-- Dictation prefers on-device recognition; if unavailable, we ask before using Google’s online speech service. Audio is never stored by this app.
-- Internet is required for transliteration suggestions and for Drive sync. Offline typing still works. Dictation works offline once the Chrome language pack is installed.
+## Your data, in plain words
 
-## Repository layout
+- Notes are stored **on your device** in the browser.
+- **Drive backup is optional.** Nothing goes to Google until you sign in from History and sync. Copies go to **your** Drive folder named *Bihar Police Notebook Backup — do not delete*.
+- More privacy and shortcuts: open **Help** (`?`) in the app, or [help.html](https://bpdiary.arverma.dev/help.html).
 
-```text
-extension/             # Chrome MV3 package only (Load unpacked from here)
-  manifest.json
-  background.js        # Opens / focuses the Pages editor tab
-  icons/
-editor/                # Static editor site (deployed to GitHub Pages)
-  index.html
-  help.html
-  css/
-  js/
-    store.js           # IndexedDB documents
-    drive-config.js    # Google OAuth client ID + Drive settings
-    drive-auth.js      # Google Identity Services token client
-    drive-sync.js      # Incremental Drive backup / restore
-  images/
-.github/workflows/     # Pages deploy for editor/
-```
+## For developers
 
-There is no Python backend, virtualenv, or Node build step.
-
-### Google Drive (maintainers)
-
-OAuth Web client ID lives in `editor/js/drive-config.js`. Enable the Drive API, add authorized JavaScript origins (`https://bpdiary.arverma.dev` and local preview if needed), and while the consent screen is in Testing, add your Google account as a test user. Do not commit a client secret.
-
-## Development
-
-Edit files under `editor/` and refresh. Preview locally:
-
-```bash
-cd editor && python3 -m http.server 8080
-# open http://127.0.0.1:8080/
-```
-
-To point the extension at a local preview, temporarily change `ORIGIN` / `BASE` in `extension/background.js`, then reload the extension at `chrome://extensions`.
-
-## Issues
-
-1. Check [Issues](https://github.com/arverma/Bihar-Police-Notebook/issues)
-2. Open a new issue with browser version and steps to reproduce
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Open a Pull Request
+Architecture diagrams, module map, and deploy notes: **[docs/](docs/README.md)**.
 
 ## License
 
 MIT — see [LICENSE](LICENSE). Copyright 2025–2026 Bihar Police Notebook.
-
-Made for Bihar Police Hindi documentation workflows.
