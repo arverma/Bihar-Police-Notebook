@@ -888,6 +888,7 @@ function initApp() {
                 if (getActiveTemplate() === 'letter') {
                     updatePageIndicator(current, total);
                 }
+                pageScale?.refresh();
             },
             onSpill: ({ toPage }) => {
                 showNotification(`Continued on page ${toPage}`);
@@ -912,6 +913,7 @@ function initApp() {
                 if (getActiveTemplate() === 'diary') {
                     updatePageIndicator(current, total);
                 }
+                pageScale?.refresh();
             },
             onSpill: ({ toPage }) => {
                 showNotification(`Continued on page ${toPage}`);
@@ -1100,9 +1102,6 @@ function initApp() {
     // History stays open until the toggle is clicked again (no outside-click dismiss).
 
     pageScale = initPageScale();
-    document.getElementById('zoomInBtn')?.addEventListener('click', () => pageScale?.zoomIn());
-    document.getElementById('zoomOutBtn')?.addEventListener('click', () => pageScale?.zoomOut());
-    document.getElementById('zoomFitBtn')?.addEventListener('click', () => pageScale?.zoomFit());
 
     document.querySelectorAll('#templateSegment .segment-btn').forEach((btn) => {
         btn.addEventListener('click', () => {

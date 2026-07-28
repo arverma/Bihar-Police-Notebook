@@ -29,7 +29,7 @@
 
 @media (max-width: 768px) {
     :root {
-        --layout-header-h-multi: 88px;
+        --layout-header-h-multi: 56px;
         --layout-header-h: var(--layout-header-h-multi);
         --chrome-top: calc(var(--layout-header-h-multi) + var(--safe-top));
     }

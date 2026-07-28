@@ -1,14 +1,16 @@
-/* Screen-only A4 scale-to-fit preview */
+/* Screen-only A4 scale-to-fit preview + mobile pinch/pan stage */
 
 .editor-stage {
+    position: relative;
     width: 100%;
     display: flex;
     flex-direction: column;
     align-items: center;
     box-sizing: border-box;
     padding: 12px 12px 24px;
-    overflow-x: hidden;
-    overflow-y: visible;
+    /* Desktop: .main-content owns vertical scroll. Nested overflow +
+       overscroll-behavior:contain ate wheel events over the page. */
+    overflow: visible;
 }
 
 .editor-scale {
@@ -16,22 +18,84 @@
     max-width: 100%;
     margin: 0 auto;
     transform-origin: top center;
+    flex: 0 0 auto;
 }
 
 .editor-scale > .editor-wrapper.editor-letter,
 .editor-scale > .editor-wrapper.editor-diary {
     margin-top: 12px;
-    margin-bottom: 24px;
     margin-left: 0;
     margin-right: 0;
+    /* margin-bottom set by page-scale.js to collapse transform layout gap */
     transform: scale(var(--page-scale));
     transform-origin: top left;
 }
 
-/* Layout height is set by JS to unscaledHeight * scale so transform gap collapses */
+/* Width only — do NOT lock height/overflow:hidden (that clipped pages). */
 .editor-scale.is-scaled {
-    height: var(--scale-layout-h, auto);
-    overflow: hidden;
+    max-width: none;
+    height: auto;
+    overflow: visible;
+}
+
+.page-fit-chip {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 6;
+    appearance: none;
+    border: 1px solid var(--color-border-medium);
+    background: rgba(255, 255, 255, 0.96);
+    color: var(--brand-primary);
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: "Roboto", Helvetica, sans-serif;
+    box-shadow: var(--shadow-medium);
+    cursor: pointer;
+}
+
+.page-fit-chip:hover {
+    background: var(--color-hover-brand);
+}
+
+.page-fit-chip[hidden] {
+    display: none !important;
+}
+
+@media (max-width: 768px) {
+    .main-content {
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        height: 100%;
+        /* Don't reserve FAB space outside the stage — that shortens the
+           scrollport and looks like the template is clipped above an empty band. */
+        padding-bottom: var(--safe-bottom);
+    }
+
+    .editor-stage {
+        flex: 1 1 auto;
+        min-height: 0;
+        width: 100%;
+        height: auto;
+        touch-action: pan-x pan-y;
+        overflow: auto;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+        /* FAB clearance scrolls with content so pages can use the full height */
+        padding-bottom: calc(var(--layout-fab-band) + var(--layout-edge) + var(--safe-bottom));
+    }
+
+    .editor-stage.is-pinching {
+        touch-action: none;
+    }
+
+    .editor-scale {
+        max-width: none;
+    }
 }
 
 @media print {
@@ -40,6 +104,7 @@
         width: auto !important;
         height: auto !important;
         max-width: none !important;
+        max-height: none !important;
         padding: 0 !important;
         overflow: visible !important;
         transform: none !important;
@@ -51,7 +116,7 @@
         margin: 0 !important;
     }
 
-    .page-zoom-controls {
+    .page-fit-chip {
         display: none !important;
     }
 }

@@ -50,7 +50,6 @@
 body {
     background: var(--color-background-gradient);
     font-family: 'Noto Sans Devanagari', 'Roboto', Arial, sans-serif;
-    min-height: 100vh;
     margin: 0;
 }
 
@@ -1864,7 +1863,7 @@ body {
     .dictation-interim,
     .dictation-sheet,
     .header-overflow,
-    .page-zoom-controls,
+    .page-fit-chip,
     .sidebar-actions {
         display: none !important;
     }

@@ -49,17 +49,6 @@
                         title="Diary layout" aria-pressed="true">Diary</button>
                 </div>
             </div>
-            <div class="page-zoom-controls" id="pageZoomControls" hidden>
-                <button type="button" class="page-zoom-btn" id="zoomOutBtn"
-                    title="Zoom out" aria-label="Zoom out">−</button>
-                <span class="page-zoom-label" id="zoomLabel">100%</span>
-                <button type="button" class="page-zoom-btn" id="zoomInBtn"
-                    title="Zoom in" aria-label="Zoom in">+</button>
-                <button type="button" class="page-zoom-btn" id="zoomFitBtn"
-                    title="Fit to width" aria-label="Fit to width">
-                    <i class="fas fa-compress" aria-hidden="true"></i>
-                </button>
-            </div>
             <div class="header-right">
                 <div class="segmented" id="langSegment" role="group" aria-label="Input language">
                     <button type="button" class="segment-btn is-active" data-lang="hinglish"
@@ -116,6 +105,10 @@
 
         <main class="main-content">
             <div class="editor-stage" id="editorStage">
+                <button type="button" class="page-fit-chip" id="pageFitChip" hidden
+                    title="Fit page to width" aria-label="Fit page to width">
+                    Fit
+                </button>
                 <div class="editor-scale" id="editorScale">
                     <!-- Letter Editor (hidden by default) — A4 page cards -->
                     <div class="editor-wrapper editor-letter" style="display:none;">

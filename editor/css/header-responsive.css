@@ -137,40 +137,6 @@
     text-overflow: ellipsis;
 }
 
-/* Zoom chrome is mobile-only (shown via media query + JS) */
-.page-zoom-controls {
-    display: none;
-    align-items: center;
-    gap: 4px;
-    flex-shrink: 0;
-}
-
-.page-zoom-btn {
-    appearance: none;
-    width: 28px;
-    height: 28px;
-    border-radius: 6px;
-    border: 1px solid var(--color-border-light);
-    background: var(--brand-white);
-    color: var(--brand-primary);
-    cursor: pointer;
-    font-size: 14px;
-    line-height: 1;
-    box-shadow: var(--shadow-light);
-}
-
-.page-zoom-btn:hover {
-    background: var(--color-hover-brand);
-}
-
-.page-zoom-label {
-    font-size: 11px;
-    font-weight: 500;
-    color: var(--color-text-secondary);
-    min-width: 36px;
-    text-align: center;
-}
-
 /* Narrow desktop / tablet: stay single-line, tighten chrome */
 @media (max-width: 1100px) {
     .header-content {
@@ -224,21 +190,19 @@
 
 /*
  * Mobile only (≤768px):
- *  Row 1: [panel+logo LEFT] …… [filename | Letter/Diary CENTERED]
- *  Row 2: [− zoom + fit | PDF] centered
- * Lang hidden — OS keyboard handles script.
+ *  [panel+logo LEFT] [spacer] [filename | Letter/Diary | PDF] [spacer]
+ * Spacers share free width so the control cluster sits in the remaining
+ * space instead of looking pinned left with a dead zone on the right.
  */
 @media (max-width: 768px) {
     .header-content {
         position: relative;
-        flex-wrap: wrap;
-        justify-content: center;
+        display: flex;
+        flex-wrap: nowrap;
+        justify-content: flex-start;
         align-items: center;
-        /* Equal side gutters so centered groups stay viewport-centered;
-           left gutter also clears the absolute brand cluster. */
-        padding: 8px 84px;
-        row-gap: 6px;
-        column-gap: 8px;
+        padding: 8px 10px;
+        gap: 8px;
     }
 
     .header-left,
@@ -248,10 +212,12 @@
     }
 
     .header-brand {
-        position: absolute;
-        left: 10px;
-        top: 8px;
-        z-index: 2;
+        position: static;
+        top: auto;
+        left: auto;
+        transform: none;
+        order: 1;
+        flex: 0 0 auto;
         gap: 6px;
     }
 
@@ -259,29 +225,25 @@
         display: none;
     }
 
+    /* Leading spacer — balances free space after the brand */
+    .header-content::before {
+        content: '';
+        order: 2;
+        flex: 1 1 0;
+        min-width: 4px;
+        max-width: 100%;
+    }
+
     .doc-name-cluster {
-        order: 1;
+        order: 3;
         flex: 0 1 auto;
-        max-width: min(148px, 36vw);
+        min-width: 0;
+        max-width: min(160px, 32vw);
     }
 
     #templateSegment {
-        order: 2;
-    }
-
-    /* Force zoom + PDF onto a second centered row */
-    .header-content::after {
-        content: '';
-        flex: 0 0 100%;
-        width: 100%;
-        height: 0;
-        order: 3;
-    }
-
-    .page-zoom-controls {
-        display: inline-flex;
         order: 4;
-        margin-left: 0;
+        flex: 0 0 auto;
     }
 
     #langSegment {
@@ -291,6 +253,7 @@
     #exportBtn {
         display: inline-flex !important;
         order: 5;
+        flex: 0 0 auto;
         width: 36px;
         padding: 0;
         justify-content: center;
@@ -298,6 +261,15 @@
 
     #exportBtn span:not(.btn-icon) {
         display: none;
+    }
+
+    /* Trailing spacer — matches ::before so cluster isn't left-biased */
+    .header-content::after {
+        content: '';
+        order: 6;
+        flex: 1 1 0;
+        min-width: 4px;
+        max-width: 100%;
     }
 
     .segment-btn {
@@ -308,26 +280,16 @@
 
 @media (max-width: 420px) {
     .header-content {
-        padding-left: 78px;
-        padding-right: 78px;
+        padding: 8px 8px;
+        gap: 6px;
     }
 
     .doc-name-cluster {
-        max-width: min(120px, 32vw);
+        max-width: min(120px, 28vw);
     }
 
     #templateSegment .segment-btn {
         padding: 0 8px;
         font-size: 11px;
-    }
-
-    .page-zoom-btn {
-        width: 26px;
-        height: 26px;
-    }
-
-    .page-zoom-label {
-        min-width: 32px;
-        font-size: 10px;
     }
 }
