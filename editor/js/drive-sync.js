@@ -85,7 +85,7 @@ async function driveFetch(path, init = {}, retried = false) {
     const res = await fetch(path, { ...init, headers });
     if (res.status === 401 && !retried) {
         invalidateToken();
-        await ensureAccessToken();
+        await ensureAccessToken({ allowInteractive: false });
         return driveFetch(path, init, true);
     }
     return res;
@@ -467,43 +467,4 @@ export async function backupOne(type, id) {
  */
 export async function backupVisibleType(type) {
     return pushPending(type);
-}
-
-/** Idle before automatic Drive upload after local edits. */
-export const DRIVE_IDLE_MS = 45000;
-
-/** @type {ReturnType<typeof setTimeout>|null} */
-let driveIdleTimer = null;
-
-/**
- * Debounce Drive backup until the user has been idle for DRIVE_IDLE_MS.
- * No-op when disconnected.
- */
-export function scheduleDriveBackup() {
-    if (!isConnected()) {
-        if (driveIdleTimer !== null) {
-            clearTimeout(driveIdleTimer);
-            driveIdleTimer = null;
-        }
-        return;
-    }
-    if (driveIdleTimer !== null) clearTimeout(driveIdleTimer);
-    driveIdleTimer = setTimeout(() => {
-        driveIdleTimer = null;
-        if (!isConnected()) return;
-        void pushPending();
-    }, DRIVE_IDLE_MS);
-}
-
-/**
- * Cancel idle timer and push pending docs now (tab hide / close / connect).
- * @returns {Promise<{ ok: boolean, reason?: string, error?: string, count?: number }>}
- */
-export async function flushDriveBackupSoon() {
-    if (driveIdleTimer !== null) {
-        clearTimeout(driveIdleTimer);
-        driveIdleTimer = null;
-    }
-    if (!isConnected()) return { ok: false, reason: 'disconnected' };
-    return pushPending();
 }

@@ -346,8 +346,18 @@ export function initDictation(hooks) {
         }
         return {
             left: window.innerWidth - FAB_SIZE - EDGE_MARGIN,
-            top: window.innerHeight - FAB_SIZE - DEFAULT_BOTTOM,
+            top: window.innerHeight - FAB_SIZE - Math.max(
+                DEFAULT_BOTTOM,
+                readCssPx('--chrome-bottom', 0) + EDGE_MARGIN,
+            ),
         };
+    }
+
+    /** @param {string} name @param {number} fallback */
+    function readCssPx(name, fallback) {
+        const raw = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+        const n = Number.parseFloat(raw);
+        return Number.isFinite(n) ? n : fallback;
     }
 
     /** @param {number} left @param {number} top */
@@ -367,11 +377,18 @@ export function initDictation(hooks) {
 
     /** @param {number} left @param {number} top */
     function clampPos(left, top) {
+        const safeBottom = readCssPx('--safe-bottom', 0);
+        const chromeBottom = readCssPx('--chrome-bottom', 0);
+        const bottomBand = Math.max(DEFAULT_BOTTOM, chromeBottom + EDGE_MARGIN);
         const maxL = Math.max(EDGE_MARGIN, window.innerWidth - FAB_SIZE - EDGE_MARGIN);
-        const maxT = Math.max(EDGE_MARGIN, window.innerHeight - FAB_SIZE - EDGE_MARGIN);
+        const maxT = Math.max(
+            EDGE_MARGIN,
+            window.innerHeight - FAB_SIZE - bottomBand - safeBottom,
+        );
+        const minT = Math.max(EDGE_MARGIN, readCssPx('--chrome-top', 56));
         return {
             left: Math.min(maxL, Math.max(EDGE_MARGIN, left)),
-            top: Math.min(maxT, Math.max(EDGE_MARGIN, top)),
+            top: Math.min(maxT, Math.max(minT, top)),
         };
     }
 

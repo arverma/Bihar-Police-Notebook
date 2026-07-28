@@ -1,0 +1,57 @@
+/* Screen-only A4 scale-to-fit preview */
+
+.editor-stage {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    box-sizing: border-box;
+    padding: 12px 12px 24px;
+    overflow-x: hidden;
+    overflow-y: visible;
+}
+
+.editor-scale {
+    width: calc(var(--layout-page-w-px) * var(--page-scale));
+    max-width: 100%;
+    margin: 0 auto;
+    transform-origin: top center;
+}
+
+.editor-scale > .editor-wrapper.editor-letter,
+.editor-scale > .editor-wrapper.editor-diary {
+    margin-top: 12px;
+    margin-bottom: 24px;
+    margin-left: 0;
+    margin-right: 0;
+    transform: scale(var(--page-scale));
+    transform-origin: top left;
+}
+
+/* Layout height is set by JS to unscaledHeight * scale so transform gap collapses */
+.editor-scale.is-scaled {
+    height: var(--scale-layout-h, auto);
+    overflow: hidden;
+}
+
+@media print {
+    .editor-stage,
+    .editor-scale {
+        width: auto !important;
+        height: auto !important;
+        max-width: none !important;
+        padding: 0 !important;
+        overflow: visible !important;
+        transform: none !important;
+    }
+
+    .editor-scale > .editor-wrapper.editor-letter,
+    .editor-scale > .editor-wrapper.editor-diary {
+        transform: none !important;
+        margin: 0 !important;
+    }
+
+    .page-zoom-controls {
+        display: none !important;
+    }
+}

@@ -22,23 +22,64 @@ import {
     connectDrive,
     disconnectDrive,
     isConnected,
+    hasUsableAccessToken,
+    ensureAccessToken,
     getConnectedEmail,
     onAuthChange,
 } from './drive-auth.js';
 import {
     syncAll,
-    pushDocById,
-    scheduleDriveBackup,
-    flushDriveBackupSoon,
     onSyncStatusChange,
     getSyncState,
 } from './drive-sync.js';
+import { initPageScale } from './page-scale.js';
 
 const letterPagesEl = document.getElementById('letterPages');
 const suggestionsBox = document.getElementById('suggestions');
 const pageIndicator = document.getElementById('pageIndicator');
 const filenameInput = document.getElementById('filenameInput');
 const exportBtnEl = document.getElementById('exportBtn');
+const filenameWrap = document.querySelector('.filename-resize-wrap');
+const filenameSizer = document.querySelector('.filename-sizer');
+
+/** @type {ReturnType<typeof initPageScale> | null} */
+let pageScale = null;
+
+function chromeHeaderHeight() {
+    const header = document.querySelector('.header-frame');
+    if (header instanceof HTMLElement) {
+        return Math.ceil(header.getBoundingClientRect().height);
+    }
+    const raw = getComputedStyle(document.documentElement)
+        .getPropertyValue('--chrome-top')
+        .trim();
+    const n = Number.parseFloat(raw);
+    return Number.isFinite(n) ? n : 56;
+}
+
+function syncChromeTop() {
+    const h = chromeHeaderHeight();
+    document.documentElement.style.setProperty('--chrome-top', `${h}px`);
+}
+
+function syncFilenameWidth() {
+    if (!filenameInput || !filenameWrap) return;
+    const text = (filenameInput.value || '').trim() || filenameInput.placeholder || 'Document name…';
+    let measured = Math.ceil(getTextWidth(text, filenameInput)) + 28;
+    if (filenameSizer) {
+        filenameSizer.textContent = text;
+        const sizerW = Math.ceil(filenameSizer.scrollWidth);
+        if (sizerW > 0) measured = Math.max(measured, sizerW + 2);
+    }
+    const cluster = filenameInput.closest('.doc-name-cluster');
+    const maxFromCluster = cluster
+        ? Math.max(100, cluster.clientWidth - 4)
+        : 420;
+    const maxW = Math.min(420, maxFromCluster);
+    const width = Math.min(maxW, Math.max(100, measured));
+    document.documentElement.style.setProperty('--filename-w', `${width}px`);
+    document.documentElement.style.setProperty('--filename-max', `${maxW}px`);
+}
 
 /** @type {ReturnType<typeof initPagedSheet> | null} */
 let letterSheet = null;
@@ -56,6 +97,12 @@ let loadHistoryFn = null;
 
 /** When true, skip Hinglish transliteration (direct Devanagari typing). */
 let isHindiMode = false;
+const mobileInputMq = window.matchMedia('(max-width: 768px)');
+
+/** Hinglish transliteration is desktop/tablet only — mobile uses the OS keyboard. */
+function isTransliterationEnabled() {
+    return !isHindiMode && !mobileInputMq.matches;
+}
 
 /** When true, skip transliteration suggestions for a programmatic dictated insert. */
 let isDictatedInput = false;
@@ -76,7 +123,7 @@ function formatDocFilename(date = new Date()) {
 
 /**
  * @param {HTMLElement|null} btn
- * @param {string} iconClass e.g. "fab fa-google-drive" or "fas fa-spinner"
+ * @param {string} iconClass e.g. "fas fa-cloud-arrow-up" or "fas fa-spinner"
  */
 function setBtnIcon(btn, iconClass) {
     const icon = btn?.querySelector('.btn-icon i');
@@ -121,12 +168,31 @@ function setLangSegmentUI(hindi) {
         btn.classList.toggle('is-active', active);
         btn.setAttribute('aria-pressed', active ? 'true' : 'false');
     });
-    const placeholder = hindi
-        ? 'यहाँ हिंदी में टाइप करें...'
-        : 'यहाँ Hinglish में टाइप करें...';
+    applyEditorPlaceholders();
+}
+
+function applyEditorPlaceholders() {
+    let placeholder;
+    if (mobileInputMq.matches) {
+        placeholder = 'यहाँ टाइप करें...';
+    } else if (isHindiMode) {
+        placeholder = 'यहाँ हिंदी में टाइप करें...';
+    } else {
+        placeholder = 'यहाँ Hinglish में टाइप करें...';
+    }
     document.querySelectorAll('.letter-page-input').forEach((ta, i) => {
         if (i === 0) ta.placeholder = placeholder;
         else ta.placeholder = '';
+    });
+    document.querySelectorAll('.editor-diary textarea.fir-input').forEach((ta) => {
+        if (!ta.dataset.defaultPlaceholder) {
+            ta.dataset.defaultPlaceholder = ta.getAttribute('placeholder') || '';
+        }
+        if (mobileInputMq.matches) {
+            ta.placeholder = 'यहाँ टाइप करें...';
+        } else if (ta.dataset.defaultPlaceholder) {
+            ta.placeholder = ta.dataset.defaultPlaceholder;
+        }
     });
 }
 
@@ -174,7 +240,6 @@ async function flushSave() {
         setSaveStatus('saved');
         updateDocumentTitle();
         if (loadHistoryFn) await loadHistoryFn();
-        scheduleDriveBackup();
     } catch (err) {
         console.error('Autosave failed:', err);
         setSaveStatus('saved');
@@ -212,6 +277,8 @@ function startNewDocument(type = getActiveTemplate()) {
     }
     setSaveStatus('saved');
     updateDocumentTitle();
+    syncFilenameWidth();
+    pageScale?.refresh();
 }
 
 function requestNewDocument(type = getActiveTemplate()) {
@@ -294,7 +361,7 @@ function attachTransliteration(el) {
             suggestionsBox.style.display = 'none';
             return;
         }
-        if (isHindiMode) {
+        if (!isTransliterationEnabled()) {
             suggestionsBox.style.display = 'none';
             return;
         }
@@ -306,7 +373,7 @@ function attachTransliteration(el) {
 
         if (currentWord.trim()) {
             typingTimer = setTimeout(async () => {
-                if (isHindiMode) return;
+                if (!isTransliterationEnabled()) return;
                 const suggestions = await fetchSuggestions(currentWord);
                 if (suggestions && suggestions.length > 0) {
                     showSuggestions(suggestions, start, end, el);
@@ -319,7 +386,7 @@ function attachTransliteration(el) {
 
     el.addEventListener('keydown', async function (e) {
         if (e.key !== ' ') return;
-        if (isHindiMode) return;
+        if (!isTransliterationEnabled()) return;
         e.preventDefault();
         const value = el.value;
         const cursor = el.selectionStart;
@@ -348,7 +415,7 @@ function attachTransliteration(el) {
     });
 
     el.addEventListener('click', async function () {
-        if (isHindiMode) return;
+        if (!isTransliterationEnabled()) return;
         const value = el.value;
         const cursor = el.selectionStart;
         const [start, end] = getWordBoundaries(value, cursor);
@@ -409,15 +476,15 @@ function showSuggestions(suggestions, wordStart, wordEnd, targetEl) {
     suggestionsBox.style.display = 'block';
 
     const boxRect = suggestionsBox.getBoundingClientRect();
-    const HEADER_HEIGHT = 65;
+    const headerH = chromeHeaderHeight();
     if (boxRect.right > window.innerWidth) {
         suggestionsBox.style.left = (window.innerWidth - boxRect.width - 10) + 'px';
     }
     if (boxRect.bottom > window.innerHeight) {
         suggestionsBox.style.top = (inputRect.top + paddingTop + lines * lineHeight - boxRect.height - 5 - targetEl.scrollTop) + 'px';
     }
-    if (parseInt(suggestionsBox.style.top) < HEADER_HEIGHT) {
-        suggestionsBox.style.top = HEADER_HEIGHT + 'px';
+    if (parseInt(suggestionsBox.style.top, 10) < headerH) {
+        suggestionsBox.style.top = headerH + 'px';
     }
 }
 
@@ -425,8 +492,11 @@ function showSuggestions(suggestions, wordStart, wordEnd, targetEl) {
 function getTextWidth(text, element) {
     const canvas = getTextWidth.canvas || (getTextWidth.canvas = document.createElement('canvas'));
     const context = canvas.getContext('2d');
-    const font = window.getComputedStyle(element, null).getPropertyValue('font');
-    context.font = font;
+    const style = window.getComputedStyle(element, null);
+    const font = style.getPropertyValue('font');
+    context.font = font && font !== ''
+        ? font
+        : `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
     const metrics = context.measureText(text);
     return metrics.width;
 }
@@ -446,6 +516,7 @@ function adjustSuggestionsPosition() {
     const boxRect = suggestionsBox.getBoundingClientRect();
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
+    const headerH = chromeHeaderHeight();
 
     // Adjust horizontal position if off-screen
     if (boxRect.right > viewportWidth) {
@@ -454,7 +525,11 @@ function adjustSuggestionsPosition() {
 
     // Adjust vertical position if off-screen
     if (boxRect.bottom > viewportHeight) {
-        suggestionsBox.style.top = (parseInt(suggestionsBox.style.top) - boxRect.height - 40) + 'px';
+        suggestionsBox.style.top = (viewportHeight - boxRect.height - 10) + 'px';
+    }
+
+    if (parseInt(suggestionsBox.style.top, 10) < headerH) {
+        suggestionsBox.style.top = headerH + 'px';
     }
 }
 
@@ -477,29 +552,83 @@ function initApp() {
     const addTemplateBtn = document.querySelector('.add-template-btn');
     const exportBtn = document.getElementById('exportBtn');
     const historyList = document.querySelector('.history-list');
-    const driveConnectBtn = document.getElementById('driveConnectBtn');
-    const driveAccountBtn = document.getElementById('driveAccountBtn');
+    const backupBtn = document.getElementById('backupBtn');
     const driveEmailLabel = document.getElementById('driveEmailLabel');
     const driveMenu = document.getElementById('driveMenu');
     const driveSyncNowBtn = document.getElementById('driveSyncNowBtn');
     const driveDisconnectBtn = document.getElementById('driveDisconnectBtn');
 
-    function updateDriveChrome() {
-        const connected = isConnected();
+    function setBackupBusy(busy) {
+        if (!backupBtn) return;
+        const glyph = backupBtn.querySelector('.backup-glyph');
+        const spinner = backupBtn.querySelector('.backup-spinner');
+        if (glyph) glyph.hidden = Boolean(busy);
+        if (spinner) spinner.hidden = !busy;
+    }
+
+    /**
+     * @param {'needs-auth'|'ready'|'syncing'|'error'} state
+     * @param {string} [errorMsg]
+     */
+    function setBackupUiState(state, errorMsg) {
+        if (!backupBtn) return;
+        const prev = backupBtn.dataset.backup;
+        backupBtn.dataset.backup = state;
         const email = getConnectedEmail();
-        if (driveConnectBtn) driveConnectBtn.hidden = connected;
-        if (driveAccountBtn) {
-            driveAccountBtn.hidden = !connected;
-            driveAccountBtn.title = email
-                ? `Connected as ${email}`
-                : 'Google Drive connected';
-            driveAccountBtn.setAttribute(
-                'aria-label',
-                email ? `Google Drive: ${email}` : 'Google Drive account',
-            );
+        const emailBit = email ? ` (${email})` : '';
+
+        if (state === 'syncing') {
+            backupBtn.classList.remove('is-sync-success');
+            backupBtn.classList.add('is-busy');
+            backupBtn.setAttribute('aria-busy', 'true');
+            setBackupBusy(true);
+            backupBtn.title = `Syncing…${emailBit}`;
+            backupBtn.setAttribute('aria-label', 'Syncing backup');
+            return;
         }
+
+        backupBtn.classList.remove('is-busy');
+        backupBtn.removeAttribute('aria-busy');
+        setBackupBusy(false);
+
+        if (state === 'needs-auth') {
+            backupBtn.classList.remove('is-sync-success');
+            backupBtn.title = 'Connect to back up';
+            backupBtn.setAttribute('aria-label', 'Connect to back up');
+            backupBtn.setAttribute('aria-expanded', 'false');
+            if (driveMenu) driveMenu.hidden = true;
+        } else if (state === 'error') {
+            backupBtn.classList.remove('is-sync-success');
+            backupBtn.title = errorMsg
+                ? `Backup error — click to retry: ${errorMsg}`
+                : 'Backup error — click to retry';
+            backupBtn.setAttribute('aria-label', 'Backup error — click to retry');
+        } else {
+            backupBtn.title = email
+                ? `Backup connected as ${email}`
+                : 'Backup connected';
+            backupBtn.setAttribute(
+                'aria-label',
+                email ? `Backup connected as ${email}` : 'Backup connected',
+            );
+            if (prev === 'syncing') {
+                backupBtn.classList.remove('is-sync-success');
+                // Retrigger success pulse after a completed sync.
+                void backupBtn.offsetWidth;
+                backupBtn.classList.add('is-sync-success');
+                window.setTimeout(() => {
+                    backupBtn.classList.remove('is-sync-success');
+                }, 600);
+            }
+        }
+    }
+
+    async function updateDriveChrome() {
+        const usable = await hasUsableAccessToken();
+        const email = getConnectedEmail();
+
         if (driveEmailLabel) {
-            if (email) {
+            if (email && usable) {
                 driveEmailLabel.hidden = false;
                 driveEmailLabel.textContent = email;
             } else {
@@ -507,51 +636,65 @@ function initApp() {
                 driveEmailLabel.textContent = '';
             }
         }
-        if (!connected && driveMenu) {
-            driveMenu.hidden = true;
-            driveAccountBtn?.setAttribute('aria-expanded', 'false');
-            if (driveAccountBtn) {
-                driveAccountBtn.dataset.sync = 'idle';
-                driveAccountBtn.classList.remove('is-busy');
-                driveAccountBtn.removeAttribute('aria-busy');
-                setBtnIcon(driveAccountBtn, 'fab fa-google-drive');
+
+        if (!usable) {
+            if (driveMenu) driveMenu.hidden = true;
+            backupBtn?.setAttribute('aria-expanded', 'false');
+            const { state, error } = getSyncState();
+            if (state === 'error') {
+                setBackupUiState('error', error || undefined);
+            } else {
+                setBackupUiState('needs-auth');
             }
+            return;
         }
+
         updateDriveSyncStatus();
     }
 
     function updateDriveSyncStatus() {
-        if (!driveAccountBtn || !isConnected()) return;
-        const { state, error } = getSyncState();
-        driveAccountBtn.dataset.sync = state;
-        const email = getConnectedEmail();
-        const emailBit = email ? ` (${email})` : '';
-
-        if (state === 'syncing') {
-            driveAccountBtn.classList.add('is-busy');
-            driveAccountBtn.setAttribute('aria-busy', 'true');
-            setBtnIcon(driveAccountBtn, 'fas fa-spinner');
-            driveAccountBtn.title = `Syncing with Google Drive${emailBit}`;
-        } else if (state === 'error') {
-            driveAccountBtn.classList.remove('is-busy');
-            driveAccountBtn.removeAttribute('aria-busy');
-            setBtnIcon(driveAccountBtn, 'fab fa-google-drive');
-            driveAccountBtn.title = error
-                ? `Sync error: ${error}`
-                : `Sync error${emailBit}`;
-        } else {
-            driveAccountBtn.classList.remove('is-busy');
-            driveAccountBtn.removeAttribute('aria-busy');
-            setBtnIcon(driveAccountBtn, 'fab fa-google-drive');
-            driveAccountBtn.title = email
-                ? `Connected as ${email}`
-                : 'Google Drive connected';
-        }
+        if (!backupBtn) return;
+        void hasUsableAccessToken().then((usable) => {
+            if (!usable) {
+                setBackupUiState('needs-auth');
+                return;
+            }
+            const { state, error } = getSyncState();
+            if (state === 'syncing') {
+                setBackupUiState('syncing');
+            } else if (state === 'error') {
+                setBackupUiState('error', error || undefined);
+            } else {
+                setBackupUiState('ready');
+            }
+        });
     }
 
     function closeDriveMenu() {
         if (driveMenu) driveMenu.hidden = true;
-        driveAccountBtn?.setAttribute('aria-expanded', 'false');
+        backupBtn?.setAttribute('aria-expanded', 'false');
+    }
+
+    async function connectAndSync() {
+        try {
+            setBackupUiState('syncing');
+            await connectDrive();
+            showNotification('Backup connected.');
+            const result = await syncAll();
+            if (!result.ok && result.error) {
+                setBackupUiState('error', result.error);
+                showNotification('Connected, but sync had an error.');
+            } else {
+                setBackupUiState('ready');
+                showNotification('Synced with Drive.');
+            }
+            await updateDriveChrome();
+            await loadHistory();
+        } catch (err) {
+            console.error(err);
+            setBackupUiState('error', err?.message || undefined);
+            showNotification(err?.message || 'Could not connect backup.');
+        }
     }
 
     // Helper to get today's date string
@@ -680,6 +823,8 @@ function initApp() {
                     }
                     setSaveStatus('saved');
                     updateDocumentTitle();
+                    syncFilenameWidth();
+                    pageScale?.refresh();
                     void loadHistory();
                 }
 
@@ -697,12 +842,11 @@ function initApp() {
                         startNewDocument(doc.type);
                     }
                     showNotification('Document deleted.');
-                    if (isConnected()) {
-                        void pushDocById(row.type, row.id).then(() => loadHistory());
-                    } else if (!row.driveFileId) {
+                    if (!isConnected() && !row.driveFileId) {
                         // Never synced — purge locally; no Drive tombstone needed
                         await hardDeleteById(row.type, row.id);
                     }
+                    // Drive tombstones upload on next manual Sync all / backup click
                     await loadHistory();
                 };
 
@@ -777,27 +921,20 @@ function initApp() {
 
     startNewDocument('diary');
     void loadHistory();
-    updateDriveChrome();
+    void updateDriveChrome();
 
     void (async () => {
         try {
             await initDriveAuth();
-            updateDriveChrome();
-            if (isConnected()) {
-                const result = await syncAll();
-                if (!result.ok && result.error) {
-                    console.warn('Drive sync on open:', result.error);
-                }
-                await loadHistory();
-                updateDriveSyncStatus();
-            }
+            await updateDriveChrome();
+            // No automatic sync — user clicks the backup icon when they want to sync.
         } catch (err) {
             console.warn('Drive auth init failed:', err);
         }
     })();
 
     onAuthChange(() => {
-        updateDriveChrome();
+        void updateDriveChrome();
         void loadHistory();
     });
     onSyncStatusChange(() => {
@@ -805,43 +942,32 @@ function initApp() {
         void loadHistory();
     });
 
-    document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'hidden') {
-            void flushDriveBackupSoon().then(() => loadHistory());
-        }
-    });
-    window.addEventListener('pagehide', () => {
-        void flushDriveBackupSoon();
-    });
-
-    driveConnectBtn?.addEventListener('click', async () => {
-        try {
-            await connectDrive();
-            updateDriveChrome();
-            showNotification('Google Drive connected.');
-            const result = await syncAll();
-            if (!result.ok && result.error) {
-                showNotification('Connected, but sync had an error.');
-            } else {
-                showNotification('Synced with Drive.');
-            }
-            await loadHistory();
-        } catch (err) {
-            console.error(err);
-            showNotification(err?.message || 'Could not connect to Drive.');
-        }
-    });
-
-    driveAccountBtn?.addEventListener('click', (e) => {
+    backupBtn?.addEventListener('click', async (e) => {
         e.stopPropagation();
+        const state = backupBtn.dataset.backup;
+        if (state === 'syncing') return;
+
+        if (state === 'needs-auth' || state === 'error') {
+            closeDriveMenu();
+            await connectAndSync();
+            return;
+        }
+
+        // ready — toggle menu
         if (!driveMenu) return;
         const open = driveMenu.hidden;
         driveMenu.hidden = !open;
-        driveAccountBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        backupBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
     });
 
     driveSyncNowBtn?.addEventListener('click', async () => {
         closeDriveMenu();
+        const token = await ensureAccessToken({ allowInteractive: true });
+        if (!token) {
+            setBackupUiState('needs-auth');
+            showNotification('Connect backup to sync.');
+            return;
+        }
         const result = await syncAll();
         await loadHistory();
         updateDriveSyncStatus();
@@ -851,9 +977,9 @@ function initApp() {
     driveDisconnectBtn?.addEventListener('click', async () => {
         closeDriveMenu();
         await disconnectDrive();
-        updateDriveChrome();
+        await updateDriveChrome();
         await loadHistory();
-        showNotification('Drive disconnected. Local files are unchanged.');
+        showNotification('Backup disconnected. Local files are unchanged.');
     });
 
     document.addEventListener('click', (e) => {
@@ -876,6 +1002,7 @@ function initApp() {
     filenameInput?.addEventListener('change', () => {
         scheduleSave();
         updateDocumentTitle();
+        syncFilenameWidth();
     });
     filenameInput?.addEventListener('blur', () => {
         if (!(filenameInput.value || '').trim()) {
@@ -883,10 +1010,24 @@ function initApp() {
         }
         scheduleSave();
         updateDocumentTitle();
+        syncFilenameWidth();
     });
     filenameInput?.addEventListener('input', () => {
         updateDocumentTitle();
+        syncFilenameWidth();
     });
+    syncFilenameWidth();
+    syncChromeTop();
+    window.addEventListener('resize', () => {
+        syncFilenameWidth();
+        syncChromeTop();
+    });
+    if (typeof ResizeObserver !== 'undefined') {
+        const header = document.querySelector('.header-frame');
+        if (header) {
+            new ResizeObserver(() => syncChromeTop()).observe(header);
+        }
+    }
 
     async function runPdfExport() {
         const activeTemplate = getActiveTemplate();
@@ -945,9 +1086,10 @@ function initApp() {
         switchBtn?.setAttribute('aria-label', label);
         switchBtn?.setAttribute('title', label);
         sidebar?.classList.toggle('open', open);
-        mainContent?.classList.toggle('shifted', open);
-        const switchIcon = switchBtn?.querySelector('.switch-icon');
-        if (switchIcon) switchIcon.style.transform = open ? 'rotate(180deg)' : 'rotate(0)';
+        sidebar?.setAttribute('aria-hidden', open ? 'false' : 'true');
+        document.body.classList.toggle('sidebar-open', open);
+        // Do not shift main content with .shifted — layout-shell handles subtle recenter.
+        mainContent?.classList.remove('shifted');
     }
 
     switchBtn?.addEventListener('click', function (e) {
@@ -955,14 +1097,12 @@ function initApp() {
         setSidebarOpen(!isToggled);
     });
 
-    document.addEventListener('click', function (e) {
-        if (isToggled &&
-            sidebar && switchBtn &&
-            !sidebar.contains(e.target) &&
-            !switchBtn.contains(e.target)) {
-            setSidebarOpen(false);
-        }
-    });
+    // History stays open until the toggle is clicked again (no outside-click dismiss).
+
+    pageScale = initPageScale();
+    document.getElementById('zoomInBtn')?.addEventListener('click', () => pageScale?.zoomIn());
+    document.getElementById('zoomOutBtn')?.addEventListener('click', () => pageScale?.zoomOut());
+    document.getElementById('zoomFitBtn')?.addEventListener('click', () => pageScale?.zoomFit());
 
     document.querySelectorAll('#templateSegment .segment-btn').forEach((btn) => {
         btn.addEventListener('click', () => {
@@ -979,6 +1119,21 @@ function initApp() {
     });
     setLangSegmentUI(false);
 
+    function onMobileInputModeChange() {
+        if (mobileInputMq.matches && suggestionsBox) {
+            suggestionsBox.style.display = 'none';
+        }
+        applyEditorPlaceholders();
+        syncChromeTop();
+        pageScale?.refresh();
+    }
+    if (typeof mobileInputMq.addEventListener === 'function') {
+        mobileInputMq.addEventListener('change', onMobileInputModeChange);
+    } else if (typeof mobileInputMq.addListener === 'function') {
+        mobileInputMq.addListener(onMobileInputModeChange);
+    }
+    onMobileInputModeChange();
+
     addTemplateBtn?.addEventListener('click', function () {
         requestNewDocument(getActiveTemplate());
     });
@@ -990,7 +1145,7 @@ function initApp() {
 
         if (e.key === 'Escape') {
             // Dictation Esc is handled in capture phase by dictation-ui.
-            if (isToggled) setSidebarOpen(false);
+            // History stays open unless the panel toggle is used.
             return;
         }
 

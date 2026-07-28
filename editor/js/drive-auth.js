@@ -275,15 +275,49 @@ export async function requestAccessToken(opts = {}) {
 }
 
 /**
- * Silent refresh when already connected; falls back to interactive.
+ * Whether a non-expired access token is available in memory/IDB (no network).
+ * @returns {Promise<boolean>}
+ */
+export async function hasUsableAccessToken() {
+    await hydrateFromStore();
+    const now = Date.now();
+    if (retainedUntil && now >= retainedUntil) {
+        await clearStoredSession();
+        accessToken = null;
+        tokenExpiresAt = 0;
+        retainedUntil = 0;
+        return false;
+    }
+    return Boolean(accessToken && now < tokenExpiresAt);
+}
+
+/**
+ * Obtain an access token. Interactive Google UI only when allowInteractive is true.
+ * @param {{ allowInteractive?: boolean }} [opts]
  * @returns {Promise<string|null>}
  */
-export async function ensureAccessToken() {
+export async function ensureAccessToken(opts = {}) {
+    const allowInteractive = opts.allowInteractive === true;
     await hydrateFromStore();
     if (!isConnected() && !accessToken) return null;
+
+    const now = Date.now();
+    if (retainedUntil && now >= retainedUntil) {
+        await clearStoredSession();
+        accessToken = null;
+        tokenExpiresAt = 0;
+        retainedUntil = 0;
+        if (!allowInteractive) return null;
+    }
+
+    if (accessToken && now < tokenExpiresAt) {
+        return accessToken;
+    }
+
     try {
         return await requestAccessToken({ interactive: false });
     } catch {
+        if (!allowInteractive) return null;
         try {
             return await requestAccessToken({ interactive: true });
         } catch {
@@ -320,7 +354,7 @@ async function fetchUserEmail() {
 }
 
 /**
- * Interactive connect.
+ * Interactive connect (shows Google UI as needed).
  * @returns {Promise<{ email: string }>}
  */
 export async function connectDrive() {
@@ -346,11 +380,12 @@ export async function disconnectDrive() {
 }
 
 /**
- * Auth header helper; refreshes on 401 via caller.
+ * Auth header helper. Does not open a login popup (allowInteractive: false).
+ * Callers that need interactive auth must obtain a token first (e.g. connectDrive).
  * @returns {Promise<Record<string, string>>}
  */
 export async function authHeaders() {
-    const token = await ensureAccessToken();
+    const token = await ensureAccessToken({ allowInteractive: false });
     if (!token) throw new Error('Not connected to Google Drive');
     return { Authorization: `Bearer ${token}` };
 }

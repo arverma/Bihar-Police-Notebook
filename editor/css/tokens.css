@@ -1,0 +1,36 @@
+:root {
+    /* Layout shell */
+    --layout-header-h: 56px;
+    --layout-header-h-multi: 104px;
+    --layout-sidebar-w: 300px;
+    --layout-sidebar-nudge: 160px;
+    --layout-footer-h: 0px;
+    --layout-page-w: 210mm;
+    --layout-page-w-px: 794px;
+    --layout-fab-band: 72px;
+    --layout-edge: 16px;
+    --layout-max: 1728px;
+
+    /* Safe areas */
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-right: env(safe-area-inset-right, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-left: env(safe-area-inset-left, 0px);
+
+    --chrome-top: calc(var(--layout-header-h) + var(--safe-top));
+    --chrome-bottom: var(--safe-bottom);
+    --overlay-bottom: calc(var(--chrome-bottom) + var(--layout-edge));
+
+    /* Page preview scale (set by JS) */
+    --page-scale: 1;
+    --filename-w: 120px;
+    --filename-max: 420px;
+}
+
+@media (max-width: 768px) {
+    :root {
+        --layout-header-h-multi: 88px;
+        --layout-header-h: var(--layout-header-h-multi);
+        --chrome-top: calc(var(--layout-header-h-multi) + var(--safe-top));
+    }
+}

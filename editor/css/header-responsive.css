@@ -1,0 +1,333 @@
+/* Header, filename sizing, compact mobile chrome */
+
+.header-frame {
+    background-color: var(--brand-secondary);
+    color: var(--brand-primary);
+    width: 100%;
+    min-height: var(--layout-header-h);
+    height: auto;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 1000;
+    box-shadow: var(--shadow-light);
+    border-top: 3px solid var(--color-error);
+    border-bottom: 2px solid var(--brand-primary);
+    padding-top: var(--safe-top);
+    box-sizing: border-box;
+}
+
+.header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: nowrap;
+    max-width: var(--layout-max);
+    min-height: calc(var(--layout-header-h) - 5px);
+    margin: 0 auto;
+    padding: 8px 14px;
+    gap: 10px;
+    box-sizing: border-box;
+}
+
+.header-left,
+.header-center,
+.header-right {
+    display: flex;
+    align-items: center;
+}
+
+.header-left {
+    flex: 1 1 0;
+    min-width: 0;
+    gap: 8px;
+}
+
+.header-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.header-center {
+    flex: 0 0 auto;
+    justify-content: center;
+}
+
+.header-right {
+    flex: 1 1 0;
+    justify-content: flex-end;
+    gap: 10px;
+    min-width: 0;
+}
+
+.brand-mark-hindi {
+    font-family: 'Noto Sans Devanagari', sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--brand-primary);
+    white-space: nowrap;
+    letter-spacing: 0.02em;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.doc-name-cluster {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    flex: 1 1 140px;
+    max-width: 420px;
+}
+
+/* Sync / new live in History */
+.header-left > .drive-control,
+.header-left > .add-template-btn {
+    display: none;
+}
+
+.filename-resize-wrap {
+    position: relative;
+    display: inline-grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    flex: 0 1 auto;
+    width: clamp(100px, var(--filename-w, 140px), var(--filename-max, 420px));
+    min-width: 100px;
+    max-width: min(420px, 100%);
+    height: 36px;
+    overflow: hidden;
+    box-sizing: border-box;
+    resize: none;
+}
+
+.filename-sizer {
+    position: absolute;
+    left: 0;
+    top: 0;
+    visibility: hidden;
+    white-space: pre;
+    font-family: "Roboto", Helvetica, sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    padding: 0 12px;
+    pointer-events: none;
+    height: 36px;
+    line-height: 36px;
+}
+
+.filename-input {
+    grid-area: 1 / 1;
+    height: 36px;
+    width: 100%;
+    min-width: 0;
+    padding: 0 12px;
+    border: 1px solid var(--color-border-light);
+    border-radius: 8px;
+    font-family: "Roboto", Helvetica, sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    background: var(--brand-white);
+    box-shadow: var(--shadow-light);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    box-sizing: border-box;
+    text-overflow: ellipsis;
+}
+
+/* Zoom chrome is mobile-only (shown via media query + JS) */
+.page-zoom-controls {
+    display: none;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.page-zoom-btn {
+    appearance: none;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    border: 1px solid var(--color-border-light);
+    background: var(--brand-white);
+    color: var(--brand-primary);
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    box-shadow: var(--shadow-light);
+}
+
+.page-zoom-btn:hover {
+    background: var(--color-hover-brand);
+}
+
+.page-zoom-label {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+    min-width: 36px;
+    text-align: center;
+}
+
+/* Narrow desktop / tablet: stay single-line, tighten chrome */
+@media (max-width: 1100px) {
+    .header-content {
+        gap: 8px;
+        padding: 8px 12px;
+    }
+
+    .brand-mark-hindi {
+        display: none;
+    }
+
+    .doc-name-cluster {
+        flex-basis: 120px;
+        max-width: 280px;
+    }
+
+    .segment-btn {
+        padding: 0 10px;
+        font-size: 12px;
+    }
+
+    #exportBtn span:not(.btn-icon) {
+        display: none;
+    }
+
+    #exportBtn {
+        padding: 0;
+        width: 36px;
+        justify-content: center;
+    }
+
+    .header-left,
+    .header-right {
+        gap: 6px;
+    }
+}
+
+@media (max-width: 900px) {
+    .doc-name-cluster {
+        max-width: 200px;
+    }
+
+    .segment-btn {
+        padding: 0 8px;
+    }
+
+    .header-content {
+        gap: 6px;
+    }
+}
+
+/*
+ * Mobile only (≤768px):
+ *  Row 1: [panel+logo LEFT] …… [filename | Letter/Diary CENTERED]
+ *  Row 2: [− zoom + fit | PDF] centered
+ * Lang hidden — OS keyboard handles script.
+ */
+@media (max-width: 768px) {
+    .header-content {
+        position: relative;
+        flex-wrap: wrap;
+        justify-content: center;
+        align-items: center;
+        /* Equal side gutters so centered groups stay viewport-centered;
+           left gutter also clears the absolute brand cluster. */
+        padding: 8px 84px;
+        row-gap: 6px;
+        column-gap: 8px;
+    }
+
+    .header-left,
+    .header-center,
+    .header-right {
+        display: contents;
+    }
+
+    .header-brand {
+        position: absolute;
+        left: 10px;
+        top: 8px;
+        z-index: 2;
+        gap: 6px;
+    }
+
+    .brand-mark-hindi {
+        display: none;
+    }
+
+    .doc-name-cluster {
+        order: 1;
+        flex: 0 1 auto;
+        max-width: min(148px, 36vw);
+    }
+
+    #templateSegment {
+        order: 2;
+    }
+
+    /* Force zoom + PDF onto a second centered row */
+    .header-content::after {
+        content: '';
+        flex: 0 0 100%;
+        width: 100%;
+        height: 0;
+        order: 3;
+    }
+
+    .page-zoom-controls {
+        display: inline-flex;
+        order: 4;
+        margin-left: 0;
+    }
+
+    #langSegment {
+        display: none !important;
+    }
+
+    #exportBtn {
+        display: inline-flex !important;
+        order: 5;
+        width: 36px;
+        padding: 0;
+        justify-content: center;
+    }
+
+    #exportBtn span:not(.btn-icon) {
+        display: none;
+    }
+
+    .segment-btn {
+        padding: 0 10px;
+        font-size: 12px;
+    }
+}
+
+@media (max-width: 420px) {
+    .header-content {
+        padding-left: 78px;
+        padding-right: 78px;
+    }
+
+    .doc-name-cluster {
+        max-width: min(120px, 32vw);
+    }
+
+    #templateSegment .segment-btn {
+        padding: 0 8px;
+        font-size: 11px;
+    }
+
+    .page-zoom-btn {
+        width: 26px;
+        height: 26px;
+    }
+
+    .page-zoom-label {
+        min-width: 32px;
+        font-size: 10px;
+    }
+}

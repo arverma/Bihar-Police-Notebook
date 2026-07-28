@@ -14,7 +14,7 @@
 - **बोलकर लिखें (Voice dictation)** — हिंदी या English (India) में बोलकर लिखें; Chrome में on-device recognition पसंद (एक बार language pack)
 - **Letter और Diary** — सादा letter editor और FIR केस-डायरी form
 - **Document history** — save / open / delete (IndexedDB, आपके browser में)
-- **वैकल्पिक Google Drive backup** — sign in करके `BP Writing Tool` folder में incremental sync (backup + restore)
+- **वैकल्पिक Google Drive backup** — History में backup icon से sign in और sync (`BP Writing Tool` folder; manual)
 - **Export & print** — browser से print
 - **Website या extension** — Pages URL सीधे, या toolbar icon से
 

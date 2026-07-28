@@ -14,7 +14,7 @@
 - **Voice dictation (बोलकर लिखें)** — speak Hindi or English (India) via a draggable mic; prefers on-device recognition in Chrome after a one-time language-pack download
 - **Letter & Diary templates** — plain letter editor and FIR case-diary form
 - **Document history** — browse, open, and delete saved documents (IndexedDB on your device)
-- **Optional Google Drive backup** — sign in once; documents sync to a `BP Writing Tool` folder in your Drive (incremental backup + restore)
+- **Optional Google Drive backup** — open History and use the backup icon to sign in and sync to a `BP Writing Tool` folder in your Drive (manual backup + restore)
 - **Export & print** — print styled Hindi documents from the browser
 - **Website or extension** — open the Pages URL directly, or via the toolbar icon
 

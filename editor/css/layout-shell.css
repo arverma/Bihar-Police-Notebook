@@ -1,0 +1,228 @@
+/* App shell, main region, sidebar */
+
+html {
+    height: 100%;
+}
+
+body.app-shell {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    min-height: 100dvh;
+    margin: 0;
+    overflow-x: hidden;
+}
+
+.app-body {
+    flex: 1 1 auto;
+    display: flex;
+    min-height: 0;
+    position: relative;
+}
+
+.main-content {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-top: var(--chrome-top);
+    padding-bottom: calc(var(--layout-fab-band) + var(--layout-edge));
+    padding-left: var(--safe-left);
+    padding-right: var(--safe-right);
+    box-sizing: border-box;
+    transition: padding-left 0.28s cubic-bezier(.4, 0, .2, 1);
+    margin-left: 0;
+}
+
+/* Desktop: subtle workspace recentering when History is open */
+@media (min-width: 1025px) {
+    body.app-shell.sidebar-open .main-content {
+        padding-left: calc(var(--layout-sidebar-nudge) + var(--safe-left));
+    }
+}
+
+/* No full 300px jump */
+.main-content.shifted {
+    margin-left: 0;
+}
+
+.sidebar {
+    position: fixed;
+    left: 0;
+    top: var(--chrome-top);
+    width: var(--layout-sidebar-w);
+    max-width: min(var(--layout-sidebar-w), calc(100vw - 24px));
+    height: calc(100vh - var(--chrome-top));
+    height: calc(100dvh - var(--chrome-top));
+    background: var(--brand-white);
+    box-shadow: var(--shadow-medium);
+    transform: translateX(-105%);
+    transition: transform 0.28s cubic-bezier(.4, 0, .2, 1);
+    z-index: 900;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+}
+
+.sidebar.open {
+    left: 0;
+    transform: translateX(0);
+}
+
+.sidebar-content {
+    flex: 1;
+    padding: 16px;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.sidebar-header {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 4px;
+}
+
+.sidebar-header h3 {
+    margin: 0;
+    font-size: 16px;
+    color: var(--brand-primary);
+}
+
+.sidebar-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.sidebar-actions .drive-menu {
+    left: auto;
+    right: 0;
+}
+
+/* Shared chrome for History action icons — matches .switch-btn */
+.sidebar-actions #backupBtn,
+.sidebar-actions .add-template-btn {
+    appearance: none;
+    background: var(--brand-white);
+    color: var(--brand-primary);
+    border: 1px solid var(--color-border-light);
+    border-radius: 8px;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    margin: 0;
+    font-size: 0.9em;
+    cursor: pointer;
+    box-shadow: var(--shadow-light);
+    /* No color transition — status red/green should snap clearly */
+    transition: border-color 0.15s ease, background 0.15s ease,
+        box-shadow 0.15s ease, transform 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.sidebar-actions #backupBtn:hover,
+.sidebar-actions .add-template-btn:hover {
+    background: var(--color-hover-brand);
+    box-shadow: var(--shadow-medium);
+    transform: translateY(-1px);
+}
+
+.sidebar-actions #backupBtn:active,
+.sidebar-actions .add-template-btn:active {
+    transform: translateY(0);
+}
+
+.sidebar-actions #backupBtn .btn-icon {
+    width: 20px;
+    height: 20px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.sidebar-actions #backupBtn .backup-glyph {
+    display: block;
+    width: 20px;
+    height: 20px;
+    background-color: currentColor;
+    -webkit-mask: url("../images/cloud-sync.svg") center / contain no-repeat;
+    mask: url("../images/cloud-sync.svg") center / contain no-repeat;
+}
+
+.sidebar-actions #backupBtn .backup-glyph[hidden],
+.sidebar-actions #backupBtn .backup-spinner[hidden] {
+    display: none !important;
+}
+
+.sidebar-actions #backupBtn .backup-spinner {
+    color: currentColor;
+    font-size: 16px;
+}
+
+/* Disconnected / error — red */
+.sidebar-actions #backupBtn[data-backup="needs-auth"],
+.sidebar-actions #backupBtn[data-backup="error"] {
+    color: var(--color-error);
+    border-color: var(--color-error);
+}
+
+/* Syncing — brand blue + spin */
+.sidebar-actions #backupBtn[data-backup="syncing"] {
+    color: var(--brand-primary);
+    border-color: var(--brand-primary);
+    cursor: wait;
+}
+
+/* Connected & idle — green */
+.sidebar-actions #backupBtn[data-backup="ready"] {
+    color: #2e7d32;
+    border-color: #2e7d32;
+}
+
+.sidebar-actions #backupBtn[data-backup="ready"].is-sync-success {
+    animation: backup-ready-pulse 0.55s ease;
+}
+
+@keyframes backup-ready-pulse {
+    0% { transform: scale(1); box-shadow: var(--shadow-light); }
+    40% { transform: scale(1.08); box-shadow: 0 0 0 4px rgba(46, 125, 50, 0.22); }
+    100% { transform: scale(1); box-shadow: var(--shadow-light); }
+}
+
+.sidebar-actions .add-template-btn .plus-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+.sidebar-actions .add-template-btn .plus-icon i {
+    color: currentColor;
+    font-size: 15px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sidebar-actions #backupBtn[data-backup="ready"].is-sync-success {
+        animation: none;
+    }
+
+    .sidebar-actions #backupBtn:hover,
+    .sidebar-actions .add-template-btn:hover {
+        transform: none;
+    }
+}
+
+.bihar-police-logo-header {
+    height: 28px;
+    width: auto;
+    display: block;
+    flex-shrink: 0;
+}

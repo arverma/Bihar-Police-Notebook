@@ -12,51 +12,34 @@
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;500;700&display=swap"
         rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/tokens.css">
+    <link rel="stylesheet" href="css/layout-shell.css">
+    <link rel="stylesheet" href="css/header-responsive.css">
+    <link rel="stylesheet" href="css/page-preview.css">
+    <link rel="stylesheet" href="css/overlays-responsive.css">
 </head>
 
-<body>
+<body class="app-shell">
     <header class="header-frame">
         <div class="header-content">
             <div class="header-left">
-                <button class="switch-btn" type="button" title="Show document history"
-                    aria-label="Show document history" aria-pressed="false">
-                    <i class="fas fa-history switch-icon"></i>
-                </button>
-                <img src="images/bihar-police-logo.svg" alt=""
-                    class="bihar-police-logo-header" width="32" height="32">
-                <span class="brand-mark-hindi" aria-hidden="true">बिहार पुलिस</span>
-                <div class="doc-name-cluster">
-                    <div class="drive-control" id="driveControl">
-                        <button type="button" class="action-btn drive-btn" id="driveConnectBtn"
-                            title="Connect Google Drive for backup" aria-label="Connect Google Drive for backup">
-                            <span class="btn-icon"><i class="fab fa-google-drive" aria-hidden="true"></i></span>
-                        </button>
-                        <button type="button" class="drive-account" id="driveAccountBtn" hidden
-                            data-sync="idle"
-                            title="Google Drive connected" aria-label="Google Drive account" aria-haspopup="true"
-                            aria-expanded="false">
-                            <span class="btn-icon"><i class="fab fa-google-drive" aria-hidden="true"></i></span>
-                        </button>
-                        <div class="drive-menu" id="driveMenu" hidden>
-                            <div class="drive-menu-email" id="driveEmailLabel" hidden></div>
-                            <button type="button" class="drive-menu-item" id="driveSyncNowBtn">
-                                Sync all
-                            </button>
-                            <button type="button" class="drive-menu-item" id="driveDisconnectBtn">
-                                Disconnect
-                            </button>
-                        </div>
-                    </div>
-                    <input type="text" class="filename-input" id="filenameInput"
-                        placeholder="Document name…" aria-label="Document name"
-                        title="Document name">
+                <div class="header-brand">
+                    <button class="switch-btn" type="button" title="Show document history"
+                        aria-label="Show document history" aria-pressed="false">
+                        <span class="switch-icon" aria-hidden="true"></span>
+                    </button>
+                    <img src="images/bihar-police-logo.svg" alt=""
+                        class="bihar-police-logo-header" width="32" height="32">
+                    <span class="brand-mark-hindi" aria-hidden="true">बिहार पुलिस</span>
                 </div>
-                <button class="add-template-btn" type="button" title="Start a new document"
-                    aria-label="Start a new document">
-                    <div class="plus-icon">
-                        <i class="fas fa-plus"></i>
+                <div class="doc-name-cluster">
+                    <div class="filename-resize-wrap">
+                        <span class="filename-sizer" aria-hidden="true"></span>
+                        <input type="text" class="filename-input" id="filenameInput"
+                            placeholder="Document name…" aria-label="Document name"
+                            title="Document name">
                     </div>
-                </button>
+                </div>
             </div>
             <div class="header-center">
                 <div class="segmented" id="templateSegment" role="group" aria-label="Document type">
@@ -65,6 +48,17 @@
                     <button type="button" class="segment-btn is-active" data-template="diary"
                         title="Diary layout" aria-pressed="true">Diary</button>
                 </div>
+            </div>
+            <div class="page-zoom-controls" id="pageZoomControls" hidden>
+                <button type="button" class="page-zoom-btn" id="zoomOutBtn"
+                    title="Zoom out" aria-label="Zoom out">−</button>
+                <span class="page-zoom-label" id="zoomLabel">100%</span>
+                <button type="button" class="page-zoom-btn" id="zoomInBtn"
+                    title="Zoom in" aria-label="Zoom in">+</button>
+                <button type="button" class="page-zoom-btn" id="zoomFitBtn"
+                    title="Fit to width" aria-label="Fit to width">
+                    <i class="fas fa-compress" aria-hidden="true"></i>
+                </button>
             </div>
             <div class="header-right">
                 <div class="segmented" id="langSegment" role="group" aria-label="Input language">
@@ -82,16 +76,59 @@
         </div>
     </header>
 
-    <div class="main-content">
-        <!-- Letter Editor (hidden by default) — A4 page cards -->
-        <div class="editor-wrapper editor-letter" style="display:none;">
-            <div id="letterPages" class="letter-pages"></div>
-        </div>
-        <!-- Diary Editor (default) — A4 page cards -->
-        <div class="editor-wrapper editor-diary">
-            <div id="diaryPages" class="diary-pages"></div>
-        </div>
-        <div id="pageIndicator" class="page-indicator">Page 1 of 1</div>
+    <div class="app-body">
+        <aside class="sidebar" id="sidebar" aria-hidden="true">
+            <div class="sidebar-content">
+                <div class="sidebar-header">
+                    <h3>History</h3>
+                    <div class="sidebar-actions">
+                        <div class="drive-control" id="driveControl">
+                            <button type="button" class="action-btn backup-btn" id="backupBtn"
+                                data-backup="needs-auth"
+                                title="Connect to back up" aria-label="Connect to back up"
+                                aria-haspopup="true" aria-expanded="false">
+                                <span class="btn-icon">
+                                    <span class="backup-glyph" aria-hidden="true"></span>
+                                    <i class="fas fa-spinner backup-spinner" hidden aria-hidden="true"></i>
+                                </span>
+                            </button>
+                            <div class="drive-menu" id="driveMenu" hidden>
+                                <div class="drive-menu-email" id="driveEmailLabel" hidden></div>
+                                <button type="button" class="drive-menu-item" id="driveSyncNowBtn">
+                                    Sync all
+                                </button>
+                                <button type="button" class="drive-menu-item" id="driveDisconnectBtn">
+                                    Disconnect
+                                </button>
+                            </div>
+                        </div>
+                        <button class="add-template-btn" type="button" title="Start a new document"
+                            aria-label="Start a new document">
+                            <div class="plus-icon">
+                                <i class="fas fa-plus"></i>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+                <div class="history-list"></div>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <div class="editor-stage" id="editorStage">
+                <div class="editor-scale" id="editorScale">
+                    <!-- Letter Editor (hidden by default) — A4 page cards -->
+                    <div class="editor-wrapper editor-letter" style="display:none;">
+                        <div id="letterPages" class="letter-pages"></div>
+                    </div>
+                    <!-- Diary Editor (default) — A4 page cards -->
+                    <div class="editor-wrapper editor-diary">
+                        <div id="diaryPages" class="diary-pages"></div>
+                    </div>
+                </div>
+            </div>
+            <div id="pageIndicator" class="page-indicator">Page 1 of 1</div>
+        </main>
     </div>
 
     <template id="diaryPageTemplate">
@@ -179,21 +216,6 @@
             </table>
         </div>
     </template>
-
-    <div class="sidebar" id="sidebar">
-        <div class="sidebar-content">
-            <div class="sidebar-header">
-                <h3>History</h3>
-            </div>
-            <div class="history-list"></div>
-        </div>
-    </div>
-
-    <footer class="footer-bihar-police">
-        <img src="images/bihar-police-logo.svg" alt="Bihar Police Logo"
-            class="bihar-police-logo-footer">
-        <span>Powered by Bihar Police</span>
-    </footer>
 
     <a id="help-fab" class="help-fab" href="help.html"
         title="Help — privacy, shortcuts &amp; about" aria-label="Help — privacy, shortcuts and about">
