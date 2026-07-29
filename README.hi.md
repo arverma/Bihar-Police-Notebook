@@ -1,97 +1,49 @@
-# 📝 बिहार पुलिस नोटबुक टूल
+# बिहार पुलिस नोटबुक (Bihar Police Notebook)
 
-[![Build Status](https://github.com/ayushrskiaa/BP-writingTool/workflows/Build%20and%20Release%20Application/badge.svg)](https://github.com/ayushrskiaa/BP-writingTool/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-lightgrey.svg)](https://github.com/ayushrskiaa/BP-writingTool/releases)
-[![Security Status](https://img.shields.io/badge/Security-CodeQL%20Active-brightgreen.svg)](https://github.com/ayushrskiaa/BP-writingTool/security/code-scanning)
+[![English](https://img.shields.io/badge/EN-English%20README-blue.svg)](README.md)
 
-## About
+**बिहार पुलिस नोटबुक** ब्राउज़र में हिंदी पत्र और FIR केस-डायरी लिखने में मदद करता है। कंप्यूटर पर Hinglish में टाइप करें; फ़ोन पर अपने कीबोर्ड का उपयोग करें। काम इसी डिवाइस पर सेव होता है; चाहें तो अपने Google Drive पर बैकअप भी कर सकते हैं।
 
-**बिहार पुलिस नोटबुक टूल** एक specialized desktop application है जो **बिहार पुलिस** के लिए बनाया गया है। इस tool से officers और staff Hindi में documents create और manage कर सकते हैं।
+**ऐप खोलें:** [https://bpdiary.arverma.dev/](https://bpdiary.arverma.dev/)  
+(*bpdiary* बिहार पुलिस नोटबुक का वेब पता है।)
 
-## Screenshots
+## आप क्या कर सकते हैं
 
-<table>
-  <tr>
-    <td><img src="doc/1.png" alt="Main Interface" width="600"/></td>
-    <td><img src="doc/2.png" alt="Document Editor" width="600"/></td>
-  </tr>
-  <tr>
-    <td><img src="doc/3.png" alt="History View" width="600"/></td>
-    <td><img src="doc/4.png" alt="Export Options" width="600"/></td>
-  </tr>
-</table>
+- **पत्र** और **केस-डायरी** लिखें जो A4 जैसे प्रिंट हों
+- इसी कंप्यूटर/फ़ोन पर दस्तावेज़ों का **इतिहास** रखें
+- ब्राउज़र से **प्रिंट** या **PDF सेव** करें
+- वैकल्पिक **Google Drive बैकअप** (जब आप खुद कनेक्ट और सिंक करें)
+- कंप्यूटर पर: **Hinglish सुझाव** और वैकल्पिक **बोलकर लिखें** माइक
+- फ़ोन पर: **कीबोर्ड** (और उसका माइक) — ऐप का माइक जानबूझकर छिपा रहता है
 
----
+## कैसे खोलें
 
-### Main Features:
-- 🚀 **Instant Transliteration** - Hinglish में type करें, Hindi output real-time में देखें
-- 📄 **Document Management** - Multiple documents create, edit, save और delete करें
-- 📚 **History Sidebar** - आपके document history को date-wise browse करें
-- 📤 **Export & Print** - Hindi documents को styled format में download या print करें
-- 💻 **Cross-Platform** - Windows और macOS पर available
-- 🔒 **Local Data Storage** - सभी documents आपके device पर locally store होते हैं
+**सबसे आसान:** [bpdiary.arverma.dev](https://bpdiary.arverma.dev/) Chrome या किसी आधुनिक ब्राउज़र में खोलें।
 
----
+**वैकल्पिक Chrome आइकन:**
 
-## Installation
+1. यह प्रोजेक्ट डाउनलोड या clone करें।
+2. Chrome में `chrome://extensions` खोलें → **Developer mode** ऑन करें।
+3. **Load unpacked** से `extension` फ़ोल्डर चुनें।
+4. **Bihar Police Notebook** पिन करें और क्लिक करें — एडिटर खुल जाएगा।
 
-### Quick Download:
-Visit our [Releases page](https://github.com/ayushrskiaa/BP-writingTool/releases) to download latest version:
+आइकन सिर्फ वेबसाइट खोलता है। यह आपके अन्य टैब या फ़ाइलें नहीं पढ़ता।
 
-- **Windows**: `BP-writing tool.exe` download करें
-- **macOS**: `BP-writing-tool-macos.zip` download करें, extract करें, फिर `MyApp.app` को Applications folder में drag करें
+## फ़ोन बनाम कंप्यूटर
 
-### Browser Extensions (For Hindi Typing):
-Full functionality के लिए Google Chrome browser में ये extensions install करें:
+एक ही वेबसाइट दोनों पर चलती है। **फ़ोन** पर कुछ कंप्यूटर-कंट्रोल छिपे रहते हैं (Hinglish टॉगल और ऐप का माइक) ताकि स्क्रीन साफ़ रहे — कीबोर्ड का उपयोग करें। **कंप्यूटर** पर Hinglish सुझाव और बोलकर लिखने का बटन मिलता है। तकनीकी विवरण: [Desktop vs mobile](docs/desktop-vs-mobile.md)।
 
-1. **[Google Input Tools](https://chromewebstore.google.com/detail/google-input-tools/mclkkofklkfljcocdinagocijmpgbhab)** - 90+ languages के लिए virtual keyboards
-2. **[Voice In](https://chromewebstore.google.com/detail/voice-in-speech-to-text-d/pjnefijmagpdjfhhkpljicbbpicelgko)** - Voice typing के लिए
+## आपका डेटा, सादे शब्दों में
 
----
+- नोट्स **आपके डिवाइस** के ब्राउज़र में रहते हैं।
+- **Drive बैकअप वैकल्पिक है।** History से साइन-इन और सिंक करने तक Google पर कुछ नहीं जाता। कॉपी **आपके** Drive फ़ोल्डर *Bihar Police Notebook Backup — do not delete* में जाती है।
+- और गोपनीयता व शॉर्टकट: ऐप में **Help** (`?`), या [help.html](https://bpdiary.arverma.dev/help.html)।
 
-## 🔧 Usage
+## डेवलपर्स के लिए
 
-### Basic Steps:
-1. **Application open** करें
-2. **Hinglish में type** करें (जैसे: "namaste" → "नमस्ते")
-3. **Documents save** करें
-4. **Export या print** करें
+आर्किटेक्चर डायग्राम और मॉड्यूल मैप: **[docs/](docs/README.md)**।
 
-### Data Privacy:
-- आपके documents internet पर नहीं जाते
-- सब कुछ आपके device पर locally store होता है
-- Chrome extensions internet connectivity require करते हैं
+## License
 
----
-
-## 🔒 Security
-
-### CodeQL Analysis:
-हमारा project automatically security scanned होता है:
-- **Python code** security check
-- **JavaScript code** security check  
-- **Regular updates** security के लिए
-
-### Current Status:
-- ✅ **Security scanning** active
-- ✅ **Automated checks** enabled
-- ✅ **Vulnerability monitoring** real-time
-
-[View Security Details →](https://github.com/ayushrskiaa/BP-writingTool/security/code-scanning)
-
----
-
-## 📞 Support
-
-### Issues या Questions के लिए:
-1. [Issues page](https://github.com/ayushrskiaa/BP-writingTool/issues) check करें
-2. New issue create करें
-3. आपका operating system, Python version और error messages mention करें
-
----
-
-## 📄 License
-
-MIT License के under यह project available है - [LICENSE](LICENSE) file देखें।
+MIT — [LICENSE](LICENSE) देखें। Copyright 2025–2026 Bihar Police Notebook.

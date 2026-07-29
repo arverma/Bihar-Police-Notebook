@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bihar Police Notebook</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="images/favicon.png">
+    <link rel="apple-touch-icon" sizes="128x128" href="images/icon128.png">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;500;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/tokens.css">
+    <link rel="stylesheet" href="css/layout-shell.css">
+    <link rel="stylesheet" href="css/header-responsive.css">
+    <link rel="stylesheet" href="css/page-preview.css">
+    <link rel="stylesheet" href="css/overlays-responsive.css">
+</head>
+
+<body class="app-shell">
+    <header class="header-frame">
+        <div class="header-content">
+            <div class="header-left">
+                <div class="header-brand">
+                    <button class="switch-btn" type="button" title="Show document history"
+                        aria-label="Show document history" aria-pressed="false">
+                        <span class="switch-icon" aria-hidden="true"></span>
+                    </button>
+                    <img src="images/bihar-police-logo.svg" alt=""
+                        class="bihar-police-logo-header" width="32" height="32">
+                    <span class="brand-mark-hindi" aria-hidden="true">बिहार पुलिस</span>
+                </div>
+                <div class="doc-name-cluster">
+                    <div class="filename-resize-wrap">
+                        <span class="filename-sizer" aria-hidden="true"></span>
+                        <input type="text" class="filename-input" id="filenameInput"
+                            placeholder="Document name…" aria-label="Document name"
+                            title="Document name">
+                    </div>
+                </div>
+            </div>
+            <div class="header-center">
+                <div class="segmented" id="templateSegment" role="group" aria-label="Document type">
+                    <button type="button" class="segment-btn" data-template="letter"
+                        title="Letter layout" aria-pressed="false">Letter</button>
+                    <button type="button" class="segment-btn is-active" data-template="diary"
+                        title="Diary layout" aria-pressed="true">Diary</button>
+                </div>
+            </div>
+            <div class="header-right">
+                <div class="segmented" id="langSegment" role="group" aria-label="Input language">
+                    <button type="button" class="segment-btn is-active" data-lang="hinglish"
+                        title="Type in Roman -> Devanagari" aria-pressed="true">Hinglish</button>
+                    <button type="button" class="segment-btn" data-lang="hindi"
+                        title="Type in Hindi (Devanagari)" aria-pressed="false">हिंदी</button>
+                </div>
+                <button class="action-btn export-btn" id="exportBtn" type="button"
+                    title="Print or save as PDF" aria-label="Print or save as PDF">
+                    <span class="btn-icon"><i class="fas fa-file-pdf" aria-hidden="true"></i></span>
+                    <span>PDF</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <div class="app-body">
+        <aside class="sidebar" id="sidebar" aria-hidden="true">
+            <div class="sidebar-content">
+                <div class="sidebar-header">
+                    <div class="sidebar-title-block">
+                        <h3>History</h3>
+                        <p class="sidebar-subtitle">Grouped by date created</p>
+                    </div>
+                    <div class="sidebar-actions">
+                        <div class="drive-control" id="driveControl">
+                            <button type="button" class="action-btn backup-btn" id="backupBtn"
+                                data-backup="needs-auth"
+                                title="Connect to back up" aria-label="Connect to back up"
+                                aria-haspopup="true" aria-expanded="false">
+                                <span class="btn-icon">
+                                    <span class="backup-glyph" aria-hidden="true"></span>
+                                    <i class="fas fa-spinner backup-spinner" hidden aria-hidden="true"></i>
+                                </span>
+                            </button>
+                            <div class="drive-menu" id="driveMenu" hidden>
+                                <div class="drive-menu-email" id="driveEmailLabel" hidden></div>
+                                <button type="button" class="drive-menu-item" id="driveSyncNowBtn">
+                                    Sync all
+                                </button>
+                                <button type="button" class="drive-menu-item" id="driveDisconnectBtn">
+                                    Disconnect
+                                </button>
+                            </div>
+                        </div>
+                        <button class="add-template-btn" type="button" title="Start a new document"
+                            aria-label="Start a new document">
+                            <div class="plus-icon">
+                                <i class="fas fa-plus"></i>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+                <div class="history-list"></div>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <div class="editor-stage" id="editorStage">
+                <button type="button" class="page-fit-chip" id="pageFitChip" hidden
+                    title="Fit page to width" aria-label="Fit page to width">
+                    Fit
+                </button>
+                <div class="editor-scale" id="editorScale">
+                    <!-- Letter Editor (hidden by default) — A4 page cards -->
+                    <div class="editor-wrapper editor-letter" style="display:none;">
+                        <div id="letterPages" class="letter-pages"></div>
+                    </div>
+                    <!-- Diary Editor (default) — A4 page cards -->
+                    <div class="editor-wrapper editor-diary">
+                        <div id="diaryPages" class="diary-pages"></div>
+                    </div>
+                </div>
+            </div>
+            <div id="pageIndicator" class="page-indicator">Page 1 of 1</div>
+        </main>
+    </div>
+
+    <template id="diaryPageTemplate">
+        <div class="diary-page">
+            <div class="diary-page-chrome screen-only">
+                <span class="diary-page-label">Page 1</span>
+                <button type="button" class="diary-header-toggle" aria-pressed="true"
+                    title="Hide page header">Hide header</button>
+                <button type="button" class="diary-page-delete" title="Delete this page"
+                    aria-label="Delete this page">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+
+            <div class="diary-page-header">
+                <div class="diary-header-top">
+                    <div class="diary-header-text">
+                        <span>अनुसूची 47, प्रपत्र सं० 120 अ</span>
+                        <span>आ० ह० प्रपत्र सं० 30 अ</span>
+                    </div>
+                    <div class="diary-header-title">
+                        <div class="diary-title-line">
+                            <span class="diary-label">केस-दैनिकी सं०</span>
+                            <input class="diary-dotted" data-field="case_diary_no" placeholder="">
+                        </div>
+                        <div class="diary-rule-line">
+                            <span>(नियम-</span>
+                            <input class="diary-dotted diary-dotted-narrow" data-field="rule_no" placeholder="">
+                            <span>)</span>
+                        </div>
+                    </div>
+                    <div class="diary-header-against">
+                        <div class="diary-against-line">
+                            <input class="diary-dotted" data-field="against_1" placeholder="">
+                            <span class="diary-label">बनाम</span>
+                            <input class="diary-dotted" data-field="against_2" placeholder="">
+                        </div>
+                        <div class="diary-against-line">
+                            <span class="diary-label">विशेष रिपोर्ट केस सं०</span>
+                            <input class="diary-dotted" data-field="special_report_no" placeholder="">
+                        </div>
+                    </div>
+                </div>
+                <div class="diary-meta-row">
+                    <span class="diary-label">थाना</span>
+                    <input class="diary-dotted" data-field="thana" placeholder="">
+                    <span class="diary-label">जिला</span>
+                    <input class="diary-dotted" data-field="district" placeholder="">
+                    <span class="diary-label">प्रथम इत्तिला रिपोर्ट सं०</span>
+                    <input class="diary-dotted" data-field="fir_number" placeholder="">
+                    <span class="diary-label">तिथि</span>
+                    <input class="diary-dotted diary-dotted-date" data-field="fir_date" type="date">
+                </div>
+                <div class="diary-meta-row">
+                    <span class="diary-label">घटना की तिथि और स्थान</span>
+                    <input class="diary-dotted diary-dotted-wide" data-field="event_date_place" placeholder="">
+                    <span class="diary-label">धारा</span>
+                    <input class="diary-dotted diary-dotted-wide" data-field="sections" placeholder="">
+                </div>
+                <div class="diary-header-divider"></div>
+            </div>
+
+            <table class="fir-table">
+                <tr class="table-header diary-titles-row">
+                    <th class="left-column">किन तिथि को (समय सहित) कार्रवाई की गई, और किन-किन स्थानों को जाकर देखा गया</th>
+                    <th class="right-column">
+                        अन्वेषण का अभिलेख
+                        <input data-field="investigation_record" placeholder="1">
+                    </th>
+                </tr>
+                <tr class="diary-body-row">
+                    <td class="left-column">
+                        <div class="diary-cell">
+                            <textarea class="fir-input hinglish-input" data-col="left"
+                                placeholder="यहाँ विवरण लिखें..." autocomplete="off"></textarea>
+                        </div>
+                    </td>
+                    <td class="right-column">
+                        <div class="diary-cell">
+                            <textarea class="fir-input hinglish-input" data-col="right"
+                                placeholder="यहाँ विवरण लिखें..." autocomplete="off"></textarea>
+                        </div>
+                    </td>
+                </tr>
+            </table>
+        </div>
+    </template>
+
+    <a id="help-fab" class="help-fab" href="help.html"
+        title="Help — privacy, shortcuts &amp; about" aria-label="Help — privacy, shortcuts and about">
+        <span aria-hidden="true">?</span>
+    </a>
+
+    <div id="dictationFab" class="dictation-fab" data-edge="right" hidden>
+        <div class="dictation-cluster">
+            <button type="button" class="dictation-lang" title="Switch to English"
+                aria-label="Switch to English">हिं</button>
+            <button type="button" class="dictation-end" hidden title="Stop dictation"
+                aria-label="Stop dictation">
+                <i class="fas fa-xmark" aria-hidden="true"></i>
+            </button>
+            <div class="dictation-mic-wrap">
+                <span class="dictation-level" aria-hidden="true"></span>
+                <span class="dictation-mode" data-mode="device" title="On-device recognition" aria-hidden="true"></span>
+                <button type="button" class="dictation-mic" title="Start dictation (Ctrl+Shift+D)"
+                    aria-label="Start dictation">
+                    <i class="fas fa-microphone" aria-hidden="true"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+    <div id="dictationInterim" class="dictation-interim" hidden aria-live="polite"></div>
+
+    <dialog id="dictationSheet" class="dictation-sheet">
+        <button type="button" class="dictation-sheet-close" title="Close"
+            aria-label="Close">
+            <i class="fas fa-xmark" aria-hidden="true"></i>
+        </button>
+        <div class="dictation-sheet-body"></div>
+    </dialog>
+
+    <div id="suggestions" class="suggestions-box"></div>
+    <script type="module" src="js/main.js"></script>
+</body>
+
+</html>

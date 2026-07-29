@@ -1,4 +1,0 @@
-flask
-tinydb
-pillow
-hindi-xlit

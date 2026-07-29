@@ -1,0 +1,54 @@
+/* Floating controls + bottom chrome offsets */
+
+.page-indicator {
+    position: fixed;
+    bottom: calc(var(--overlay-bottom) + 8px);
+    right: calc(24px + var(--safe-right));
+    padding: 6px 12px;
+    background: var(--brand-primary);
+    color: var(--brand-white);
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 500;
+    box-shadow: var(--shadow-medium);
+    z-index: 20;
+    pointer-events: none;
+    width: fit-content;
+}
+
+.help-fab {
+    left: calc(16px + var(--safe-left));
+    bottom: var(--overlay-bottom);
+}
+
+.dictation-interim {
+    bottom: calc(var(--overlay-bottom) + var(--layout-fab-band));
+}
+
+.restore-message {
+    bottom: calc(var(--overlay-bottom) + 48px);
+}
+
+/* Mobile keyboards already expose a mic — hide in-app dictation chrome */
+@media (max-width: 768px) {
+    .dictation-fab,
+    .dictation-interim {
+        display: none !important;
+    }
+}
+
+@media (max-width: 1024px) {
+    .page-indicator {
+        right: calc(16px + var(--safe-right));
+        bottom: calc(var(--overlay-bottom) + 56px);
+        font-size: 11px;
+        padding: 5px 10px;
+    }
+}
+
+@media (max-width: 640px) {
+    .help-fab {
+        width: 36px;
+        height: 36px;
+    }
+}
