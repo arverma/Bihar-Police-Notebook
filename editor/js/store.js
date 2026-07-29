@@ -323,6 +323,55 @@ export async function deleteDocument(type, filename) {
 }
 
 /**
+ * Clear Drive file ids on all docs (live + tombstones) after the backup folder is lost.
+ * Keeps syncedAt / content so the next push re-creates remotes via needsBackup (!driveFileId).
+ * @returns {Promise<number>} number of rows updated
+ */
+export async function clearAllDriveFileIds() {
+    const db = await openDb();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORES, 'readwrite');
+        let updated = 0;
+        let pending = STORES.length;
+        let failed = false;
+
+        for (const name of STORES) {
+            if (!db.objectStoreNames.contains(name)) {
+                pending -= 1;
+                if (pending === 0 && !failed) resolve(updated);
+                continue;
+            }
+            const store = tx.objectStore(name);
+            const req = store.openCursor();
+            req.onsuccess = () => {
+                const cursor = req.result;
+                if (!cursor) {
+                    pending -= 1;
+                    if (pending === 0 && !failed) resolve(updated);
+                    return;
+                }
+                const row = cursor.value;
+                if (row.driveFileId != null) {
+                    row.driveFileId = null;
+                    cursor.update(row);
+                    updated += 1;
+                }
+                cursor.continue();
+            };
+            req.onerror = () => {
+                failed = true;
+                reject(req.error);
+            };
+        }
+
+        tx.onerror = () => {
+            failed = true;
+            reject(tx.error);
+        };
+    });
+}
+
+/**
  * @param {'letter'|'diary'} type
  * @param {number} id
  * @param {{ driveFileId?: string|null, syncedAt?: string|null, syncError?: string|null, deletedAt?: string|null }} fields
