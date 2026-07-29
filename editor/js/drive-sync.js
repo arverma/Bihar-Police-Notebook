@@ -15,6 +15,7 @@ import {
 } from './drive-auth.js';
 import { getPref, setPref } from './prefs.js';
 import {
+    clearAllDriveFileIds,
     getDocumentById,
     getDocumentByUuid,
     getDocumentsIncludingDeleted,
@@ -121,6 +122,8 @@ async function driveList(q, fields = 'files(id,name,appProperties,modifiedTime)'
 
 export async function ensureFolder() {
     const cached = getPref(FOLDER_ID_KEY, null);
+    let folderLost = false;
+
     if (cached) {
         const res = await driveFetch(
             `${DRIVE_API_BASE}/files/${encodeURIComponent(String(cached))}?fields=id,trashed`,
@@ -130,6 +133,11 @@ export async function ensureFolder() {
             if (meta.id && !meta.trashed) return meta.id;
         }
         setPref(FOLDER_ID_KEY, null);
+        folderLost = true;
+    }
+
+    if (folderLost) {
+        await clearAllDriveFileIds();
     }
 
     const safeName = DRIVE_FOLDER_NAME.replace(/'/g, "\\'");
@@ -203,47 +211,74 @@ async function uploadDocFile(doc, folderId, fileId) {
         },
     };
 
-    if (fileId) {
-        const res = await driveFetch(
-            `${DRIVE_UPLOAD_BASE}/files/${encodeURIComponent(fileId)}?uploadType=media`,
+    /**
+     * @param {string} id
+     * @returns {Promise<Response>}
+     */
+    async function patchMedia(id) {
+        return driveFetch(
+            `${DRIVE_UPLOAD_BASE}/files/${encodeURIComponent(id)}?uploadType=media`,
             {
                 method: 'PATCH',
                 headers: { 'Content-Type': JSON_MIME },
                 body,
             },
         );
+    }
+
+    async function createMultipart() {
+        const boundary = `bpnt_${Date.now().toString(36)}`;
+        const metaWithParent = { ...metadata, parents: [folderId] };
+        const multipart =
+            `--${boundary}\r\n` +
+            `Content-Type: application/json; charset=UTF-8\r\n\r\n` +
+            `${JSON.stringify(metaWithParent)}\r\n` +
+            `--${boundary}\r\n` +
+            `Content-Type: ${JSON_MIME}\r\n\r\n` +
+            `${body}\r\n` +
+            `--${boundary}--`;
+
+        const res = await driveFetch(
+            `${DRIVE_UPLOAD_BASE}/files?uploadType=multipart&fields=id`,
+            {
+                method: 'POST',
+                headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
+                body: multipart,
+            },
+        );
         if (!res.ok) {
+            const text = await res.text();
+            throw new Error(`Drive create failed (${res.status}): ${text}`);
+        }
+        const created = await res.json();
+        return created.id;
+    }
+
+    let id = fileId || null;
+
+    if (id) {
+        const res = await patchMedia(id);
+        if (res.ok) return id;
+        if (res.status !== 404 && res.status !== 403) {
             const text = await res.text();
             throw new Error(`Drive update failed (${res.status}): ${text}`);
         }
-        return fileId;
+        id = null;
     }
 
-    const boundary = `bpnt_${Date.now().toString(36)}`;
-    const metaWithParent = { ...metadata, parents: [folderId] };
-    const multipart =
-        `--${boundary}\r\n` +
-        `Content-Type: application/json; charset=UTF-8\r\n\r\n` +
-        `${JSON.stringify(metaWithParent)}\r\n` +
-        `--${boundary}\r\n` +
-        `Content-Type: ${JSON_MIME}\r\n\r\n` +
-        `${body}\r\n` +
-        `--${boundary}--`;
-
-    const res = await driveFetch(
-        `${DRIVE_UPLOAD_BASE}/files?uploadType=multipart&fields=id`,
-        {
-            method: 'POST',
-            headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
-            body: multipart,
-        },
-    );
-    if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`Drive create failed (${res.status}): ${text}`);
+    if (!id && doc.uuid) {
+        const found = await findFileByUuid(folderId, doc.uuid);
+        if (found?.id) {
+            const res = await patchMedia(found.id);
+            if (res.ok) return found.id;
+            if (res.status !== 404 && res.status !== 403) {
+                const text = await res.text();
+                throw new Error(`Drive update failed (${res.status}): ${text}`);
+            }
+        }
     }
-    const created = await res.json();
-    return created.id;
+
+    return createMultipart();
 }
 
 /**

@@ -29,6 +29,7 @@ import {
 } from './drive-auth.js';
 import {
     syncAll,
+    pushPending,
     onSyncStatusChange,
     getSyncState,
 } from './drive-sync.js';
@@ -556,6 +557,7 @@ function initApp() {
     const driveEmailLabel = document.getElementById('driveEmailLabel');
     const driveMenu = document.getElementById('driveMenu');
     const driveSyncNowBtn = document.getElementById('driveSyncNowBtn');
+    const driveSyncNewBtn = document.getElementById('driveSyncNewBtn');
     const driveDisconnectBtn = document.getElementById('driveDisconnectBtn');
 
     function setBackupBusy(busy) {
@@ -981,6 +983,31 @@ function initApp() {
         await loadHistory();
         updateDriveSyncStatus();
         showNotification(result.ok ? 'Synced with Drive.' : (result.error || 'Sync failed.'));
+    });
+
+    driveSyncNewBtn?.addEventListener('click', async () => {
+        closeDriveMenu();
+        const token = await ensureAccessToken({ allowInteractive: true });
+        if (!token) {
+            setBackupUiState('needs-auth');
+            showNotification('Connect backup to sync.');
+            return;
+        }
+        const result = await pushPending();
+        await loadHistory();
+        updateDriveSyncStatus();
+        if (!result.ok) {
+            showNotification(result.error || 'Upload failed.');
+            return;
+        }
+        const n = result.count || 0;
+        showNotification(
+            n === 0
+                ? 'No pending changes to upload.'
+                : n === 1
+                    ? 'Uploaded 1 pending change.'
+                    : `Uploaded ${n} pending changes.`,
+        );
     });
 
     driveDisconnectBtn?.addEventListener('click', async () => {
