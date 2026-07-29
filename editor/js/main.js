@@ -740,41 +740,48 @@ function initApp() {
             return groups[b][0].date - groups[a][0].date;
         });
 
-        sortedDateKeys.forEach(dateKey => {
+        sortedDateKeys.forEach((dateKey, groupIndex) => {
             const groupDiv = document.createElement('div');
             groupDiv.className = 'history-date-group';
 
+            const isRecentGroup = groupIndex === 0;
             const header = document.createElement('div');
             header.className = 'date-header collapsible-header';
             header.title = 'Expand or collapse this day';
-            header.innerHTML = `<span class="collapse-arrow">&#9660;</span> ${dateKey}`;
+            header.innerHTML = `<span class="collapse-arrow">${isRecentGroup ? '&#9660;' : '&#9654;'}</span> ${dateKey}`;
             groupDiv.appendChild(header);
 
             const itemsContainer = document.createElement('div');
             itemsContainer.className = 'history-items-container';
+            if (!isRecentGroup) itemsContainer.classList.add('collapsed');
 
             groups[dateKey].sort((a, b) => b.date - a.date).forEach(doc => {
                 const firstLine = previewText(doc);
                 const created = new Date(doc.created_at || doc.date || Date.now());
                 const updated = doc.updated_at ? new Date(doc.updated_at) : created;
-                const updatedStr = updated.toLocaleString([], {
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                });
+                const sameDayAsGroup =
+                    updated.getDate() === created.getDate() &&
+                    updated.getMonth() === created.getMonth() &&
+                    updated.getFullYear() === created.getFullYear();
+                const updatedStr = sameDayAsGroup
+                    ? updated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    : updated.toLocaleString([], {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                    });
 
                 const status = backupStatus(doc);
                 const connected = isConnected();
-                let syncIcon = '';
+                let leadingIcon = '';
                 if (connected) {
                     if (status === 'synced') {
-                        syncIcon = `<span class="history-sync-badge is-synced" title="Backed up to Drive"><i class="fas fa-cloud" aria-hidden="true"></i></span>`;
+                        leadingIcon = `<span class="history-sync-badge is-synced" title="Backed up to Drive"><i class="fas fa-cloud" aria-hidden="true"></i></span>`;
                     } else if (status === 'error') {
-                        syncIcon = `<span class="history-sync-badge is-error" title="${escapeHtml(doc.syncError || 'Backup failed')}"><i class="fas fa-cloud" aria-hidden="true"></i></span>`;
+                        leadingIcon = `<span class="history-sync-badge is-error" title="${escapeHtml(doc.syncError || 'Backup failed')}"><i class="fas fa-cloud" aria-hidden="true"></i></span>`;
                     } else {
-                        syncIcon = `<span class="history-sync-badge is-pending" title="Not backed up yet"><i class="fas fa-cloud" aria-hidden="true"></i></span>`;
+                        leadingIcon = `<span class="history-sync-badge is-pending" title="Not backed up yet"><i class="fas fa-cloud" aria-hidden="true"></i></span>`;
                     }
                 }
 
@@ -785,10 +792,10 @@ function initApp() {
                     item.classList.add('is-active');
                 }
                 item.innerHTML = `
-                    <i class="fas fa-file-alt"></i>
+                    ${leadingIcon}
                     <div class="history-item-details">
-                        <span class="history-item-name">${escapeHtml(doc.filename)} ${syncIcon}</span>
-                        <span class="history-item-time">${updatedStr}</span>
+                        <span class="history-item-name">${escapeHtml(doc.filename)}</span>
+                        <span class="history-item-time" title="Last updated">${updatedStr}</span>
                         <span class="history-item-preview">${escapeHtml(firstLine)}</span>
                     </div>
                     <div class="history-item-actions">
