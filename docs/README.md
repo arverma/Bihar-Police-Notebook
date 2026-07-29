@@ -13,7 +13,6 @@ Architecture and how the pieces fit together. For everyday use (opening the app,
 
 | Component | Detail |
 |-----------|--------|
-| [Chrome extension](components/extension.md) | Toolbar launcher |
 | [Editor shell](components/editor-shell.md) | Header, History, scroll areas |
 | [Letter & Diary](components/templates.md) | Templates and print / PDF |
 | [Local storage](components/storage.md) | Autosave in IndexedDB |

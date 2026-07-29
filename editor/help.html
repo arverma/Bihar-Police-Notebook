@@ -197,17 +197,15 @@
     <main class="help-page">
         <a class="help-back" href="index.html">← Bihar Police Notebook</a>
         <h1>Help</h1>
-        <p class="updated">Last updated: July 27, 2026</p>
+        <p class="updated">Last updated: July 29, 2026</p>
 
         <details class="help-section" open id="privacy">
             <summary>Privacy policy</summary>
             <div class="help-section-body">
                 <p>
-                    This policy covers the Bihar Police Notebook Chrome extension and the
-                    website editor. They ship as separate packages: the extension only launches
-                    the editor tab; the editor is the static site where you write. Your documents
-                    stay on your device by default. Optional Google Drive backup is off until you
-                    choose to connect.
+                    This policy covers the Bihar Police Notebook website editor — the static
+                    site where you write letters and diaries. Your documents stay on your device
+                    by default. Optional Google Drive backup is off until you choose to connect.
                 </p>
 
                 <h3>Data collection</h3>
@@ -226,33 +224,50 @@
                 <h3>Local storage</h3>
                 <p>
                     Letters and diaries are stored in your browser (IndexedDB) on this device.
-                </p>
-                <p>
-                    The Chrome extension package contains only a toolbar launcher (manifest,
-                    background script, icons). It opens or focuses the editor tab. It does not
-                    read other websites, and it does not see or send your documents. The host
-                    that serves the editor files does not receive your notes.
+                    The host that serves the editor files does not receive your notes.
                 </p>
 
                 <h3>Google Drive backup (optional)</h3>
                 <p>
                     Use the <strong>backup</strong> icon at the top of the History panel to connect
-                    Google Drive and sync when you choose. Reload does not open a Google sign-in
-                    popup and does not sync automatically. Sync runs only when you click the
-                    backup icon (or <strong>Sync all</strong> in its menu). The app creates or
-                    reuses a folder named <strong>Bihar Police Notebook Backup — do not delete</strong>
-                    in your My Drive and
-                    stores each document as a JSON file. Local edits still save quickly in the
-                    browser (IndexedDB).
+                    Google Drive. Reload does not open a Google sign-in popup and does not sync
+                    automatically. Sync runs only when you use the backup menu:
                 </p>
                 <ul>
-                    <li>History items show whether each document is backed up; you can back up one
-                        item, the current list, or sync all.</li>
-                    <li><strong>Disconnect</strong> revokes access from this browser. It does not
-                        delete the folder or files already in your Drive.</li>
-                    <li>After you connect, a short-lived access token may be stored in this browser
+                    <li>
+                        <strong>Sync all</strong> — downloads updates from your Drive folder into
+                        this browser, then uploads any new or changed local documents.
+                    </li>
+                    <li>
+                        <strong>Sync new</strong> — uploads only new or changed local documents
+                        to Drive (does not pull from Drive).
+                    </li>
+                </ul>
+                <p>
+                    The app creates or reuses a folder named
+                    <strong>Bihar Police Notebook Backup — do not delete</strong>
+                    in your My Drive and stores each document as a JSON file. Local edits still
+                    save quickly in the browser (IndexedDB). If that folder was deleted, the next
+                    sync recreates it and re-uploads your local documents.
+                </p>
+                <ul>
+                    <li>
+                        When Drive is connected, History items show a cloud badge for backup
+                        status (backed up, pending, or error).
+                    </li>
+                    <li>
+                        History is <strong>grouped by date created</strong>. Each item shows when
+                        it was last updated.
+                    </li>
+                    <li>
+                        <strong>Disconnect</strong> revokes access from this browser. It does not
+                        delete the folder or files already in your Drive.
+                    </li>
+                    <li>
+                        After you connect, a short-lived access token may be stored in this browser
                         (IndexedDB) for up to one day. Reload will not force a Google sign-in
-                        popup; use the backup icon when you want to connect or refresh the session.</li>
+                        popup; use the backup icon when you want to connect or refresh the session.
+                    </li>
                     <li>Data stays in <em>your</em> Google account. We do not host your notes.</li>
                 </ul>
 
@@ -296,8 +311,6 @@
                     <li>Delete a document from History anytime.</li>
                     <li>
                         Clear all documents by clearing this site’s data in your browser settings.
-                        Uninstalling the extension does not remove notes stored by the website
-                        origin — clear site data for that.
                     </li>
                 </ul>
 
@@ -358,8 +371,10 @@
                 <ul>
                     <li><strong>Letter</strong> and <strong>Diary</strong> templates with print-ready layout</li>
                     <li>Document history stored locally in your browser (IndexedDB)</li>
-                    <li>Optional Google Drive backup (sign in; sync to your Drive folder)</li>
-                    <li>Optional Chrome extension — toolbar icon that opens this editor only</li>
+                    <li>
+                        Optional Google Drive backup — <strong>Sync all</strong> (pull + push) or
+                        <strong>Sync new</strong> (upload pending only)
+                    </li>
                     <li>
                         Live editor (bpdiary):
                         <a href="https://bpdiary.arverma.dev/">bpdiary.arverma.dev</a>
@@ -395,8 +410,8 @@
                     </li>
                     <li>
                         <strong>Another device or Chrome profile</strong> — local history does not
-                        sync by itself; use Drive backup and Sync all after connecting on the other
-                        device.
+                        sync by itself; use Drive backup and <strong>Sync all</strong> after
+                        connecting on the other device.
                     </li>
                     <li>
                         <strong>Storage full or browser bugs</strong> — rare IndexedDB failures or

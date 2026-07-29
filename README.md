@@ -21,15 +21,6 @@
 
 **Easiest:** open [bpdiary.arverma.dev](https://bpdiary.arverma.dev/) in Chrome or another modern browser.
 
-**Optional Chrome icon:**
-
-1. Download or clone this project.
-2. In Chrome open `chrome://extensions` and turn on **Developer mode**.
-3. Choose **Load unpacked** and select the `extension` folder.
-4. Pin **Bihar Police Notebook** and click it to open the editor.
-
-The icon only opens the website. It does not read your other tabs or files.
-
 ## Phone vs computer
 
 The same website works on both. On a **phone**, some computer-only controls are hidden (Hinglish toggle and in-app microphone) so the screen stays clear — use your keyboard instead. On a **computer**, you get Hinglish suggestions and the speak-to-type button. Details for developers: [Desktop vs mobile](docs/desktop-vs-mobile.md).

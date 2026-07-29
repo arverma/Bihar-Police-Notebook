@@ -1,6 +1,6 @@
 # Architecture
 
-Bihar Police Notebook is a **static website** (the editor) plus an optional **Chrome toolbar launcher**. There is no application server that stores your notes. Documents live in the browser (IndexedDB). Optional backup copies them into **your** Google Drive when you choose to sync.
+Bihar Police Notebook is a **static website** (the editor). There is no application server that stores your notes. Documents live in the browser (IndexedDB). Optional backup copies them into **your** Google Drive when you choose to sync.
 
 **Live editor:** [https://bpdiary.arverma.dev/](https://bpdiary.arverma.dev/) (`bpdiary` is the domain alias for Bihar Police Notebook.)
 
@@ -9,16 +9,13 @@ Bihar Police Notebook is a **static website** (the editor) plus an optional **Ch
 ```mermaid
 flowchart LR
   User([User])
-  Ext[Chrome_extension]
   Editor[Editor_site]
   IDB[(IndexedDB)]
   GIT[Google_Input_Tools]
   Drive[Google_Drive]
   Print[Browser_print_PDF]
 
-  User --> Ext
   User --> Editor
-  Ext -->|opens_or_focuses| Editor
   Editor --> IDB
   Editor --> GIT
   Editor --> Drive
@@ -27,7 +24,6 @@ flowchart LR
 
 | Piece | Role |
 |-------|------|
-| [Chrome extension](components/extension.md) | Opens or focuses the editor tab — does not read documents |
 | [Editor site](components/editor-shell.md) | UI: header, History, Letter/Diary pages, overlays |
 | [IndexedDB](components/storage.md) | Local autosave on this device |
 | [Google Input Tools](components/typing.md) | Hinglish → Hindi suggestions (network; desktop/tablet) |
@@ -65,7 +61,6 @@ flowchart TB
 | Typing | `translit.js` | [Typing](components/typing.md) |
 | Voice | `dictation.js`, `dictation-ui.js` | [Dictation](components/dictation.md) |
 | Prefs | `prefs.js` | Used by Drive + dictation |
-| Launcher | `extension/` | [Extension](components/extension.md) |
 | Hosting | `.github/workflows/pages.yml` | [Deploy](components/deploy.md) |
 
 ## Phone vs computer

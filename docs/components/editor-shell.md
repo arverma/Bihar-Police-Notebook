@@ -33,7 +33,8 @@ Orchestration: `editor/js/main.js` (sidebar toggle, template switch, autosave ho
 
 - Opens/closes only via the panel button (or Ctrl/Cmd+H / B) — not by outside click.
 - On wide screens (≥1025px), opening History nudges the workspace slightly; on smaller screens it is an overlay drawer.
-- Sync and New live in the sidebar (not in the header).
+- Documents are grouped by **date created**; older day groups start collapsed. Each row shows last-updated time.
+- Drive backup menu (sidebar): **Sync all** (pull + push), **Sync new** (push pending only), **Disconnect**.
 
 ## Scroll ownership
 

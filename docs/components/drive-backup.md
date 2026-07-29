@@ -14,6 +14,16 @@ Scope: `https://www.googleapis.com/auth/drive.file` (files/folders this app crea
 | `drive-auth.js` | Google Identity Services token; short-lived token cache in IndexedDB `bp-writing-tool-auth` |
 | `drive-sync.js` | Ensure folder, push/pull/merge JSON per document UUID |
 
+## Menu actions
+
+| Action | Behavior |
+|--------|----------|
+| **Sync all** | Pull from Drive into local, then push dirty/new local docs to Drive |
+| **Sync new** | Push only dirty/new local docs to Drive (no pull) |
+| **Disconnect** | Revokes access in this browser; does not delete the Drive folder |
+
+If the backup folder was deleted, the next sync recreates it and re-uploads local docs (stale Drive file ids are cleared).
+
 ## Sync sequence (happy path)
 
 ```mermaid
@@ -27,9 +37,9 @@ sequenceDiagram
   User->>UI: Connect_or_Sync
   UI->>Auth: ensureAccessToken
   Auth->>Drive: OAuth_token
-  UI->>Sync: syncAll_or_one_doc
+  UI->>Sync: syncAll_or_pushPending
   Sync->>Drive: ensureFolder
-  Sync->>Drive: Pull_and_push_JSON_files
+  Sync->>Drive: Pull_and_or_push_JSON_files
   Sync->>UI: Update_badges_status
 ```
 

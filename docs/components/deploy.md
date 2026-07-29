@@ -29,10 +29,8 @@ cd editor && python3 -m http.server 8080
 
 No Node build or Python backend for the app itself.
 
-To test the extension against local files, point `ORIGIN` / `BASE` in `extension/background.js` at your local origin, then reload the extension.
-
 ## OAuth origins (Drive)
 
 Add authorized JavaScript origins for production (`https://bpdiary.arverma.dev`) and any local preview URL you use with Drive login. Client ID: `editor/js/drive-config.js`.
 
-See: [Extension](extension.md), [Drive backup](drive-backup.md).
+See: [Drive backup](drive-backup.md).
