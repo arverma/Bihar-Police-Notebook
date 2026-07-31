@@ -52,6 +52,8 @@
 
     .quill-chrome-toolbar {
         --quill-tb-bottom: calc(var(--overlay-bottom) + 12px);
+        bottom: auto;
+        top: calc(56px + env(safe-area-inset-top, 0px) + 12px);
         gap: 1px;
         padding: 5px 8px;
         max-width: calc(100vw - 24px - var(--safe-left) - var(--safe-right));
