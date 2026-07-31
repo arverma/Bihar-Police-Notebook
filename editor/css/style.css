@@ -266,6 +266,13 @@ body {
     box-shadow: var(--shadow-medium, 0 4px 16px rgba(26, 54, 93, 0.14));
     z-index: 22;
     pointer-events: auto;
+    opacity: 0.5;
+    transition: opacity 0.2s ease, bottom 0.2s ease;
+}
+
+.quill-chrome-toolbar:hover,
+.quill-chrome-toolbar:focus-within {
+    opacity: 1;
 }
 
 .quill-chrome-toolbar[hidden] {
