@@ -5,6 +5,14 @@
  * Box heights snap to whole 24px lines so no line splits across pages.
  */
 
+import {
+  contentToPrintHtml,
+  mountQuill,
+  quillPrintCssFragment,
+  splitRichToFit,
+  stripHtmlToPlain,
+} from './quill-fields.js';
+
 const DPI = 96;
 const MM_PER_IN = 25.4;
 
@@ -124,7 +132,11 @@ export function normalizeDiaryModel(raw) {
 export function diaryHasMeaningfulContent(model) {
   const m = normalizeDiaryModel(model);
   const anyHeader = m.pages.some((p) => p.header && Object.values(p.header).some((v) => String(v).trim()));
-  const anyText = m.pages.some((p) => String(p.left).trim() || String(p.right).trim());
+  const anyText = m.pages.some((p) => {
+    const left = String(p.left || '').trim();
+    const right = stripHtmlToPlain(p.right || '').trim();
+    return left || right;
+  });
   return anyHeader || anyText;
 }
 
@@ -475,6 +487,10 @@ export function diaryPrintCss() {
       box-sizing: border-box;
       overflow: hidden;
     }
+    .diary-print-body.ql-print {
+      white-space: normal;
+    }
+    ${quillPrintCssFragment()}
   `;
 }
 
@@ -552,7 +568,7 @@ export function diaryPagesHtml(model) {
               <div class="diary-print-body" style="height:${boxH}px;">${escapeHtml(page.left)}</div>
             </td>
             <td class="right-col" style="height:${boxH}px;">
-              <div class="diary-print-body" style="height:${boxH}px;">${escapeHtml(page.right)}</div>
+              <div class="diary-print-body ql-print" style="height:${boxH}px;">${contentToPrintHtml(page.right)}</div>
             </td>
           </tr>
         </table>
@@ -602,8 +618,14 @@ function splitOverflow(textarea) {
  * like the print output); otherwise estimated from the collapsed table borders.
  */
 function columnWidthPx(col) {
-  const live = document.querySelector(`.diary-page .fir-input[data-col="${col}"]`);
-  if (live && live.clientWidth > 0) return live.clientWidth;
+  const live = document.querySelector(`.diary-page [data-col="${col}"]`);
+  if (live) {
+    const editor = live.classList?.contains('ql-editor')
+      ? live
+      : live.querySelector?.('.ql-editor');
+    if (editor && editor.clientWidth > 0) return editor.clientWidth;
+    if (live.clientWidth > 0) return live.clientWidth;
+  }
   const colPct = col === 'left' ? LEFT_COL_PCT : 100 - LEFT_COL_PCT;
   return ((CONTENT_W_PX - TABLE_BORDER_W_PX) * colPct) / 100;
 }
@@ -627,6 +649,14 @@ function splitTextToFit(
   const boxH = boxHeightPx(hasHeader, headerBlockH, titlesRowH)
     + cellPadBottomPx(hasHeader, headerBlockH, titlesRowH);
   const colW = columnWidthPx(col);
+
+  if (col === 'right') {
+    return splitRichToFit(text, colW, boxH, {
+      fontSize: FONT_PX,
+      lineHeight: LINE_HEIGHT_PX,
+      padding: '4px 6px',
+    });
+  }
 
   const ta = document.createElement('textarea');
   ta.setAttribute('aria-hidden', 'true');
@@ -668,7 +698,7 @@ function splitTextToFit(
  * }} hooks
  */
 export function initDiarySheet(container, template, hooks) {
-  /** @type {{ header: Record<string,string>, pages: Array<{hasHeader:boolean,left:string,right:string}> }} */
+  /** @type {{ pages: Array<{hasHeader:boolean,header:object|null,left:string,right:string}> }} */
   let model = emptyModel();
   let focusedPage = 0;
   let spilling = false;
@@ -676,6 +706,8 @@ export function initDiarySheet(container, template, hooks) {
   let cachedHeaderBlockH = HEADER_BLOCK_H_PX;
   /** Cached measured titles-row height (grows when left col wraps) */
   let cachedTitlesRowH = TITLES_ROW_H_PX;
+  /** @type {WeakMap<HTMLElement, object>} */
+  const rightFields = new WeakMap();
 
   function notify() {
     hooks.onChange?.();
@@ -753,9 +785,11 @@ export function initDiarySheet(container, template, hooks) {
         });
       }
       const left = pageEl.querySelector('[data-col="left"]');
-      const right = pageEl.querySelector('[data-col="right"]');
+      const rightHost = pageEl.querySelector('[data-col="right"]');
       if (left) model.pages[i].left = left.value;
-      if (right) model.pages[i].right = right.value;
+      const rf = rightHost ? rightFields.get(pageEl) : null;
+      if (rf) model.pages[i].right = rf.getHtml();
+      else if (rightHost?.value != null) model.pages[i].right = rightHost.value;
     });
   }
 
@@ -825,12 +859,27 @@ export function initDiarySheet(container, template, hooks) {
       render({ skipRead: true });
       requestAnimationFrame(() => {
         const pages = container.querySelectorAll('.diary-page');
-        const ta = pages[toPage]?.querySelector(`[data-col="${col}"]`);
-        if (ta) {
-          ta.focus();
-          const len = ta.value.length;
-          try { ta.setSelectionRange(len, len); } catch (_) { /* ignore */ }
-          ta.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        const pageEl = pages[toPage];
+        if (!pageEl) {
+          notifyFocus(toPage);
+          return;
+        }
+        if (col === 'right') {
+          const rf = rightFields.get(pageEl);
+          if (rf) {
+            rf.quill.focus();
+            const len = Math.max(0, rf.quill.getLength() - 1);
+            rf.quill.setSelection(len, 0, 'user');
+            pageEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+          }
+        } else {
+          const ta = pageEl.querySelector(`[data-col="${col}"]`);
+          if (ta) {
+            ta.focus();
+            const len = ta.value.length;
+            try { ta.setSelectionRange(len, len); } catch (_) { /* ignore */ }
+            ta.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+          }
         }
         notifyFocus(toPage);
       });
@@ -849,14 +898,19 @@ export function initDiarySheet(container, template, hooks) {
   function checkOverflow(pageEl, pageIndex) {
     if (spilling) return;
     const overflowingCols = [];
-    pageEl.querySelectorAll('[data-col]').forEach((ta) => {
-      const cell = ta.closest('.diary-cell');
-      ta.classList.remove('diary-box-overflow');
-      cell?.classList.remove('diary-box-overflow');
-      if (ta.scrollHeight > ta.clientHeight + 1) {
-        overflowingCols.push(ta.dataset.col);
-      }
-    });
+    const left = pageEl.querySelector('[data-col="left"]');
+    if (left instanceof HTMLTextAreaElement) {
+      left.classList.remove('diary-box-overflow');
+      left.closest('.diary-cell')?.classList.remove('diary-box-overflow');
+      if (left.scrollHeight > left.clientHeight + 1) overflowingCols.push('left');
+    }
+    const rf = rightFields.get(pageEl);
+    if (rf) {
+      rf.quill.root.classList.remove('diary-box-overflow');
+      pageEl.querySelector('[data-col="right"]')?.closest('.diary-cell')
+        ?.classList.remove('diary-box-overflow');
+      if (!rf.fitsInBox()) overflowingCols.push('right');
+    }
     overflowingCols.forEach((col) => {
       spillColumn(pageIndex, col);
     });
@@ -870,6 +924,26 @@ export function initDiarySheet(container, template, hooks) {
     ).forEach((el) => {
       hooks.onAttachField?.(el);
     });
+
+    const rightHost = pageEl.querySelector('[data-col="right"]');
+    if (rightHost && !(rightHost instanceof HTMLTextAreaElement)) {
+      const existing = rightFields.get(pageEl);
+      existing?.destroy?.();
+      const placeholder = rightHost.getAttribute('data-placeholder') || 'यहाँ विवरण लिखें...';
+      const field = mountQuill(rightHost, {
+        placeholder,
+        onFocus: () => notifyFocus(pageIndex),
+        onChange: (html) => {
+          if (spilling) return;
+          model.pages[pageIndex].right = html;
+          checkOverflow(pageEl, pageIndex);
+          if (!spilling) notify();
+        },
+      });
+      field.setContent(model.pages[pageIndex].right || '');
+      rightFields.set(pageEl, field);
+      hooks.onAttachField?.(field.quill.root, field);
+    }
 
     pageEl.querySelectorAll('input[data-field], textarea[data-field]').forEach((el) => {
       el.addEventListener('input', () => {
@@ -921,7 +995,7 @@ export function initDiarySheet(container, template, hooks) {
       });
     });
 
-    pageEl.querySelectorAll('[data-col]').forEach((ta) => {
+    pageEl.querySelectorAll('textarea[data-col]').forEach((ta) => {
       const runOverflow = () => {
         model.pages[pageIndex][ta.dataset.col] = ta.value;
         checkOverflow(pageEl, pageIndex);
@@ -979,9 +1053,8 @@ export function initDiarySheet(container, template, hooks) {
     });
 
     const left = pageEl.querySelector('[data-col="left"]');
-    const right = pageEl.querySelector('[data-col="right"]');
     if (left) left.value = page.left || '';
-    if (right) right.value = page.right || '';
+    // Right Quill is mounted in wirePage with model content
 
     const toggle = pageEl.querySelector('.diary-header-toggle');
     if (toggle) {
@@ -1008,7 +1081,6 @@ export function initDiarySheet(container, template, hooks) {
       readModelFromDom();
     }
     container.innerHTML = '';
-    container.style.setProperty('--diary-left-col', `${LEFT_COL_PCT}%`);
     container.style.setProperty('--diary-left-col', `${LEFT_COL_PCT}%`);
 
     model.pages.forEach((page, i) => {

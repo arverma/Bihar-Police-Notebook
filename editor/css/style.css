@@ -183,6 +183,127 @@ body {
     outline: none;
 }
 
+/* Quill hosts (letter + diary right) */
+.letter-page-input.ql-container,
+.fir-input.ql-container,
+.bp-ql-container {
+    border: none !important;
+    font-family: 'Noto Sans Devanagari', Arial, sans-serif;
+    background: transparent;
+}
+
+.letter-page .bp-ql-container {
+    height: 912px;
+    max-height: 912px;
+}
+
+.diary-cell .bp-ql-container {
+    height: 100%;
+}
+
+.letter-page .bp-ql-editor,
+.letter-page-input.bp-ql-editor {
+    height: 912px;
+    max-height: 912px;
+    overflow: hidden;
+    padding: 0;
+    font-size: 16px;
+    line-height: 24px;
+    font-family: 'Noto Sans Devanagari', sans-serif;
+    color: var(--color-text-primary);
+}
+
+.diary-cell .bp-ql-editor,
+.fir-input .bp-ql-editor {
+    height: 100%;
+    overflow: hidden;
+    padding: 4px 6px;
+    font-size: 15px;
+    line-height: 24px;
+    font-family: 'Noto Sans Devanagari', Arial, sans-serif;
+    color: var(--color-text-primary);
+}
+
+.bp-ql-editor.ql-blank::before {
+    font-style: normal;
+    color: var(--color-text-muted);
+    left: 0;
+    right: 0;
+}
+
+.diary-cell .bp-ql-editor.ql-blank::before {
+    left: 6px;
+}
+
+.bp-ql-editor img {
+    max-width: 100%;
+    height: auto;
+}
+
+.bp-ql-editor p { margin: 0; }
+.bp-ql-editor ul { margin: 0; padding-left: 1.4em; }
+
+.quill-chrome-toolbar {
+    --quill-tb-bottom: calc(var(--overlay-bottom, 16px) + 20px);
+    position: fixed;
+    left: 50%;
+    bottom: var(--quill-tb-bottom);
+    transform: translateX(-50%);
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    width: fit-content;
+    max-width: calc(100vw - 32px - var(--safe-left, 0px) - var(--safe-right, 0px));
+    padding: 6px 10px;
+    margin: 0;
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    border-radius: 999px;
+    background: rgba(173, 205, 224, 0.72);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow: var(--shadow-medium, 0 4px 16px rgba(26, 54, 93, 0.14));
+    z-index: 22;
+    pointer-events: auto;
+}
+
+.quill-chrome-toolbar[hidden] {
+    display: none !important;
+}
+
+.quill-chrome-toolbar button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--brand-primary, #1a365d);
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.quill-chrome-toolbar button:hover {
+    background: rgba(26, 54, 93, 0.1);
+}
+
+.quill-chrome-toolbar button.is-active {
+    background: var(--brand-primary, #1a365d);
+    color: #fff;
+}
+
+.quill-toolbar-sep {
+    width: 1px;
+    height: 18px;
+    margin: 0 4px;
+    flex: 0 0 auto;
+    background: rgba(26, 54, 93, 0.22);
+}
+
 /* Legacy dashed markers removed — letter now uses diary-style page cards */
 
 .page-indicator {

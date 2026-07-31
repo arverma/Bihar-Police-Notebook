@@ -35,6 +35,11 @@ import {
     getSyncState,
 } from './drive-sync.js';
 import { initPageScale } from './page-scale.js';
+import {
+    initQuillToolbar,
+    getFieldForEditor,
+    stripHtmlToPlain,
+} from './quill-fields.js';
 
 const letterPagesEl = document.getElementById('letterPages');
 const suggestionsBox = document.getElementById('suggestions');
@@ -43,6 +48,7 @@ const filenameInput = document.getElementById('filenameInput');
 const exportBtnEl = document.getElementById('exportBtn');
 const filenameWrap = document.querySelector('.filename-resize-wrap');
 const filenameSizer = document.querySelector('.filename-sizer');
+const quillToolbarEl = document.getElementById('quillToolbar');
 
 /** @type {ReturnType<typeof initPageScale> | null} */
 let pageScale = null;
@@ -211,7 +217,11 @@ function getActiveContent() {
 
 function hasMeaningfulContent() {
     const type = getActiveTemplate();
-    if (type === 'letter') return Boolean((letterSheet?.getText() ?? '').trim());
+    if (type === 'letter') {
+        const plain = letterSheet?.getPlainText?.()
+            ?? stripHtmlToPlain(letterSheet?.getText() ?? '');
+        return Boolean(plain.trim());
+    }
     return diaryHasMeaningfulContent(diarySheet?.getModel() ?? emptyModel());
 }
 
@@ -355,16 +365,23 @@ function notifyLetterChanged(el) {
 }
 
 /** @param {HTMLElement} el */
+function isQuillEditor(el) {
+    return Boolean(el?.classList?.contains('ql-editor'));
+}
+
 function isEditableTextField(el) {
     return Boolean(
         el
         && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable
-            || el.getAttribute?.('contenteditable') === 'true'),
+            || el.getAttribute?.('contenteditable') === 'true'
+            || isQuillEditor(el)),
     );
 }
 
 /** @param {HTMLElement} el */
 function getEditableText(el) {
+    const field = isQuillEditor(el) ? getFieldForEditor(el) : null;
+    if (field) return field.getText();
     if (el.isContentEditable || el.getAttribute?.('contenteditable') === 'true') {
         return (el.textContent || '').replace(/\u00a0/g, ' ');
     }
@@ -373,6 +390,13 @@ function getEditableText(el) {
 
 /** @param {HTMLElement} el @param {string} text */
 function setEditableText(el, text) {
+    const field = isQuillEditor(el) ? getFieldForEditor(el) : null;
+    if (field) {
+        // Full replace used only for rare paths; prefer patchWordAtCaret for Quill
+        field.setContent(text);
+        field.quill.root.dispatchEvent(new Event('input', { bubbles: true }));
+        return;
+    }
     if (el.isContentEditable || el.getAttribute?.('contenteditable') === 'true') {
         el.textContent = text;
         el.dispatchEvent(new Event('input', { bubbles: true }));
@@ -381,8 +405,34 @@ function setEditableText(el, text) {
     el.value = text;
 }
 
+/**
+ * Replace a word range inside a Quill editor without wiping other formatting.
+ * @param {HTMLElement} el
+ * @param {number} start
+ * @param {number} end
+ * @param {string} replacement
+ */
+function replaceEditableRange(el, start, end, replacement) {
+    const field = isQuillEditor(el) ? getFieldForEditor(el) : null;
+    if (field) {
+        const len = Math.max(0, end - start);
+        if (len > 0) field.quill.deleteText(start, len, 'user');
+        field.quill.insertText(start, replacement, 'user');
+        field.quill.setSelection(start + replacement.length, 0, 'user');
+        return;
+    }
+    const value = getEditableText(el);
+    setEditableText(el, value.slice(0, start) + replacement + value.slice(end));
+    setEditableCaret(el, start + replacement.length);
+}
+
 /** @param {HTMLElement} el */
 function getEditableCaret(el) {
+    const field = isQuillEditor(el) ? getFieldForEditor(el) : null;
+    if (field) {
+        const sel = field.quill.getSelection(true);
+        return sel?.index ?? field.getText().length;
+    }
     if (!(el.isContentEditable || el.getAttribute?.('contenteditable') === 'true')) {
         return el.selectionStart ?? getEditableText(el).length;
     }
@@ -399,6 +449,12 @@ function getEditableCaret(el) {
 
 /** @param {HTMLElement} el @param {number} offset */
 function setEditableCaret(el, offset) {
+    const field = isQuillEditor(el) ? getFieldForEditor(el) : null;
+    if (field) {
+        const max = Math.max(0, field.quill.getLength() - 1);
+        field.quill.setSelection(Math.max(0, Math.min(offset, max)), 0, 'user');
+        return;
+    }
     if (!(el.isContentEditable || el.getAttribute?.('contenteditable') === 'true')) {
         el.selectionStart = el.selectionEnd = offset;
         return;
@@ -464,8 +520,7 @@ function attachTransliteration(el) {
         const word = value.slice(start, end);
 
         if (!word.trim()) {
-            setEditableText(el, value.slice(0, cursor) + ' ' + value.slice(cursor));
-            setEditableCaret(el, cursor + 1);
+            replaceEditableRange(el, cursor, cursor, ' ');
             notifyLetterChanged(el);
             return;
         }
@@ -473,12 +528,9 @@ function attachTransliteration(el) {
         let suggestions = await fetchSuggestions(word);
         if (suggestions && suggestions.length > 0) {
             const suggestion = suggestions[0];
-            const newValue = value.slice(0, start) + suggestion + ' ' + value.slice(end);
-            setEditableText(el, newValue);
-            setEditableCaret(el, start + suggestion.length + 1);
+            replaceEditableRange(el, start, end, suggestion + ' ');
         } else {
-            setEditableText(el, value.slice(0, cursor) + ' ' + value.slice(cursor));
-            setEditableCaret(el, cursor + 1);
+            replaceEditableRange(el, cursor, cursor, ' ');
         }
         suggestionsBox.style.display = 'none';
         notifyLetterChanged(el);
@@ -535,9 +587,7 @@ function showSuggestions(suggestions, wordStart, wordEnd, targetEl) {
         div.className = 'suggestion';
         div.textContent = suggestion;
         div.onclick = () => {
-            const cur = getEditableText(targetEl);
-            setEditableText(targetEl, cur.slice(0, wordStart) + suggestion + cur.slice(wordEnd));
-            setEditableCaret(targetEl, wordStart + suggestion.length);
+            replaceEditableRange(targetEl, wordStart, wordEnd, suggestion);
             suggestionsBox.style.display = 'none';
             notifyLetterChanged(targetEl);
             targetEl.dispatchEvent(new Event('input', { bubbles: true }));
@@ -985,7 +1035,10 @@ function initApp() {
         diarySheet = initDiarySheet(diaryPagesEl, diaryTemplate, {
             onChange: scheduleSave,
             onAttachField: (el) => {
-                if (el.matches('input:not([type="date"]), textarea, [data-field].diary-dotted-flow')) {
+                if (
+                    el.matches?.('input:not([type="date"]), textarea, [data-field].diary-dotted-flow')
+                    || el.classList?.contains('ql-editor')
+                ) {
                     attachTransliteration(el);
                 }
                 if (el.type === 'date') {
@@ -1003,6 +1056,8 @@ function initApp() {
             },
         });
     }
+
+    if (quillToolbarEl) initQuillToolbar(quillToolbarEl);
 
     startNewDocument('diary');
     void loadHistory();
@@ -1279,9 +1334,26 @@ function initApp() {
     // Track focus/selection for voice dictation insertion target
     document.addEventListener('focusin', (e) => {
         const el = e.target;
-        if (!(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)) return;
         if (el === filenameInput) return;
+        if (!(el instanceof HTMLElement)) return;
         if (!el.closest('.editor-letter') && !el.closest('.editor-diary')) return;
+
+        if (isQuillEditor(el)) {
+            const field = getFieldForEditor(el);
+            if (!field) return;
+            const sel = field.quill.getSelection(true);
+            const index = sel?.index ?? Math.max(0, field.quill.getLength() - 1);
+            const length = sel?.length ?? 0;
+            dictationTarget = {
+                el,
+                field,
+                start: index,
+                end: index + length,
+            };
+            return;
+        }
+
+        if (!(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)) return;
         if (el.type === 'date') return;
         dictationTarget = {
             el,
@@ -1291,6 +1363,16 @@ function initApp() {
     });
     document.addEventListener('selectionchange', () => {
         const el = document.activeElement;
+        if (isQuillEditor(el) && dictationTarget?.el === el) {
+            const field = getFieldForEditor(el);
+            if (!field) return;
+            const sel = field.quill.getSelection();
+            if (!sel) return;
+            dictationTarget.start = sel.index;
+            dictationTarget.end = sel.index + sel.length;
+            dictationTarget.field = field;
+            return;
+        }
         if (!(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)) return;
         if (!dictationTarget || dictationTarget.el !== el) return;
         dictationTarget.start = el.selectionStart ?? el.value.length;
@@ -1328,11 +1410,28 @@ function showNotification(message) {
 
 /**
  * Resolve the current dictation insertion target (caret + element).
- * Falls back to the letter textarea when nothing is tracked.
- * @returns {{ el: HTMLInputElement|HTMLTextAreaElement, start: number, end: number } | null}
+ * Falls back to the letter Quill field when nothing is tracked.
+ * @returns {{ el: HTMLElement, start: number, end: number, field?: object } | null}
  */
 function getDictationTarget() {
     const active = document.activeElement;
+
+    if (isQuillEditor(active) && (active.closest('.editor-letter') || active.closest('.editor-diary'))) {
+        const field = getFieldForEditor(active);
+        if (field) {
+            const sel = field.quill.getSelection(true);
+            const index = sel?.index ?? Math.max(0, field.quill.getLength() - 1);
+            const length = sel?.length ?? 0;
+            dictationTarget = {
+                el: active,
+                field,
+                start: index,
+                end: index + length,
+            };
+            return dictationTarget;
+        }
+    }
+
     if (
         (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) &&
         active !== filenameInput &&
@@ -1352,10 +1451,10 @@ function getDictationTarget() {
     }
 
     if (getActiveTemplate() === 'letter') {
-        const field = letterSheet?.getActiveField();
-        if (field?.el) {
-            field.el.focus();
-            dictationTarget = field;
+        const fieldInfo = letterSheet?.getActiveField();
+        if (fieldInfo?.el) {
+            fieldInfo.el.focus();
+            dictationTarget = fieldInfo;
             return dictationTarget;
         }
     }
@@ -1374,25 +1473,52 @@ function insertDictatedText(text) {
     if (!target?.el) return;
 
     const el = target.el;
-    const start = target.start ?? el.selectionStart ?? el.value.length;
-    const end = target.end ?? el.selectionEnd ?? el.value.length;
-    const value = el.value;
-    const next = value.slice(0, start) + text + value.slice(end);
-    const caret = start + text.length;
-
     isDictatedInput = true;
     try {
+        if (isQuillEditor(el) || target.field) {
+            const field = target.field || getFieldForEditor(el);
+            if (!field) return;
+            const start = target.start ?? field.quill.getSelection(true)?.index ?? 0;
+            const end = target.end ?? start;
+            const len = Math.max(0, end - start);
+            if (len > 0) field.quill.deleteText(start, len, 'user');
+            field.quill.insertText(start, text, 'user');
+            const caret = start + text.length;
+            field.quill.setSelection(caret, 0, 'user');
+            field.quill.focus();
+            dictationTarget = { el: field.quill.root, field, start: caret, end: caret };
+            return;
+        }
+
+        const start = target.start ?? el.selectionStart ?? el.value.length;
+        const end = target.end ?? el.selectionEnd ?? el.value.length;
+        const value = el.value;
+        const next = value.slice(0, start) + text + value.slice(end);
+        const caret = start + text.length;
         el.value = next;
         el.focus();
         el.selectionStart = el.selectionEnd = caret;
         el.dispatchEvent(new Event('input', { bubbles: true }));
+        dictationTarget = { el, start: caret, end: caret };
     } finally {
         isDictatedInput = false;
     }
 
-    // Diary spill may move focus to another textarea — adopt it
+    // Diary spill may move focus — adopt the active Quill/textarea
     const active = document.activeElement;
-    if (
+    if (isQuillEditor(active)) {
+        const field = getFieldForEditor(active);
+        if (field) {
+            const sel = field.quill.getSelection(true);
+            const index = sel?.index ?? 0;
+            dictationTarget = {
+                el: active,
+                field,
+                start: index,
+                end: index + (sel?.length ?? 0),
+            };
+        }
+    } else if (
         (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) &&
         (active.closest('.editor-letter') || active.closest('.editor-diary'))
     ) {
@@ -1401,8 +1527,6 @@ function insertDictatedText(text) {
             start: active.selectionStart ?? active.value.length,
             end: active.selectionEnd ?? active.value.length,
         };
-    } else {
-        dictationTarget = { el, start: caret, end: caret };
     }
 }
 
