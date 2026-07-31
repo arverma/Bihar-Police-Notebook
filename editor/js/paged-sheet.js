@@ -1,10 +1,19 @@
 /**
- * A4 paged letter sheet — diary-style page cards with continuous typing + spill.
+ * A4 paged letter sheet — Quill editors with continuous typing + spill.
  *
  * At 96dpi: 1in = 96px exactly.
  * Content height is snapped to a whole number of 24px lines so no line
  * ever splits across a page boundary on screen or in print.
  */
+
+import {
+  contentToPrintHtml,
+  mountQuill,
+  paginateRich,
+  quillPrintCssFragment,
+  splitRichToFit,
+  stripHtmlToPlain,
+} from './quill-fields.js';
 
 const DPI = 96;
 const MM_PER_IN = 25.4;
@@ -29,15 +38,13 @@ const CONTENT_H_PX = LINES_PER_PAGE * LINE_HEIGHT_PX; // 912
 const BOTTOM_MARGIN_EXTRA_PX = RAW_CONTENT_H_PX - CONTENT_H_PX; // ~18.52
 const BOTTOM_MARGIN_PRINT_MM = MARGIN_MM + (BOTTOM_MARGIN_EXTRA_PX / DPI) * MM_PER_IN; // ~30.3
 const CONTENT_W_MM = PAGE_W_MM - 2 * MARGIN_MM; // 159.2
-const CONTENT_H_MM = PAGE_H_MM - 2 * MARGIN_MM; // 246.2
+const CONTENT_W_PX = PAGE_W_PX - 2 * MARGIN_PX;
 
-function escapeHtml(str) {
-  return String(str ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
+const LETTER_STYLE = {
+  fontSize: FONT_PX,
+  lineHeight: LINE_HEIGHT_PX,
+  padding: '0',
+};
 
 /**
  * Print stylesheet — one A4 page card per letter page.
@@ -65,9 +72,13 @@ export function letterPrintCss() {
       page-break-after: always;
       overflow: hidden;
     }
+    .letter-print-page.ql-print {
+      white-space: normal;
+    }
     .letter-print-page:last-child {
       page-break-after: auto;
     }
+    ${quillPrintCssFragment()}
   `;
 }
 
@@ -76,101 +87,19 @@ export function letterPrintCss() {
  */
 export function letterPagesHtml(pages) {
   const list = pages?.length ? pages : [''];
-  return list.map((text) => (
-    `<div class="letter-print-page">${escapeHtml(text)}</div>`
-  )).join('');
+  return list.map((text) => {
+    const body = contentToPrintHtml(text);
+    const isRich = /<\s*(p|div|strong|em|u|ul|li|img)\b/i.test(body);
+    return `<div class="letter-print-page${isRich ? ' ql-print' : ''}">${body}</div>`;
+  }).join('');
 }
 
-/**
- * Spill text that overflows a fixed-height textarea at the last whitespace
- * boundary that still fits.
- * @param {HTMLTextAreaElement} textarea
- */
-function splitOverflow(textarea) {
-  const full = textarea.value;
-  if (textarea.scrollHeight <= textarea.clientHeight + 1) {
-    return { keep: full, spill: '' };
-  }
-  let lo = 0;
-  let hi = full.length;
-  while (lo < hi) {
-    const mid = Math.ceil((lo + hi) / 2);
-    textarea.value = full.slice(0, mid);
-    if (textarea.scrollHeight <= textarea.clientHeight + 1) lo = mid;
-    else hi = mid - 1;
-  }
-  let cut = lo;
-  // Prefer breaking at a newline near the cut; fall back to a space.
-  const lookNl = full.lastIndexOf('\n', cut);
-  if (lookNl >= Math.floor(cut * 0.5)) {
-    cut = lookNl + 1;
-  } else {
-    const lookBack = full.lastIndexOf(' ', cut);
-    if (lookBack > cut * 0.6) cut = lookBack + 1;
-  }
-
-  textarea.value = full.slice(0, cut);
-  while (cut > 0 && textarea.scrollHeight > textarea.clientHeight + 1) {
-    const prev = Math.max(full.lastIndexOf('\n', cut - 2), full.lastIndexOf(' ', cut - 2));
-    cut = prev > 0 ? prev + 1 : cut - 1;
-    textarea.value = full.slice(0, cut);
-  }
-
-  return { keep: full.slice(0, cut), spill: full.slice(cut) };
-}
-
-/**
- * @param {string} text
- */
 function splitTextToFit(text) {
-  if (!text) return { keep: '', spill: '' };
-  const ta = document.createElement('textarea');
-  ta.setAttribute('aria-hidden', 'true');
-  ta.style.cssText = [
-    'position:absolute',
-    'left:-9999px',
-    'top:0',
-    'visibility:hidden',
-    `width:${PAGE_W_PX - 2 * MARGIN_PX}px`,
-    `height:${CONTENT_H_PX}px`,
-    'box-sizing:border-box',
-    'border:none',
-    'padding:0',
-    'margin:0',
-    `font-size:${FONT_PX}px`,
-    `line-height:${LINE_HEIGHT_PX}px`,
-    "font-family:'Noto Sans Devanagari', Arial, sans-serif",
-    'white-space:pre-wrap',
-    'word-break:break-word',
-    'overflow:hidden',
-  ].join(';');
-  document.body.appendChild(ta);
-  ta.value = text;
-  const result = splitOverflow(ta);
-  document.body.removeChild(ta);
-  return result;
+  return splitRichToFit(text, CONTENT_W_PX, CONTENT_H_PX, LETTER_STYLE);
 }
 
-/**
- * @param {string} text
- * @returns {string[]}
- */
 function paginateText(text) {
-  const pages = [];
-  let rest = text ?? '';
-  let guard = 0;
-  while (guard++ < 200) {
-    if (!rest) {
-      pages.push('');
-      break;
-    }
-    const { keep, spill } = splitTextToFit(rest);
-    pages.push(keep);
-    if (!spill) break;
-    rest = spill;
-  }
-  if (!pages.length) pages.push('');
-  return pages;
+  return paginateRich(text, CONTENT_W_PX, CONTENT_H_PX, LETTER_STYLE);
 }
 
 /**
@@ -180,7 +109,7 @@ function paginateText(text) {
  * @param {HTMLElement|null} indicatorEl
  * @param {{
  *   onChange?: () => void,
- *   onAttachField?: (el: HTMLTextAreaElement) => void,
+ *   onAttachField?: (el: HTMLElement, field?: object) => void,
  *   onPageFocus?: (current: number, total: number) => void,
  *   onSpill?: (info: { fromPage: number, toPage: number }) => void,
  * }} [hooks]
@@ -190,6 +119,8 @@ export function initPagedSheet(container, indicatorEl, hooks = {}) {
   let pages = [''];
   let spilling = false;
   let focusedPage = 0;
+  /** @type {Map<number, object>} */
+  const fields = new Map();
 
   function notify() {
     hooks.onChange?.();
@@ -205,6 +136,10 @@ export function initPagedSheet(container, indicatorEl, hooks = {}) {
 
   function getText() {
     return pages.join('');
+  }
+
+  function getPlainText() {
+    return pages.map((p) => stripHtmlToPlain(p)).join('');
   }
 
   function setText(text) {
@@ -238,12 +173,17 @@ export function initPagedSheet(container, indicatorEl, hooks = {}) {
       didSpill = true;
       pages[i] = keep;
       if (i + 1 >= pages.length) pages.push('');
-      pages[i + 1] = spill + (pages[i + 1] || '');
+      const next = pages[i + 1] || '';
+      if (!next) pages[i + 1] = spill;
+      else pages[i + 1] = spill + next;
       i += 1;
     }
 
-    // Drop trailing empty pages (keep at least one)
-    while (pages.length > 1 && !(pages[pages.length - 1] || '').trim() && i < pages.length - 1) {
+    while (
+      pages.length > 1
+      && !stripHtmlToPlain(pages[pages.length - 1] || '').trim()
+      && i < pages.length - 1
+    ) {
       pages.pop();
     }
 
@@ -251,12 +191,11 @@ export function initPagedSheet(container, indicatorEl, hooks = {}) {
     if (didSpill) {
       render();
       requestAnimationFrame(() => {
-        const pageEls = container.querySelectorAll('.letter-page');
-        const ta = pageEls[toPage]?.querySelector('textarea');
-        if (ta) {
-          ta.focus();
-          try { ta.setSelectionRange(0, 0); } catch (_) { /* ignore */ }
-          ta.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        const field = fields.get(toPage);
+        if (field) {
+          field.quill.focus();
+          field.quill.setSelection(0, 0, 'user');
+          field.host.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         }
         notifyFocus(toPage);
       });
@@ -270,43 +209,23 @@ export function initPagedSheet(container, indicatorEl, hooks = {}) {
   /**
    * @param {HTMLElement} pageEl
    * @param {number} pageIndex
+   * @param {object} field
    */
-  function wirePage(pageEl, pageIndex) {
-    const ta = pageEl.querySelector('textarea');
-    if (!ta) return;
+  function wirePage(pageEl, pageIndex, field) {
+    fields.set(pageIndex, field);
 
-    ta.addEventListener('input', () => {
-      pages[pageIndex] = ta.value;
-      if (ta.scrollHeight > ta.clientHeight + 1) {
+    field.quill.on('text-change', (_d, _o, source) => {
+      if (source === 'silent' || spilling) return;
+      pages[pageIndex] = field.getHtml();
+      if (!field.fitsInBox()) {
         spillFrom(pageIndex);
       } else {
-        // Trim empty trailing pages when deleting
-        if (
-          pageIndex === pages.length - 1 &&
-          pages.length > 1 &&
-          !(pages[pageIndex] || '').trim() &&
-          !(pages[pageIndex - 1] || '').endsWith('\n')
-        ) {
-          // keep empty last page for typing comfort
-        }
         notify();
       }
       notifyFocus(pageIndex);
     });
 
-    ta.addEventListener('paste', () => {
-      requestAnimationFrame(() => {
-        pages[pageIndex] = ta.value;
-        if (ta.scrollHeight > ta.clientHeight + 1) spillFrom(pageIndex);
-        else notify();
-      });
-    });
-
-    ta.addEventListener('focus', () => notifyFocus(pageIndex));
-    ta.addEventListener('click', () => notifyFocus(pageIndex));
-    ta.addEventListener('keyup', () => notifyFocus(pageIndex));
-
-    hooks.onAttachField?.(ta);
+    hooks.onAttachField?.(field.quill.root, field);
   }
 
   function buildPageEl(text, pageIndex) {
@@ -319,30 +238,32 @@ export function initPagedSheet(container, indicatorEl, hooks = {}) {
     chrome.innerHTML = `<span class="letter-page-label">Page ${pageIndex + 1}</span>`;
     pageEl.appendChild(chrome);
 
-    const ta = document.createElement('textarea');
-    ta.className = 'letter-page-input hinglish-input';
-    ta.setAttribute('autocomplete', 'off');
-    if (pageIndex === 0) {
-      ta.placeholder = 'यहाँ Hinglish में टाइप करें...';
-    }
-    ta.value = text || '';
-    pageEl.appendChild(ta);
+    const host = document.createElement('div');
+    host.className = 'letter-page-input hinglish-input';
+    pageEl.appendChild(host);
 
-    return pageEl;
+    const field = mountQuill(host, {
+      placeholder: pageIndex === 0 ? 'यहाँ Hinglish में टाइप करें...' : '',
+      onFocus: () => notifyFocus(pageIndex),
+    });
+    field.setContent(text || '');
+
+    return { pageEl, field };
   }
 
   function render() {
+    fields.forEach((f) => f.destroy());
+    fields.clear();
     container.innerHTML = '';
     pages.forEach((text, i) => {
-      const pageEl = buildPageEl(text, i);
+      const { pageEl, field } = buildPageEl(text, i);
       container.appendChild(pageEl);
-      wirePage(pageEl, i);
+      wirePage(pageEl, i, field);
     });
 
-    // Ensure at least one empty trailing page isn't needed — always have room
     const last = pages[pages.length - 1] || '';
-    const lastTa = container.querySelector('.letter-page:last-child textarea');
-    if (lastTa && last && lastTa.scrollHeight > lastTa.clientHeight + 1) {
+    const lastField = fields.get(pages.length - 1);
+    if (lastField && last && !lastField.fitsInBox()) {
       spillFrom(pages.length - 1);
       return;
     }
@@ -351,39 +272,45 @@ export function initPagedSheet(container, indicatorEl, hooks = {}) {
   }
 
   function update() {
-    // Re-paginate from joined text (e.g. after external set)
-    const joined = getText();
-    pages = paginateText(joined);
+    pages = paginateText(getText());
     render();
   }
 
   function focus() {
-    const pageEls = container.querySelectorAll('.letter-page');
-    const ta = pageEls[focusedPage]?.querySelector('textarea')
-      || pageEls[0]?.querySelector('textarea');
-    ta?.focus();
+    const field = fields.get(focusedPage) || fields.get(0);
+    field?.quill.focus();
   }
 
   /**
-   * @returns {{ el: HTMLTextAreaElement, start: number, end: number } | null}
+   * @returns {{ el: HTMLElement, field: object, start: number, end: number } | null}
    */
   function getActiveField() {
     const active = document.activeElement;
-    if (active instanceof HTMLTextAreaElement && active.closest('.letter-page')) {
-      return {
-        el: active,
-        start: active.selectionStart ?? active.value.length,
-        end: active.selectionEnd ?? active.value.length,
-      };
+    if (active instanceof HTMLElement && active.classList.contains('ql-editor')) {
+      for (const [, field] of fields) {
+        if (field.quill.root === active || field.quill.root.contains(active)) {
+          const sel = field.quill.getSelection(true);
+          const index = sel?.index ?? Math.max(0, field.quill.getLength() - 1);
+          const length = sel?.length ?? 0;
+          return {
+            el: field.quill.root,
+            field,
+            start: index,
+            end: index + length,
+          };
+        }
+      }
     }
-    const pageEls = container.querySelectorAll('.letter-page');
-    const ta = pageEls[focusedPage]?.querySelector('textarea')
-      || pageEls[0]?.querySelector('textarea');
-    if (!ta) return null;
+    const field = fields.get(focusedPage) || fields.get(0);
+    if (!field) return null;
+    const sel = field.quill.getSelection();
+    const index = sel?.index ?? Math.max(0, field.quill.getLength() - 1);
+    const length = sel?.length ?? 0;
     return {
-      el: ta,
-      start: ta.selectionStart ?? ta.value.length,
-      end: ta.selectionEnd ?? ta.value.length,
+      el: field.quill.root,
+      field,
+      start: index,
+      end: index + length,
     };
   }
 
@@ -392,6 +319,7 @@ export function initPagedSheet(container, indicatorEl, hooks = {}) {
   return {
     update,
     getText,
+    getPlainText,
     setText,
     clear,
     focus,

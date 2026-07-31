@@ -17,6 +17,7 @@
     <link rel="stylesheet" href="css/header-responsive.css">
     <link rel="stylesheet" href="css/page-preview.css">
     <link rel="stylesheet" href="css/overlays-responsive.css">
+    <link href="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css" rel="stylesheet">
 </head>
 
 <body class="app-shell">
@@ -110,6 +111,35 @@
         </aside>
 
         <main class="main-content">
+            <div id="quillToolbar" class="quill-chrome-toolbar screen-only" hidden
+                role="toolbar" aria-label="Text formatting">
+                <button type="button" data-ql="bold" title="Bold" aria-label="Bold" aria-pressed="false">
+                    <i class="fas fa-bold" aria-hidden="true"></i>
+                </button>
+                <button type="button" data-ql="italic" title="Italic" aria-label="Italic" aria-pressed="false">
+                    <i class="fas fa-italic" aria-hidden="true"></i>
+                </button>
+                <button type="button" data-ql="underline" title="Underline" aria-label="Underline" aria-pressed="false">
+                    <i class="fas fa-underline" aria-hidden="true"></i>
+                </button>
+                <span class="quill-toolbar-sep" aria-hidden="true"></span>
+                <button type="button" data-ql="align:left" title="Align left" aria-label="Align left" aria-pressed="false">
+                    <i class="fas fa-align-left" aria-hidden="true"></i>
+                </button>
+                <button type="button" data-ql="align:center" title="Align center" aria-label="Align center" aria-pressed="false">
+                    <i class="fas fa-align-center" aria-hidden="true"></i>
+                </button>
+                <button type="button" data-ql="align:right" title="Align right" aria-label="Align right" aria-pressed="false">
+                    <i class="fas fa-align-right" aria-hidden="true"></i>
+                </button>
+                <button type="button" data-ql="align:justify" title="Justify" aria-label="Justify" aria-pressed="false">
+                    <i class="fas fa-align-justify" aria-hidden="true"></i>
+                </button>
+                <span class="quill-toolbar-sep" aria-hidden="true"></span>
+                <button type="button" data-ql="list" title="Bullet list" aria-label="Bullet list" aria-pressed="false">
+                    <i class="fas fa-list-ul" aria-hidden="true"></i>
+                </button>
+            </div>
             <div class="editor-stage" id="editorStage">
                 <button type="button" class="page-fit-chip" id="pageFitChip" hidden
                     title="Fit page to width" aria-label="Fit page to width">
@@ -212,8 +242,9 @@
                     </td>
                     <td class="right-column">
                         <div class="diary-cell">
-                            <textarea class="fir-input hinglish-input" data-col="right"
-                                placeholder="यहाँ विवरण लिखें..." autocomplete="off"></textarea>
+                            <div class="fir-input hinglish-input" data-col="right"
+                                data-placeholder="यहाँ विवरण लिखें..."
+                                role="textbox" aria-label="अन्वेषण का अभिलेख"></div>
                         </div>
                     </td>
                 </tr>
@@ -255,6 +286,7 @@
     </dialog>
 
     <div id="suggestions" class="suggestions-box"></div>
+    <script src="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js"></script>
     <script type="module" src="js/main.js"></script>
 </body>
 
