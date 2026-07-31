@@ -155,7 +155,7 @@ export function quillPrintCssFragment() {
  */
 export function initQuillToolbar(el) {
   toolbarEl = el;
-  el.hidden = true;
+  el.hidden = false;
   el.addEventListener('mousedown', (e) => {
     // Keep editor selection when clicking toolbar
     e.preventDefault();
@@ -188,9 +188,8 @@ export function initQuillToolbar(el) {
 
 function setToolbarVisible(show) {
   if (!toolbarEl) return;
-  toolbarEl.hidden = !show;
-  if (show) updateToolbarViewportOffset();
-  else clearToolbarViewportOffset();
+  toolbarEl.hidden = false;
+  updateToolbarViewportOffset();
 }
 
 /** @type {boolean} */
@@ -236,8 +235,8 @@ function updateToolbarViewportOffset() {
 }
 
 function syncToolbarUi() {
-  if (!toolbarEl || !activeQuill) return;
-  const fmt = activeQuill.getFormat();
+  if (!toolbarEl) return;
+  const fmt = activeQuill ? activeQuill.getFormat() : {};
   toolbarEl.querySelectorAll('[data-ql]').forEach((btn) => {
     if (!(btn instanceof HTMLElement)) return;
     const cmd = btn.dataset.ql || '';
@@ -258,8 +257,8 @@ function syncToolbarUi() {
  */
 export function setActiveQuill(quill) {
   activeQuill = quill;
-  setToolbarVisible(Boolean(quill));
-  if (quill) syncToolbarUi();
+  setToolbarVisible(true);
+  syncToolbarUi();
 }
 
 export function getActiveQuill() {
