@@ -221,7 +221,7 @@ body {
 }
 
 .diary-pages {
-    --diary-left-col: 25%;
+    --diary-left-col: 20%;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -294,8 +294,8 @@ body {
 .diary-page-header {
     flex: 0 0 auto;
     margin-bottom: 4px;
-    max-height: 148px;
-    overflow: hidden;
+    min-height: 140px;
+    overflow: visible;
     font-size: 13px;
     line-height: 1.4;
 }
@@ -388,6 +388,17 @@ body {
     line-height: 1.7;
 }
 
+/* Continuous word-wrap row for event_date_place + sections */
+.diary-meta-row-flow {
+    display: block;
+    line-height: 1.7;
+}
+
+.diary-meta-row-flow .diary-label {
+    display: inline;
+    white-space: nowrap;
+}
+
 .diary-label {
     white-space: nowrap;
     font-weight: 500;
@@ -430,6 +441,53 @@ body {
     max-width: none;
 }
 
+/* Inline contenteditable values — continuous paragraph wrap with labels */
+span.diary-dotted-flow {
+    display: inline;
+    flex: none;
+    width: auto;
+    max-width: none;
+    min-width: 0;
+    height: auto;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    word-break: normal;
+    text-align: left;
+    margin: 0 0.25em;
+    padding: 0 4ch;
+    line-height: 1.35;
+    vertical-align: baseline;
+    -webkit-user-modify: read-write-plaintext-only;
+}
+
+/* Empty: larger dotted target (min-width needs inline-block) */
+span.diary-dotted-flow:empty,
+span.diary-dotted-flow:has(> br:only-child) {
+    display: inline-block;
+    min-width: 10em;
+    min-height: 1.35em;
+    vertical-align: baseline;
+}
+
+span.diary-dotted-flow[data-field="event_date_place"]:empty,
+span.diary-dotted-flow[data-field="event_date_place"]:has(> br:only-child) {
+    min-width: 14em;
+}
+
+span.diary-dotted-flow[data-field="sections"]:empty,
+span.diary-dotted-flow[data-field="sections"]:has(> br:only-child) {
+    min-width: 12em;
+}
+
+span.diary-dotted-flow:empty::before {
+    content: '\00a0';
+}
+
+span.diary-dotted-flow:focus {
+    outline: none;
+    border-bottom-color: var(--brand-primary);
+}
+
 .diary-dotted-date {
     min-width: 110px;
     max-width: 130px;
@@ -463,11 +521,6 @@ body {
     min-width: 4.5em;
 }
 
-.diary-header-divider {
-    margin-top: 6px;
-    border-top: 1.5px solid #000;
-}
-
 .fir-table {
     width: 100%;
     border-collapse: collapse;
@@ -487,18 +540,19 @@ body {
     font-size: 12px;
     line-height: 1.3;
     color: var(--color-text-primary);
-    height: 72px;
+    min-height: 72px;
+    height: auto;
     box-sizing: border-box;
 }
 
 .fir-table th.left-column,
 .fir-table td.left-column {
-    width: var(--diary-left-col, 25%);
+    width: var(--diary-left-col, 20%);
 }
 
 .fir-table th.right-column,
 .fir-table td.right-column {
-    width: calc(100% - var(--diary-left-col, 25%));
+    width: calc(100% - var(--diary-left-col, 20%));
 }
 
 .fir-table th.right-column input {
@@ -523,7 +577,7 @@ body {
 .diary-cell {
     position: relative;
     width: 100%;
-    height: var(--diary-box-h, 768px);
+    height: var(--diary-box-h, 806px);
     box-sizing: border-box;
     overflow: hidden;
 }
@@ -1331,14 +1385,6 @@ body {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-}
-
-.history-item-description {
-    display: block;
-    color: #444;
-    font-size: 12px;
-    overflow: hidden;
-    margin-top: 5px;
 }
 
 .collapsible-header {

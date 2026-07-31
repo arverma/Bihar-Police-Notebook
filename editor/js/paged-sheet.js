@@ -31,22 +31,6 @@ const BOTTOM_MARGIN_PRINT_MM = MARGIN_MM + (BOTTOM_MARGIN_EXTRA_PX / DPI) * MM_P
 const CONTENT_W_MM = PAGE_W_MM - 2 * MARGIN_MM; // 159.2
 const CONTENT_H_MM = PAGE_H_MM - 2 * MARGIN_MM; // 246.2
 
-export const PAGE = {
-  WIDTH_MM: PAGE_W_MM,
-  HEIGHT_MM: PAGE_H_MM,
-  MARGIN_MM,
-  BOTTOM_MARGIN_PRINT_MM,
-  CONTENT_W_MM,
-  CONTENT_H_MM,
-  FONT_PX,
-  LINE_HEIGHT_PX,
-  LINES_PER_PAGE,
-  CONTENT_H_PX,
-  MARGIN_PX,
-  WIDTH_PX: PAGE_W_PX,
-  HEIGHT_PX: PAGE_H_PX,
-};
-
 function escapeHtml(str) {
   return String(str ?? '')
     .replace(/&/g, '&amp;')

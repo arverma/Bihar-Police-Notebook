@@ -17,7 +17,7 @@ const PAGE_H_MM = 297;
 const MARGIN_MM = 12.7; // half of Google Docs 1in
 const FONT_PX = 15;
 const LINE_HEIGHT_PX = 24;
-const LEFT_COL_PCT = 25;
+const LEFT_COL_PCT = 20;
 
 const PAGE_W_PX = mmToPx(PAGE_W_MM);
 const PAGE_H_PX = mmToPx(PAGE_H_MM);
@@ -26,10 +26,13 @@ const MARGIN_PX = mmToPx(MARGIN_MM); // 48
 const CONTENT_H_RAW_PX = PAGE_H_PX - 2 * MARGIN_PX; // ~1026.52
 const CONTENT_W_MM = PAGE_W_MM - 2 * MARGIN_MM; // 184.6
 const CONTENT_H_MM = PAGE_H_MM - 2 * MARGIN_MM; // 271.6
+const CONTENT_W_PX = mmToPx(CONTENT_W_MM);
 
 /** Fixed heights for header block + titles row when shown */
-const HEADER_BLOCK_H_PX = 148;
+const HEADER_BLOCK_H_PX = 140;
 const TITLES_ROW_H_PX = 72;
+/** Matches .diary-page-header / .diary-print-header margin-bottom */
+const HEADER_MARGIN_BOTTOM_PX = 4;
 
 /**
  * Outer border of the bordered table, which sits outside the writing box and
@@ -37,37 +40,16 @@ const TITLES_ROW_H_PX = 72;
  */
 const TABLE_BORDER_H_PX = 4;
 const TABLE_BORDER_W_PX = 4;
-const HEADER_TOTAL_H_PX = HEADER_BLOCK_H_PX + TITLES_ROW_H_PX; // 240
+const HEADER_TOTAL_H_PX = HEADER_BLOCK_H_PX + HEADER_MARGIN_BOTTOM_PX + TITLES_ROW_H_PX;
 
 function linesFor(availablePx) {
   return Math.floor(availablePx / LINE_HEIGHT_PX);
 }
 
-const BOX_LINES_WITH_HEADER = linesFor(CONTENT_H_RAW_PX - HEADER_TOTAL_H_PX); // 32
-const BOX_LINES_NO_HEADER = linesFor(CONTENT_H_RAW_PX); // 42
-const BOX_H_WITH_HEADER_PX = BOX_LINES_WITH_HEADER * LINE_HEIGHT_PX; // 768
-const BOX_H_NO_HEADER_PX = BOX_LINES_NO_HEADER * LINE_HEIGHT_PX; // 1008
-
-export const DIARY_PAGE = {
-  WIDTH_MM: PAGE_W_MM,
-  HEIGHT_MM: PAGE_H_MM,
-  MARGIN_MM,
-  CONTENT_W_MM,
-  CONTENT_H_MM,
-  FONT_PX,
-  LINE_HEIGHT_PX,
-  LEFT_COL_PCT,
-  MARGIN_PX,
-  WIDTH_PX: PAGE_W_PX,
-  HEIGHT_PX: PAGE_H_PX,
-  HEADER_BLOCK_H_PX,
-  TITLES_ROW_H_PX,
-  HEADER_TOTAL_H_PX,
-  BOX_LINES_WITH_HEADER,
-  BOX_LINES_NO_HEADER,
-  BOX_H_WITH_HEADER_PX,
-  BOX_H_NO_HEADER_PX,
-};
+const BOX_LINES_WITH_HEADER = linesFor(CONTENT_H_RAW_PX - HEADER_TOTAL_H_PX);
+const BOX_LINES_NO_HEADER = linesFor(CONTENT_H_RAW_PX - TABLE_BORDER_H_PX);
+const BOX_H_WITH_HEADER_PX = BOX_LINES_WITH_HEADER * LINE_HEIGHT_PX;
+const BOX_H_NO_HEADER_PX = BOX_LINES_NO_HEADER * LINE_HEIGHT_PX;
 
 export const HEADER_FIELDS = [
   'case_diary_no', 'rule_no', 'against_1', 'against_2', 'special_report_no',
@@ -83,14 +65,14 @@ export function emptyHeader() {
 
 export function emptyModel() {
   return {
-    header: emptyHeader(),
-    pages: [{ hasHeader: true, left: '', right: '' }],
+    pages: [{ hasHeader: true, header: emptyHeader(), left: '', right: '' }],
   };
 }
 
 /**
- * Normalize stored content into { header, pages }.
- * Supports legacy flat { left_box, right_box, ...fields } shape.
+ * Normalize stored content into { pages }.
+ * Supports legacy flat { left_box, right_box, ...fields } shape,
+ * and migrates global `header` to per-page `header`.
  */
 export function normalizeDiaryModel(raw) {
   let data = raw;
@@ -99,30 +81,40 @@ export function normalizeDiaryModel(raw) {
   }
   if (!data || typeof data !== 'object') data = {};
 
+  const globalHeaderFallback = emptyHeader();
+  HEADER_FIELDS.forEach((k) => {
+    if (data.header && k in data.header) globalHeaderFallback[k] = data.header[k] ?? '';
+    else if (k in data) globalHeaderFallback[k] = data[k] ?? '';
+  });
+
   if (Array.isArray(data.pages)) {
-    const header = emptyHeader();
-    HEADER_FIELDS.forEach((k) => {
-      if (data.header && k in data.header) header[k] = data.header[k] ?? '';
-      else if (k in data) header[k] = data[k] ?? '';
+    const pages = data.pages.map((p, i) => {
+      const hasHeader = p.hasHeader != null ? Boolean(p.hasHeader) : i === 0;
+      let header = null;
+      if (p.header) {
+        header = emptyHeader();
+        HEADER_FIELDS.forEach((k) => {
+          if (k in p.header) header[k] = p.header[k] ?? '';
+        });
+      } else if (hasHeader) {
+        header = { ...globalHeaderFallback };
+      }
+      return {
+        hasHeader,
+        header,
+        left: p.left ?? '',
+        right: p.right ?? '',
+      };
     });
-    const pages = data.pages.map((p, i) => ({
-      hasHeader: p.hasHeader != null ? Boolean(p.hasHeader) : i === 0,
-      left: p.left ?? '',
-      right: p.right ?? '',
-    }));
-    if (!pages.length) pages.push({ hasHeader: true, left: '', right: '' });
-    return { header, pages };
+    if (!pages.length) pages.push({ hasHeader: true, header: { ...globalHeaderFallback }, left: '', right: '' });
+    return { pages };
   }
 
   // Legacy flat format
-  const header = emptyHeader();
-  HEADER_FIELDS.forEach((k) => {
-    if (k in data) header[k] = data[k] ?? '';
-  });
   return {
-    header,
     pages: [{
       hasHeader: true,
+      header: { ...globalHeaderFallback },
       left: data.left_box ?? '',
       right: data.right_box ?? '',
     }],
@@ -131,8 +123,9 @@ export function normalizeDiaryModel(raw) {
 
 export function diaryHasMeaningfulContent(model) {
   const m = normalizeDiaryModel(model);
-  if (Object.values(m.header).some((v) => String(v).trim())) return true;
-  return m.pages.some((p) => String(p.left).trim() || String(p.right).trim());
+  const anyHeader = m.pages.some((p) => p.header && Object.values(p.header).some((v) => String(v).trim()));
+  const anyText = m.pages.some((p) => String(p.left).trim() || String(p.right).trim());
+  return anyHeader || anyText;
 }
 
 function escapeHtml(str) {
@@ -143,55 +136,54 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;');
 }
 
-function boxHeightPx(hasHeader) {
-  return hasHeader ? BOX_H_WITH_HEADER_PX : BOX_H_NO_HEADER_PX;
-}
-
-function cellPadBottomPx(hasHeader) {
-  const used =
-    (hasHeader ? HEADER_TOTAL_H_PX : 0) + boxHeightPx(hasHeader) + TABLE_BORDER_H_PX;
-  return Math.max(0, CONTENT_H_RAW_PX - used);
+/**
+ * Body writing-box height for a page.
+ * @param {boolean} hasHeader
+ * @param {number} [headerBlockH] measured header block px (min HEADER_BLOCK_H_PX)
+ * @param {number} [titlesRowH] measured titles row px (min TITLES_ROW_H_PX)
+ */
+function boxHeightPx(
+  hasHeader,
+  headerBlockH = HEADER_BLOCK_H_PX,
+  titlesRowH = TITLES_ROW_H_PX,
+) {
+  if (!hasHeader) return BOX_H_NO_HEADER_PX;
+  const h = Math.max(HEADER_BLOCK_H_PX, headerBlockH);
+  const titlesH = Math.max(TITLES_ROW_H_PX, titlesRowH);
+  const headerTotal = h + HEADER_MARGIN_BOTTOM_PX + titlesH;
+  const lines = linesFor(CONTENT_H_RAW_PX - headerTotal - TABLE_BORDER_H_PX);
+  return Math.max(LINE_HEIGHT_PX, lines * LINE_HEIGHT_PX);
 }
 
 /**
- * Print stylesheet — screen and print share the same A4 geometry.
+ * @param {boolean} hasHeader
+ * @param {number} [headerBlockH]
+ * @param {number} [titlesRowH]
  */
-export function diaryPrintCss() {
+function cellPadBottomPx(
+  hasHeader,
+  headerBlockH = HEADER_BLOCK_H_PX,
+  titlesRowH = TITLES_ROW_H_PX,
+) {
+  const hBlock = hasHeader ? Math.max(HEADER_BLOCK_H_PX, headerBlockH) : 0;
+  const titlesH = hasHeader ? Math.max(TITLES_ROW_H_PX, titlesRowH) : 0;
+  const headerTotal = hasHeader ? hBlock + HEADER_MARGIN_BOTTOM_PX + titlesH : 0;
+  const used = headerTotal + boxHeightPx(hasHeader, headerBlockH, titlesRowH) + TABLE_BORDER_H_PX;
+  return Math.max(0, CONTENT_H_RAW_PX - used);
+}
+
+/** Print CSS shared by export window and offscreen header measurement. */
+function diaryHeaderPrintCssFragment() {
   return `
-    @page {
-      size: A4;
-      margin: ${MARGIN_MM}mm;
-    }
-    html, body {
-      margin: 0;
-      padding: 0;
-      background: #fff;
-    }
-    .diary-print-page {
-      width: ${CONTENT_W_MM}mm;
-      height: ${CONTENT_H_MM}mm;
-      box-sizing: border-box;
-      font-family: 'Noto Sans Devanagari', Arial, sans-serif;
-      font-size: ${FONT_PX}px;
-      line-height: ${LINE_HEIGHT_PX}px;
-      color: #000;
-      page-break-after: always;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-    }
-    .diary-print-page:last-child {
-      page-break-after: auto;
-    }
     .diary-print-header {
       flex: 0 0 auto;
-      max-height: ${HEADER_BLOCK_H_PX}px;
-      overflow: hidden;
       box-sizing: border-box;
+      font-family: 'Noto Sans Devanagari', Arial, sans-serif;
       font-size: 13px;
       line-height: 1.4;
       margin: 0 0 4px;
       padding: 0;
+      color: #000;
     }
     .diary-print-header .top-row {
       display: grid;
@@ -207,12 +199,8 @@ export function diaryPrintCss() {
       font-size: 11px;
       line-height: 1.35;
     }
-    .diary-print-header .sched-1 {
-      grid-row: 1;
-    }
-    .diary-print-header .sched-2 {
-      grid-row: 2;
-    }
+    .diary-print-header .sched-1 { grid-row: 1; }
+    .diary-print-header .sched-2 { grid-row: 2; }
     .diary-print-header .title-line {
       grid-column: 2;
       grid-row: 2;
@@ -247,12 +235,8 @@ export function diaryPrintCss() {
       justify-self: end;
       width: 100%;
     }
-    .diary-print-header .against-line {
-      grid-row: 3;
-    }
-    .diary-print-header .special-line {
-      grid-row: 4;
-    }
+    .diary-print-header .against-line { grid-row: 3; }
+    .diary-print-header .special-line { grid-row: 4; }
     .diary-print-header .dotted {
       display: inline-block;
       min-width: 72px;
@@ -268,9 +252,7 @@ export function diaryPrintCss() {
       min-width: 0;
       width: 28%;
     }
-    .diary-print-header .dotted.narrow {
-      min-width: 56px;
-    }
+    .diary-print-header .dotted.narrow { min-width: 56px; }
     .diary-print-header .dotted.against {
       min-width: 52px;
       width: 88px;
@@ -308,10 +290,147 @@ export function diaryPrintCss() {
       flex: 1 1 0;
       width: auto;
     }
-    .diary-print-header .divider {
-      margin-top: 6px;
-      border-top: 1.5px solid #000;
+    .diary-print-header .meta-row-flow {
+      display: block;
+      line-height: 1.7;
     }
+    .diary-print-header .meta-row-flow .dotted.wide {
+      display: inline;
+      flex: none;
+      width: auto;
+      min-width: 4em;
+      max-width: none;
+      white-space: normal;
+      overflow-wrap: break-word;
+      word-break: normal;
+      text-align: left;
+      padding: 0 4ch;
+    }
+  `;
+}
+
+/**
+ * Measure print header height for the given header model (min HEADER_BLOCK_H_PX).
+ * @param {Record<string, string>} header
+ * @returns {number}
+ */
+export function measureHeaderHeightPx(header) {
+  if (typeof document === 'undefined') return HEADER_BLOCK_H_PX;
+  const host = document.createElement('div');
+  host.setAttribute('aria-hidden', 'true');
+  host.style.cssText = [
+    'position:absolute',
+    'left:-99999px',
+    'top:0',
+    `width:${CONTENT_W_PX}px`,
+    'visibility:hidden',
+    'pointer-events:none',
+  ].join(';');
+  const style = document.createElement('style');
+  style.textContent = diaryHeaderPrintCssFragment();
+  host.appendChild(style);
+  const mount = document.createElement('div');
+  mount.innerHTML = printHeaderHtml(header || emptyHeader());
+  host.appendChild(mount);
+  document.body.appendChild(host);
+  const el = mount.querySelector('.diary-print-header');
+  const h = el ? el.getBoundingClientRect().height : HEADER_BLOCK_H_PX;
+  document.body.removeChild(host);
+  return Math.max(HEADER_BLOCK_H_PX, Math.ceil(h));
+}
+
+/**
+ * Measure titles-row height at the current left/right column ratio
+ * (narrow left col wraps the Hindi heading and can exceed TITLES_ROW_H_PX).
+ * @param {string} [investigationRecord]
+ * @returns {number}
+ */
+export function measureTitlesRowHeightPx(investigationRecord = '') {
+  if (typeof document === 'undefined') return TITLES_ROW_H_PX;
+  const host = document.createElement('div');
+  host.setAttribute('aria-hidden', 'true');
+  host.style.cssText = [
+    'position:absolute',
+    'left:-99999px',
+    'top:0',
+    `width:${CONTENT_W_PX}px`,
+    'visibility:hidden',
+    'pointer-events:none',
+  ].join(';');
+  const style = document.createElement('style');
+  style.textContent = `
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      border: 1.5px solid #000;
+      font-family: 'Noto Sans Devanagari', Arial, sans-serif;
+    }
+    th {
+      border: 1px solid #000;
+      font-size: 12px;
+      font-weight: 700;
+      text-align: center;
+      line-height: 1.3;
+      min-height: ${TITLES_ROW_H_PX}px;
+      padding: 6px 8px;
+      box-sizing: border-box;
+    }
+    th.left-col { width: ${LEFT_COL_PCT}%; }
+    th.right-col { width: ${100 - LEFT_COL_PCT}%; }
+  `;
+  host.appendChild(style);
+  const inv = investigationRecord && String(investigationRecord).trim()
+    ? `<div>(${escapeHtml(investigationRecord)})</div>`
+    : '';
+  const mount = document.createElement('div');
+  mount.innerHTML = `
+    <table>
+      <tr class="titles-row">
+        <th class="left-col">किन तिथि को (समय सहित) कार्रवाई की गई, और किन-किन स्थानों को जाकर देखा गया</th>
+        <th class="right-col">अन्वेषण का अभिलेख${inv}</th>
+      </tr>
+    </table>
+  `;
+  host.appendChild(mount);
+  document.body.appendChild(host);
+  const row = mount.querySelector('.titles-row');
+  const h = row ? row.getBoundingClientRect().height : TITLES_ROW_H_PX;
+  document.body.removeChild(host);
+  return Math.max(TITLES_ROW_H_PX, Math.ceil(h));
+}
+
+/**
+ * Print stylesheet — screen and print share the same A4 geometry.
+ */
+export function diaryPrintCss() {
+  return `
+    @page {
+      size: A4;
+      margin: ${MARGIN_MM}mm;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #fff;
+    }
+    .diary-print-page {
+      width: ${CONTENT_W_MM}mm;
+      height: ${CONTENT_H_MM}mm;
+      box-sizing: border-box;
+      font-family: 'Noto Sans Devanagari', Arial, sans-serif;
+      font-size: ${FONT_PX}px;
+      line-height: ${LINE_HEIGHT_PX}px;
+      color: #000;
+      page-break-after: always;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .diary-print-page:last-child {
+      page-break-after: auto;
+    }
+    ${diaryHeaderPrintCssFragment()}
     .diary-print-table {
       flex: 0 0 auto;
       width: 100%;
@@ -340,7 +459,8 @@ export function diaryPrintCss() {
       font-weight: 700;
       text-align: center;
       line-height: 1.3;
-      height: ${TITLES_ROW_H_PX}px;
+      min-height: ${TITLES_ROW_H_PX}px;
+      height: auto;
       padding: 6px 8px;
       box-sizing: border-box;
     }
@@ -360,7 +480,11 @@ export function diaryPrintCss() {
 
 function printHeaderHtml(header) {
   const dotted = (k, cls = '') => {
-    const v = header[k];
+    let v = header[k];
+    if (k === 'fir_date' && typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v.trim())) {
+      const [y, m, d] = v.trim().split('-');
+      v = `${d}/${m}/${y}`;
+    }
     const text = v && String(v).trim() ? escapeHtml(v) : '&nbsp;';
     const className = cls ? `dotted ${cls}` : 'dotted';
     return `<span class="${className}">${text}</span>`;
@@ -387,11 +511,10 @@ function printHeaderHtml(header) {
         प्रथम इत्तिला रिपोर्ट सं० ${dotted('fir_number', 'fir-no')}
         तिथि ${dotted('fir_date')}
       </div>
-      <div class="meta-row">
+      <div class="meta-row meta-row-flow">
         घटना की तिथि और स्थान ${dotted('event_date_place', 'wide')}
         धारा ${dotted('sections', 'wide')}
       </div>
-      <div class="divider"></div>
     </div>
   `;
 }
@@ -401,21 +524,24 @@ function printHeaderHtml(header) {
  */
 export function diaryPagesHtml(model) {
   const m = normalizeDiaryModel(model);
-  return m.pages.map((page, i) => {
+  return m.pages.map((page) => {
     const h = page.hasHeader;
-    const boxH = boxHeightPx(h) + cellPadBottomPx(h);
+    const headerBlockH = h ? measureHeaderHeightPx(page.header) : HEADER_BLOCK_H_PX;
+    const titlesRowH = h ? measureTitlesRowHeightPx(page.header.investigation_record) : TITLES_ROW_H_PX;
+    const boxH = boxHeightPx(h, headerBlockH, titlesRowH)
+      + cellPadBottomPx(h, headerBlockH, titlesRowH);
     const titles = h ? `
       <tr>
         <th class="left-col">किन तिथि को (समय सहित) कार्रवाई की गई, और किन-किन स्थानों को जाकर देखा गया</th>
         <th class="right-col">
           अन्वेषण का अभिलेख
-          ${m.header.investigation_record
-            ? `<div>(${escapeHtml(m.header.investigation_record)})</div>`
+          ${page.header.investigation_record
+            ? `<div>(${escapeHtml(page.header.investigation_record)})</div>`
             : ''}
         </th>
       </tr>
     ` : '';
-    const headerBlock = h ? printHeaderHtml(m.header) : '';
+    const headerBlock = h ? printHeaderHtml(page.header) : '';
     return `
       <div class="diary-print-page${h ? ' has-header' : ' no-header'}">
         ${headerBlock}
@@ -470,8 +596,6 @@ function splitOverflow(textarea) {
   return { keep: full.slice(0, cut), spill: full.slice(cut) };
 }
 
-const CONTENT_W_PX = mmToPx(CONTENT_W_MM);
-
 /**
  * Width of a diary column's writing area. Measured from a live page when one
  * exists so the mirror wraps exactly like the on-screen cell (and therefore
@@ -489,10 +613,19 @@ function columnWidthPx(col) {
  * @param {string} text
  * @param {'left'|'right'} col
  * @param {boolean} hasHeader
+ * @param {number} [headerBlockH]
+ * @param {number} [titlesRowH]
  */
-function splitTextToFit(text, col, hasHeader) {
+function splitTextToFit(
+  text,
+  col,
+  hasHeader,
+  headerBlockH = HEADER_BLOCK_H_PX,
+  titlesRowH = TITLES_ROW_H_PX,
+) {
   if (!text) return { keep: '', spill: '' };
-  const boxH = boxHeightPx(hasHeader) + cellPadBottomPx(hasHeader);
+  const boxH = boxHeightPx(hasHeader, headerBlockH, titlesRowH)
+    + cellPadBottomPx(hasHeader, headerBlockH, titlesRowH);
   const colW = columnWidthPx(col);
 
   const ta = document.createElement('textarea');
@@ -539,6 +672,10 @@ export function initDiarySheet(container, template, hooks) {
   let model = emptyModel();
   let focusedPage = 0;
   let spilling = false;
+  /** Cached measured header block height for hasHeader pages */
+  let cachedHeaderBlockH = HEADER_BLOCK_H_PX;
+  /** Cached measured titles-row height (grows when left col wraps) */
+  let cachedTitlesRowH = TITLES_ROW_H_PX;
 
   function notify() {
     hooks.onChange?.();
@@ -549,31 +686,72 @@ export function initDiarySheet(container, template, hooks) {
     hooks.onPageFocus?.(index + 1, model.pages.length);
   }
 
-  function syncHeaderInputs(sourceEl) {
+  function refreshHeaderBlockH(pageIndex = 0) {
+    const p = model.pages[pageIndex] || model.pages.find((p) => p.hasHeader);
+    const h = p?.header || emptyHeader();
+    cachedHeaderBlockH = measureHeaderHeightPx(h);
+    return cachedHeaderBlockH;
+  }
+
+  function refreshTitlesRowH(pageEl, pageIndex = 0) {
+    const titlesRow = pageEl?.querySelector?.('.diary-titles-row');
+    if (titlesRow && !titlesRow.hidden) {
+      cachedTitlesRowH = Math.max(
+        TITLES_ROW_H_PX,
+        Math.ceil(titlesRow.getBoundingClientRect().height),
+      );
+    } else {
+      const p = model.pages[pageIndex] || model.pages.find((p) => p.hasHeader);
+      const invRecord = p?.header?.investigation_record || '';
+      cachedTitlesRowH = measureTitlesRowHeightPx(invRecord);
+    }
+    return cachedTitlesRowH;
+  }
+
+  /** @param {HTMLElement} el */
+  function isFlowField(el) {
+    return el?.classList?.contains('diary-dotted-flow');
+  }
+
+  /** @param {HTMLElement} el */
+  function getHeaderFieldValue(el) {
+    if (!el) return '';
+    if (isFlowField(el) || el.isContentEditable) {
+      return (el.textContent || '').replace(/\u00a0/g, ' ');
+    }
+    return el.value || '';
+  }
+
+  /** @param {HTMLElement} el @param {string} value */
+  function setHeaderFieldValue(el, value) {
+    if (!el) return;
+    if (isFlowField(el) || el.isContentEditable) {
+      el.textContent = value || '';
+    } else {
+      el.value = value || '';
+    }
+  }
+
+  function syncHeaderInputs(sourceEl, pageIndex) {
     const field = sourceEl.dataset.field;
     if (!HEADER_FIELDS.includes(field)) return;
-    const value = sourceEl.value;
-    model.header[field] = value;
-    container.querySelectorAll(`[data-field="${field}"]`).forEach((el) => {
-      if (el !== sourceEl) el.value = value;
-    });
+    const value = getHeaderFieldValue(sourceEl);
+    if (model.pages[pageIndex] && model.pages[pageIndex].header) {
+      model.pages[pageIndex].header[field] = value;
+    }
   }
 
   function readModelFromDom() {
-    const firstHeader = container.querySelector('.diary-page[data-has-header="true"]');
-    const headerSrc = firstHeader || container.querySelector('.diary-page');
-    if (headerSrc) {
-      HEADER_FIELDS.forEach((k) => {
-        const el = headerSrc.querySelector(`[data-field="${k}"]`);
-        if (el) model.header[k] = el.value || '';
-      });
-    }
-    const inv = container.querySelector('[data-field="investigation_record"]');
-    if (inv) model.header.investigation_record = inv.value || '';
-
     container.querySelectorAll('.diary-page').forEach((pageEl, i) => {
       if (!model.pages[i]) return;
       model.pages[i].hasHeader = pageEl.dataset.hasHeader === 'true';
+      if (model.pages[i].hasHeader) {
+        if (!model.pages[i].header) model.pages[i].header = emptyHeader();
+        HEADER_FIELDS.forEach((k) => {
+          const el = pageEl.querySelector(`[data-field="${k}"]`);
+          if (el) model.pages[i].header[k] = getHeaderFieldValue(el);
+        });
+      }
       const left = pageEl.querySelector('[data-col="left"]');
       const right = pageEl.querySelector('[data-col="right"]');
       if (left) model.pages[i].left = left.value;
@@ -582,7 +760,10 @@ export function initDiarySheet(container, template, hooks) {
   }
 
   function applyBoxHeights(pageEl, hasHeader) {
-    const h = boxHeightPx(hasHeader) + cellPadBottomPx(hasHeader);
+    const headerH = hasHeader ? cachedHeaderBlockH : HEADER_BLOCK_H_PX;
+    const titlesH = hasHeader ? cachedTitlesRowH : TITLES_ROW_H_PX;
+    const h = boxHeightPx(hasHeader, headerH, titlesH)
+      + cellPadBottomPx(hasHeader, headerH, titlesH);
     pageEl.style.setProperty('--diary-box-h', `${h}px`);
     pageEl.querySelectorAll('.diary-cell').forEach((cell) => {
       cell.style.height = `${h}px`;
@@ -590,6 +771,15 @@ export function initDiarySheet(container, template, hooks) {
     pageEl.querySelectorAll('[data-col]').forEach((ta) => {
       ta.style.height = '';
     });
+  }
+
+  function onHeaderGeometryChange(pageEl, pageIndex) {
+    refreshHeaderBlockH(pageIndex);
+    refreshTitlesRowH(pageEl, pageIndex);
+    if (model.pages[pageIndex]?.hasHeader) {
+      applyBoxHeights(pageEl, true);
+      checkOverflow(pageEl, pageIndex);
+    }
   }
 
   /**
@@ -607,10 +797,19 @@ export function initDiarySheet(container, template, hooks) {
     let i = pageIndex;
     let didSpill = false;
     let iterations = 0;
+    const headerH = cachedHeaderBlockH;
+    const titlesH = cachedTitlesRowH;
 
     while (i < model.pages.length && iterations++ < 50) {
       const text = model.pages[i][col] || '';
-      const { keep, spill } = splitTextToFit(text, col, model.pages[i].hasHeader);
+      const pageHasHeader = model.pages[i].hasHeader;
+      const { keep, spill } = splitTextToFit(
+        text,
+        col,
+        pageHasHeader,
+        pageHasHeader ? headerH : HEADER_BLOCK_H_PX,
+        pageHasHeader ? titlesH : TITLES_ROW_H_PX,
+      );
       if (!spill) break;
       didSpill = true;
       model.pages[i][col] = keep;
@@ -666,17 +865,58 @@ export function initDiarySheet(container, template, hooks) {
   function wirePage(pageEl, pageIndex) {
     applyBoxHeights(pageEl, model.pages[pageIndex].hasHeader);
 
-    pageEl.querySelectorAll('input[data-field], textarea[data-field], textarea[data-col]').forEach((el) => {
+    pageEl.querySelectorAll(
+      'input[data-field], textarea[data-field], textarea[data-col], [data-field].diary-dotted-flow',
+    ).forEach((el) => {
       hooks.onAttachField?.(el);
     });
 
-    pageEl.querySelectorAll('input[data-field]').forEach((el) => {
+    pageEl.querySelectorAll('input[data-field], textarea[data-field]').forEach((el) => {
       el.addEventListener('input', () => {
-        syncHeaderInputs(el);
+        syncHeaderInputs(el, pageIndex);
         notify();
       });
       el.addEventListener('change', () => {
-        syncHeaderInputs(el);
+        syncHeaderInputs(el, pageIndex);
+        notify();
+      });
+    });
+
+    pageEl.querySelectorAll('[data-field].diary-dotted-flow').forEach((el) => {
+      el.addEventListener('input', () => {
+        syncHeaderInputs(el, pageIndex);
+        onHeaderGeometryChange(pageEl, pageIndex);
+        notify();
+      });
+      el.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+        }
+      });
+      el.addEventListener('blur', () => {
+        if (!(el.textContent || '').trim()) {
+          el.textContent = '';
+        }
+      });
+      el.addEventListener('paste', (e) => {
+        e.preventDefault();
+        const text = (e.clipboardData || window.clipboardData)?.getData('text/plain') || '';
+        const clean = text.replace(/\r?\n+/g, ' ');
+        if (document.queryCommandSupported?.('insertText')) {
+          document.execCommand('insertText', false, clean);
+        } else {
+          const sel = window.getSelection();
+          if (sel?.rangeCount) {
+            const range = sel.getRangeAt(0);
+            range.deleteContents();
+            range.insertNode(document.createTextNode(clean));
+            range.collapse(false);
+            sel.removeAllRanges();
+            sel.addRange(range);
+          }
+        }
+        syncHeaderInputs(el, pageIndex);
+        onHeaderGeometryChange(pageEl, pageIndex);
         notify();
       });
     });
@@ -698,7 +938,11 @@ export function initDiarySheet(container, template, hooks) {
     const toggle = pageEl.querySelector('.diary-header-toggle');
     if (toggle) {
       toggle.addEventListener('click', () => {
-        model.pages[pageIndex].hasHeader = !model.pages[pageIndex].hasHeader;
+        const nextState = !model.pages[pageIndex].hasHeader;
+        model.pages[pageIndex].hasHeader = nextState;
+        if (nextState && !model.pages[pageIndex].header) {
+          model.pages[pageIndex].header = getPrefilledHeader(pageIndex);
+        }
         render({ skipRead: true });
         notify();
       });
@@ -708,6 +952,7 @@ export function initDiarySheet(container, template, hooks) {
     if (delBtn) {
       delBtn.addEventListener('click', () => {
         if (model.pages.length <= 1) return;
+        if (!confirm('Delete this page permanently? This cannot be undone.')) return;
         model.pages.splice(pageIndex, 1);
         render({ skipRead: true });
         notify();
@@ -730,7 +975,7 @@ export function initDiarySheet(container, template, hooks) {
 
     HEADER_FIELDS.forEach((k) => {
       const el = pageEl.querySelector(`[data-field="${k}"]`);
-      if (el) el.value = model.header[k] || '';
+      if (el) setHeaderFieldValue(el, page.header ? page.header[k] : '');
     });
 
     const left = pageEl.querySelector('[data-col="left"]');
@@ -764,14 +1009,21 @@ export function initDiarySheet(container, template, hooks) {
     }
     container.innerHTML = '';
     container.style.setProperty('--diary-left-col', `${LEFT_COL_PCT}%`);
+    container.style.setProperty('--diary-left-col', `${LEFT_COL_PCT}%`);
 
     model.pages.forEach((page, i) => {
       const pageEl = buildPageEl(page, i);
       container.appendChild(pageEl);
       wirePage(pageEl, i);
+      applyBoxHeights(pageEl, page.hasHeader);
       if (!spilling) {
         requestAnimationFrame(() => {
           if (!pageEl.isConnected) return;
+          if (page.hasHeader) {
+            refreshHeaderBlockH(i);
+            refreshTitlesRowH(pageEl, i);
+            applyBoxHeights(pageEl, true);
+          }
           checkOverflow(pageEl, i);
         });
       }
@@ -792,10 +1044,33 @@ export function initDiarySheet(container, template, hooks) {
     notifyFocus(Math.min(focusedPage, model.pages.length - 1));
   }
 
+  function getPrefilledHeader(startIndex) {
+    let srcHeader = null;
+    for (let i = startIndex - 1; i >= 0; i--) {
+      if (model.pages[i].hasHeader && model.pages[i].header) {
+        srcHeader = model.pages[i].header;
+        break;
+      }
+    }
+    if (!srcHeader) return emptyHeader();
+    
+    const newHeader = { ...srcHeader };
+    const num = parseInt(newHeader.case_diary_no, 10);
+    if (!isNaN(num)) {
+      newHeader.case_diary_no = String(num + 1);
+    }
+    return newHeader;
+  }
+
   function addPage(hasHeader) {
     if (container.dataset.adding === '1') return;
     container.dataset.adding = '1';
-    model.pages.push({ hasHeader: Boolean(hasHeader), left: '', right: '' });
+    
+    let header = null;
+    if (hasHeader) {
+      header = getPrefilledHeader(model.pages.length);
+    }
+    model.pages.push({ hasHeader: Boolean(hasHeader), header, left: '', right: '' });
     render({ skipRead: true });
     container.dataset.adding = '0';
   }
@@ -809,8 +1084,7 @@ export function initDiarySheet(container, template, hooks) {
   function getModel() {
     readModelFromDom();
     return {
-      header: { ...model.header },
-      pages: model.pages.map((p) => ({ ...p })),
+      pages: model.pages.map((p) => ({ ...p, header: p.header ? { ...p.header } : null })),
     };
   }
 

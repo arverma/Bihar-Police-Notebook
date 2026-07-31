@@ -181,13 +181,18 @@
                     <span class="diary-label">तिथि</span>
                     <input class="diary-dotted diary-dotted-date" data-field="fir_date" type="date">
                 </div>
-                <div class="diary-meta-row">
+                <div class="diary-meta-row diary-meta-row-flow">
                     <span class="diary-label">घटना की तिथि और स्थान</span>
-                    <input class="diary-dotted diary-dotted-wide" data-field="event_date_place" placeholder="">
+                    <span class="diary-dotted diary-dotted-wide diary-dotted-flow"
+                        contenteditable="true" role="textbox" tabindex="0"
+                        data-field="event_date_place"
+                        aria-label="घटना की तिथि और स्थान"></span>
                     <span class="diary-label">धारा</span>
-                    <input class="diary-dotted diary-dotted-wide" data-field="sections" placeholder="">
+                    <span class="diary-dotted diary-dotted-wide diary-dotted-flow"
+                        contenteditable="true" role="textbox" tabindex="0"
+                        data-field="sections"
+                        aria-label="धारा"></span>
                 </div>
-                <div class="diary-header-divider"></div>
             </div>
 
             <table class="fir-table">

@@ -148,18 +148,6 @@ export function previewText(doc) {
 }
 
 /**
- * Get letters and diaries combined (live only).
- * @returns {Promise<object[]>}
- */
-export async function getAllDocuments() {
-    const [letters, diaries] = await Promise.all([
-        getDocuments('letter'),
-        getDocuments('diary'),
-    ]);
-    return [...letters, ...diaries];
-}
-
-/**
  * Whether a doc needs a Drive upload.
  * @param {object} doc
  * @returns {boolean}
@@ -262,6 +250,37 @@ export async function saveDocument(type, filename, content) {
 }
 
 /**
+ * Soft-delete a document by id (for Drive tombstone sync).
+ * @param {'letter'|'diary'} type
+ * @param {number} id
+ * @returns {Promise<object|null>} deleted row or null
+ */
+export async function softDeleteDocumentById(type, id) {
+    const db = await openDb();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(type, 'readwrite');
+        const store = tx.objectStore(type);
+        const findReq = store.get(id);
+
+        findReq.onsuccess = () => {
+            const row = findReq.result;
+            if (!row || row.deletedAt) {
+                resolve(null);
+                return;
+            }
+            const now = new Date().toISOString();
+            row.deletedAt = now;
+            row.updated_at = now;
+            row.syncError = null;
+            const putReq = store.put(row);
+            putReq.onsuccess = () => resolve({ ...row, type, _id: String(row.id) });
+            putReq.onerror = () => reject(putReq.error);
+        };
+        findReq.onerror = () => reject(findReq.error);
+    });
+}
+
+/**
  * Soft-delete a document by filename (for Drive tombstone sync).
  * @param {'letter'|'diary'} type
  * @param {string} filename
@@ -312,13 +331,17 @@ export async function hardDeleteById(type, id) {
 }
 
 /**
- * Delete a document by filename (soft-delete when sync fields exist).
+ * Delete a document by filename or id (soft-delete when sync fields exist).
  * @param {'letter'|'diary'} type
- * @param {string} filename
+ * @param {string|number} filenameOrId
  * @returns {Promise<boolean>}
  */
-export async function deleteDocument(type, filename) {
-    const row = await softDeleteDocument(type, filename);
+export async function deleteDocument(type, filenameOrId) {
+    if (typeof filenameOrId === 'number') {
+        const row = await softDeleteDocumentById(type, filenameOrId);
+        return Boolean(row);
+    }
+    const row = await softDeleteDocument(type, filenameOrId);
     return Boolean(row);
 }
 
@@ -527,32 +550,6 @@ export async function upsertFromRemote(remote) {
             }, type));
         };
         addReq.onerror = () => reject(addReq.error);
-    });
-}
-
-/**
- * Load full document by filename (for opening from history).
- * @param {'letter'|'diary'} type
- * @param {string} filename
- * @returns {Promise<object|null>}
- */
-export async function getDocumentByFilename(type, filename) {
-    const db = await openDb();
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(type, 'readonly');
-        const store = tx.objectStore(type);
-        const idx = store.index('filename');
-        const req = idx.getAll(filename);
-        req.onsuccess = () => {
-            const matches = (req.result || []).filter((d) => !d.deletedAt);
-            const doc = matches[0];
-            if (!doc) {
-                resolve(null);
-                return;
-            }
-            resolve(normalizeDoc(doc, type));
-        };
-        req.onerror = () => reject(req.error);
     });
 }
 

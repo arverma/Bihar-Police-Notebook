@@ -333,14 +333,6 @@ export async function pushDocById(type, id) {
     });
 }
 
-/**
- * @param {object} doc
- */
-export async function pushDoc(doc) {
-    if (!doc?.id || !doc?.type) return { ok: false, reason: 'invalid' };
-    return pushDocById(doc.type, doc.id);
-}
-
 export async function pushPending(type) {
     return enqueue(async () => {
         if (!isConnected()) return { ok: false, reason: 'disconnected' };
@@ -486,20 +478,4 @@ export async function syncAll() {
         push,
         error: push.error || pull.error || null,
     };
-}
-
-/**
- * @param {'letter'|'diary'} type
- * @param {number} id
- */
-export async function backupOne(type, id) {
-    return pushDocById(type, id);
-}
-
-/**
- * Backup all docs of the active template (letters or diaries).
- * @param {'letter'|'diary'} type
- */
-export async function backupVisibleType(type) {
-    return pushPending(type);
 }

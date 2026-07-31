@@ -4,6 +4,7 @@ import {
     getDocuments,
     saveDocumentById,
     softDeleteDocument,
+    softDeleteDocumentById,
     hardDeleteById,
     previewText,
     backupStatus,
@@ -353,6 +354,74 @@ function notifyLetterChanged(el) {
     el.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
+/** @param {HTMLElement} el */
+function isEditableTextField(el) {
+    return Boolean(
+        el
+        && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable
+            || el.getAttribute?.('contenteditable') === 'true'),
+    );
+}
+
+/** @param {HTMLElement} el */
+function getEditableText(el) {
+    if (el.isContentEditable || el.getAttribute?.('contenteditable') === 'true') {
+        return (el.textContent || '').replace(/\u00a0/g, ' ');
+    }
+    return el.value || '';
+}
+
+/** @param {HTMLElement} el @param {string} text */
+function setEditableText(el, text) {
+    if (el.isContentEditable || el.getAttribute?.('contenteditable') === 'true') {
+        el.textContent = text;
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        return;
+    }
+    el.value = text;
+}
+
+/** @param {HTMLElement} el */
+function getEditableCaret(el) {
+    if (!(el.isContentEditable || el.getAttribute?.('contenteditable') === 'true')) {
+        return el.selectionStart ?? getEditableText(el).length;
+    }
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || !el.contains(sel.anchorNode)) {
+        return getEditableText(el).length;
+    }
+    const range = sel.getRangeAt(0);
+    const pre = range.cloneRange();
+    pre.selectNodeContents(el);
+    pre.setEnd(range.startContainer, range.startOffset);
+    return pre.toString().length;
+}
+
+/** @param {HTMLElement} el @param {number} offset */
+function setEditableCaret(el, offset) {
+    if (!(el.isContentEditable || el.getAttribute?.('contenteditable') === 'true')) {
+        el.selectionStart = el.selectionEnd = offset;
+        return;
+    }
+    const text = getEditableText(el);
+    const clamped = Math.max(0, Math.min(offset, text.length));
+    if (!el.firstChild || el.firstChild.nodeType !== Node.TEXT_NODE) {
+        el.textContent = text;
+    }
+    const textNode = el.firstChild;
+    if (!textNode) {
+        el.focus();
+        return;
+    }
+    const range = document.createRange();
+    const sel = window.getSelection();
+    const off = Math.min(clamped, textNode.textContent?.length || 0);
+    range.setStart(textNode, off);
+    range.collapse(true);
+    sel?.removeAllRanges();
+    sel?.addRange(range);
+}
+
 function attachTransliteration(el) {
     el.addEventListener('input', function () {
         if (el.closest('.letter-page') || el.closest('.editor-diary')) {
@@ -367,8 +436,8 @@ function attachTransliteration(el) {
             return;
         }
         clearTimeout(typingTimer);
-        const value = el.value;
-        const cursor = el.selectionStart;
+        const value = getEditableText(el);
+        const cursor = getEditableCaret(el);
         const [start, end] = getWordBoundaries(value, Math.max(0, cursor - 1));
         const currentWord = value.slice(start, end);
 
@@ -389,14 +458,14 @@ function attachTransliteration(el) {
         if (e.key !== ' ') return;
         if (!isTransliterationEnabled()) return;
         e.preventDefault();
-        const value = el.value;
-        const cursor = el.selectionStart;
+        const value = getEditableText(el);
+        const cursor = getEditableCaret(el);
         const [start, end] = getWordBoundaries(value, cursor - 1);
         const word = value.slice(start, end);
 
         if (!word.trim()) {
-            el.value = value.slice(0, cursor) + ' ' + value.slice(cursor);
-            el.selectionStart = el.selectionEnd = cursor + 1;
+            setEditableText(el, value.slice(0, cursor) + ' ' + value.slice(cursor));
+            setEditableCaret(el, cursor + 1);
             notifyLetterChanged(el);
             return;
         }
@@ -405,11 +474,11 @@ function attachTransliteration(el) {
         if (suggestions && suggestions.length > 0) {
             const suggestion = suggestions[0];
             const newValue = value.slice(0, start) + suggestion + ' ' + value.slice(end);
-            el.value = newValue;
-            el.selectionStart = el.selectionEnd = start + suggestion.length + 1;
+            setEditableText(el, newValue);
+            setEditableCaret(el, start + suggestion.length + 1);
         } else {
-            el.value = value.slice(0, cursor) + ' ' + value.slice(cursor);
-            el.selectionStart = el.selectionEnd = cursor + 1;
+            setEditableText(el, value.slice(0, cursor) + ' ' + value.slice(cursor));
+            setEditableCaret(el, cursor + 1);
         }
         suggestionsBox.style.display = 'none';
         notifyLetterChanged(el);
@@ -417,8 +486,8 @@ function attachTransliteration(el) {
 
     el.addEventListener('click', async function () {
         if (!isTransliterationEnabled()) return;
-        const value = el.value;
-        const cursor = el.selectionStart;
+        const value = getEditableText(el);
+        const cursor = getEditableCaret(el);
         const [start, end] = getWordBoundaries(value, cursor);
         const word = value.slice(start, end);
 
@@ -432,10 +501,10 @@ function attachTransliteration(el) {
 }
 
 document.addEventListener('click', function (e) {
-    const tag = e.target.tagName;
-    if (!suggestionsBox.contains(e.target) && tag !== 'INPUT' && tag !== 'TEXTAREA') {
-        suggestionsBox.style.display = 'none';
-    }
+    const t = e.target;
+    if (suggestionsBox.contains(t)) return;
+    if (t instanceof HTMLElement && isEditableTextField(t)) return;
+    suggestionsBox.style.display = 'none';
 });
 
 function showSuggestions(suggestions, wordStart, wordEnd, targetEl) {
@@ -445,44 +514,47 @@ function showSuggestions(suggestions, wordStart, wordEnd, targetEl) {
         return;
     }
 
+    const scale = pageScale?.getScale() || 1;
     const inputRect = targetEl.getBoundingClientRect();
     const style = window.getComputedStyle(targetEl);
-    const lineHeight = parseInt(style.lineHeight) || 24;
-    const paddingTop = parseInt(style.paddingTop) || 0;
-    const paddingLeft = parseInt(style.paddingLeft) || 0;
-    const textBeforeWord = targetEl.value.substring(0, wordStart);
+    const lineHeight = (parseInt(style.lineHeight) || 24) * scale;
+    const paddingTop = (parseInt(style.paddingTop) || 0) * scale;
+    const paddingLeft = (parseInt(style.paddingLeft) || 0) * scale;
+    const value = getEditableText(targetEl);
+    const textBeforeWord = value.substring(0, wordStart);
     const lines = textBeforeWord.split('\n').length - 1;
     const currentLineText = textBeforeWord.split('\n').pop();
-    const textWidth = getTextWidth(currentLineText, targetEl);
+    const textWidth = getTextWidth(currentLineText, targetEl) * scale;
 
     suggestionsBox.style.position = 'fixed';
-    suggestionsBox.style.left = (inputRect.left + paddingLeft + Math.min(textWidth, targetEl.offsetWidth - paddingLeft - 200)) + 'px';
-    suggestionsBox.style.top = (inputRect.top + paddingTop + (lines + 1) * lineHeight + 5 - targetEl.scrollTop) + 'px';
+    suggestionsBox.style.left = (inputRect.left + paddingLeft + Math.min(textWidth, Math.max(40 * scale, inputRect.width - paddingLeft - 200 * scale))) + 'px';
+    suggestionsBox.style.top = (inputRect.top + paddingTop + (lines + 1) * lineHeight + 5 - ((targetEl.scrollTop || 0) * scale)) + 'px';
 
     suggestions.forEach((suggestion) => {
         const div = document.createElement('div');
         div.className = 'suggestion';
         div.textContent = suggestion;
         div.onclick = () => {
-            const value = targetEl.value;
-            targetEl.value = value.slice(0, wordStart) + suggestion + value.slice(wordEnd);
-            targetEl.selectionStart = targetEl.selectionEnd = wordStart + suggestion.length;
+            const cur = getEditableText(targetEl);
+            setEditableText(targetEl, cur.slice(0, wordStart) + suggestion + cur.slice(wordEnd));
+            setEditableCaret(targetEl, wordStart + suggestion.length);
             suggestionsBox.style.display = 'none';
             notifyLetterChanged(targetEl);
+            targetEl.dispatchEvent(new Event('input', { bubbles: true }));
         };
         div.title = `Insert “${suggestion}”`;
         suggestionsBox.appendChild(div);
     });
-
     suggestionsBox.style.display = 'block';
 
     const boxRect = suggestionsBox.getBoundingClientRect();
     const headerH = chromeHeaderHeight();
+    const scrollTop = targetEl.scrollTop || 0;
     if (boxRect.right > window.innerWidth) {
         suggestionsBox.style.left = (window.innerWidth - boxRect.width - 10) + 'px';
     }
     if (boxRect.bottom > window.innerHeight) {
-        suggestionsBox.style.top = (inputRect.top + paddingTop + lines * lineHeight - boxRect.height - 5 - targetEl.scrollTop) + 'px';
+        suggestionsBox.style.top = (inputRect.top + paddingTop + lines * lineHeight - boxRect.height - 5 - scrollTop) + 'px';
     }
     if (parseInt(suggestionsBox.style.top, 10) < headerH) {
         suggestionsBox.style.top = headerH + 'px';
@@ -725,7 +797,7 @@ function initApp() {
             const empty = document.createElement('div');
             empty.className = 'history-empty';
             const kind = getActiveTemplate() === 'diary' ? 'diaries' : 'letters';
-            empty.innerHTML = `<strong>No ${kind} yet</strong><span>Create one with the + button in the header.</span>`;
+            empty.innerHTML = `<strong>No ${kind} yet</strong><span>Create one with the + button above.</span>`;
             historyList.appendChild(empty);
             return;
         }
@@ -845,7 +917,9 @@ function initApp() {
                 item.querySelector('.delete-btn').onclick = async (e) => {
                     e.stopPropagation();
                     if (!confirm(`Delete "${doc.filename}" permanently? This cannot be undone.`)) return;
-                    const row = await softDeleteDocument(doc.type, doc.filename);
+                    const row = doc.id != null
+                        ? await softDeleteDocumentById(doc.type, doc.id)
+                        : await softDeleteDocument(doc.type, doc.filename);
                     if (!row) { alert('Failed to delete document.'); return; }
                     if (currentDoc.id != null && currentDoc.id === doc.id) {
                         startNewDocument(doc.type);
@@ -911,7 +985,7 @@ function initApp() {
         diarySheet = initDiarySheet(diaryPagesEl, diaryTemplate, {
             onChange: scheduleSave,
             onAttachField: (el) => {
-                if (el.matches('input:not([type="date"]), textarea')) {
+                if (el.matches('input:not([type="date"]), textarea, [data-field].diary-dotted-flow')) {
                     attachTransliteration(el);
                 }
                 if (el.type === 'date') {
