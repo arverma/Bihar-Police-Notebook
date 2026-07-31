@@ -68,6 +68,7 @@ export const HEADER_FIELDS = [
 export function emptyHeader() {
   const h = {};
   HEADER_FIELDS.forEach((k) => { h[k] = ''; });
+  h.rule_no = '164';
   return h;
 }
 
@@ -513,7 +514,7 @@ function printHeaderHtml(header) {
         <div class="title-line">
           केस-दैनिकी सं० ${dotted('case_diary_no')}
         </div>
-        <div class="rule">(नियम-${dotted('rule_no', 'narrow')})</div>
+        <div class="rule">(नियम-164)</div>
         <div class="against-line">
           ${dotted('against_1', 'against')} बनाम ${dotted('against_2', 'against')}
         </div>
