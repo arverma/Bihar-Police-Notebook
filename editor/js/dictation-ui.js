@@ -349,7 +349,16 @@ export function initDictation(hooks) {
     function withLeadingSpace(text) {
         const t = hooks.getTarget();
         if (!t?.el) return text;
-        const before = t.el.value.slice(Math.max(0, t.start - 1), t.start);
+        
+        let before = '';
+        if (t.field) {
+            before = t.field.getText().slice(Math.max(0, t.start - 1), t.start);
+        } else if (t.el.value !== undefined) {
+            before = t.el.value.slice(Math.max(0, t.start - 1), t.start);
+        } else {
+            before = t.el.textContent?.slice(Math.max(0, t.start - 1), t.start) || '';
+        }
+
         if (!before || /\s/.test(before) || text.startsWith('\n')) {
             return text;
         }
