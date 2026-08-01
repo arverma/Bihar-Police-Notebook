@@ -11,6 +11,21 @@ const DEV_DIGITS = '०१२३४५६७८९';
 /** Pure number tokens (digits + common separators) — do not transliterate. */
 const PURE_NUMBER_RE = /^[\d.,\-\/]+$/;
 
+/** Shift-typed English (any A–Z) — keep as-is for diary acronyms like IPC, FIR. */
+const HAS_LATIN_UPPER_RE = /[A-Z]/;
+
+/**
+ * @param {string} word
+ * @returns {boolean}
+ */
+export function shouldSkipTransliteration(word) {
+    const key = String(word ?? '').trim();
+    if (!key) return true;
+    if (PURE_NUMBER_RE.test(key)) return true;
+    if (HAS_LATIN_UPPER_RE.test(key)) return true;
+    return false;
+}
+
 /**
  * @param {string} s
  * @returns {string}
@@ -27,7 +42,7 @@ function toAsciiDigits(s) {
 export async function fetchSuggestions(word) {
     if (!word || !word.trim()) return [];
     const key = word.trim();
-    if (PURE_NUMBER_RE.test(key)) return [];
+    if (shouldSkipTransliteration(key)) return [];
     if (cache[key]) return cache[key];
 
     try {

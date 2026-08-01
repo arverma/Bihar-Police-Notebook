@@ -46,7 +46,8 @@
 /* Mobile keyboards already expose a mic — hide in-app dictation chrome */
 @media (max-width: 768px) {
     .dictation-fab,
-    .dictation-interim {
+    .dictation-interim,
+    .punctuation-panel {
         display: none !important;
     }
 

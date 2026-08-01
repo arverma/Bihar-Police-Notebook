@@ -261,24 +261,12 @@ export function setActiveQuill(quill) {
   syncToolbarUi();
 }
 
-export function getActiveQuill() {
-  return activeQuill;
-}
-
 /**
  * @param {HTMLElement} editorRoot .ql-editor
  * @returns {object | null}
  */
 export function getFieldForEditor(editorRoot) {
   return fieldByEditor.get(editorRoot) || null;
-}
-
-/**
- * @param {HTMLElement} host
- * @returns {object | null}
- */
-export function getFieldForHost(host) {
-  return quillByHost.get(host) || null;
 }
 
 /**

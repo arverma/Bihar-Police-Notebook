@@ -18,6 +18,7 @@ Architecture and how the pieces fit together. For everyday use (opening the app,
 | [Local storage](components/storage.md) | Autosave in IndexedDB |
 | [Drive backup](components/drive-backup.md) | Optional Google Drive sync |
 | [Hinglish typing](components/typing.md) | Transliteration suggestions |
+| Punctuation Panel | Draggable panel with common Hindi/English punctuation |
 | [Dictation](components/dictation.md) | In-app microphone (desktop/tablet) |
 | [Page preview](components/page-preview.md) | On-screen fit / pinch zoom |
 | [Deploy](components/deploy.md) | GitHub Pages and local preview |

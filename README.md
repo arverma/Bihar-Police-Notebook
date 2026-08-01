@@ -14,7 +14,7 @@
 - Keep a **history** of documents on this computer or phone
 - **Print** or **Save as PDF** from your browser
 - Optionally **back up to Google Drive** (only when you connect and sync)
-- On a computer: **Hinglish suggestions** and an optional **speak-to-type** microphone
+- On a computer: **Hinglish suggestions**, **Punctuation Panel**, and an optional **speak-to-type** microphone
 - On a phone: use the **keyboard** (including its mic) — the in-app mic is hidden on purpose
 
 ## How to open it

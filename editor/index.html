@@ -283,6 +283,21 @@
         <div class="dictation-sheet-body"></div>
     </dialog>
 
+    <aside id="punctuationPanel" class="punctuation-panel">
+        <button id="punctuationToggle" class="punctuation-toggle" title="विराम चिह्न (Punctuation)">
+            <i class="fas fa-quote-right"></i>
+        </button>
+        <div class="punctuation-content">
+            <div id="punctuationGrid" class="punctuation-grid"></div>
+            <div class="punctuation-footer">
+                <button id="punctuationClose" class="punctuation-close" title="Close" aria-label="Close">
+                    <i class="fas fa-times"></i>
+                </button>
+                <div id="punctuationTooltip" class="punctuation-tooltip">Hover over a mark</div>
+            </div>
+        </div>
+    </aside>
+
     <div id="suggestions" class="suggestions-box"></div>
     <script src="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js"></script>
     <script type="module" src="js/main.js"></script>

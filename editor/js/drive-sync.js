@@ -281,58 +281,6 @@ async function uploadDocFile(doc, folderId, fileId) {
     return createMultipart();
 }
 
-/**
- * Push one document (live or tombstone).
- * @param {'letter'|'diary'} type
- * @param {number} id
- */
-export async function pushDocById(type, id) {
-    return enqueue(async () => {
-        if (!isConnected()) return { ok: false, reason: 'disconnected' };
-        setSyncState('syncing');
-        try {
-            const doc = await getDocumentById(type, id);
-            if (!doc || !doc.uuid) {
-                setSyncState('idle');
-                return { ok: false, reason: 'missing' };
-            }
-            if (!needsBackup(doc)) {
-                setSyncState('idle');
-                return { ok: true, skipped: true };
-            }
-
-            const folderId = await ensureFolder();
-            let fileId = doc.driveFileId || null;
-            if (!fileId) {
-                const found = await findFileByUuid(folderId, doc.uuid);
-                fileId = found?.id || null;
-            }
-
-            const newId = await uploadDocFile(doc, folderId, fileId);
-            const syncedAt = new Date().toISOString();
-            await markSynced(type, id, {
-                driveFileId: newId,
-                syncedAt,
-                syncError: null,
-            });
-
-            if (doc.deletedAt) {
-                await hardDeleteById(type, id);
-            }
-
-            setSyncState('idle');
-            return { ok: true, driveFileId: newId };
-        } catch (err) {
-            const message = err?.message || String(err);
-            try {
-                await markSynced(type, id, { syncError: message });
-            } catch (_) { /* ignore */ }
-            setSyncState('error', message);
-            return { ok: false, error: message };
-        }
-    });
-}
-
 export async function pushPending(type) {
     return enqueue(async () => {
         if (!isConnected()) return { ok: false, reason: 'disconnected' };

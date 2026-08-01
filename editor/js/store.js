@@ -331,21 +331,6 @@ export async function hardDeleteById(type, id) {
 }
 
 /**
- * Delete a document by filename or id (soft-delete when sync fields exist).
- * @param {'letter'|'diary'} type
- * @param {string|number} filenameOrId
- * @returns {Promise<boolean>}
- */
-export async function deleteDocument(type, filenameOrId) {
-    if (typeof filenameOrId === 'number') {
-        const row = await softDeleteDocumentById(type, filenameOrId);
-        return Boolean(row);
-    }
-    const row = await softDeleteDocument(type, filenameOrId);
-    return Boolean(row);
-}
-
-/**
  * Clear Drive file ids on all docs (live + tombstones) after the backup folder is lost.
  * Keeps syncedAt / content so the next push re-creates remotes via needsBackup (!driveFileId).
  * @returns {Promise<number>} number of rows updated

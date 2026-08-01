@@ -2,6 +2,7 @@ import { getWordBoundaries } from './utils.js';
 import { fetchSuggestions } from './translit.js';
 import {
     getDocuments,
+    getDocumentById,
     saveDocumentById,
     softDeleteDocument,
     softDeleteDocumentById,
@@ -18,6 +19,7 @@ import {
     emptyModel,
 } from './diary-sheet.js';
 import { initDictation } from './dictation-ui.js';
+import { initPunctuationPanel } from './punctuation.js';
 import {
     initDriveAuth,
     connectDrive,
@@ -249,6 +251,8 @@ async function flushSave() {
             created_at: currentDoc.createdAt,
         });
         currentDoc = { id, type, createdAt: currentDoc.createdAt };
+        localStorage.setItem('lastActiveDocId', id);
+        localStorage.setItem('lastActiveDocType', type);
         setSaveStatus('saved');
         updateDocumentTitle();
         if (loadHistoryFn) await loadHistoryFn();
@@ -264,13 +268,60 @@ function scheduleSave() {
     saveTimer = setTimeout(() => { void flushSave(); }, AUTOSAVE_DELAY_MS);
 }
 
-function startNewDocument(type = getActiveTemplate()) {
+async function loadDocumentState(doc) {
     if (saveTimer !== null) {
         clearTimeout(saveTimer);
         saveTimer = null;
+        await flushSave();
+    }
+    currentDoc = {
+        id: doc.id ?? null,
+        type: doc.type,
+        createdAt: doc.created_at || new Date().toISOString(),
+    };
+    filenameInput.value = doc.filename;
+    
+    if (doc.type === 'diary') {
+        document.querySelector('.editor-letter').style.display = 'none';
+        document.querySelector('.editor-diary').style.display = '';
+        setTemplateSegmentUI('diary');
+        setDiaryContent(doc.content);
+        updatePageIndicator(1, diarySheet?.pageCount || 1);
+    } else {
+        document.querySelector('.editor-letter').style.display = '';
+        document.querySelector('.editor-diary').style.display = 'none';
+        setTemplateSegmentUI('letter');
+        letterSheet?.setText(doc.content || '');
+        letterSheet?.focus();
+        updatePageIndicator(1, letterSheet?.pageCount || 1);
+    }
+    
+    setSaveStatus('saved');
+    updateDocumentTitle();
+    syncFilenameWidth();
+    pageScale?.refresh();
+    
+    if (loadHistoryFn) loadHistoryFn();
+    
+    if (currentDoc.id) {
+        localStorage.setItem('lastActiveDocId', currentDoc.id);
+        localStorage.setItem('lastActiveDocType', currentDoc.type);
+    } else {
+        localStorage.removeItem('lastActiveDocId');
+        localStorage.setItem('lastActiveDocType', currentDoc.type);
+    }
+}
+
+async function startNewDocument(type = getActiveTemplate()) {
+    if (saveTimer !== null) {
+        clearTimeout(saveTimer);
+        saveTimer = null;
+        await flushSave();
     }
     const createdAt = new Date().toISOString();
     currentDoc = { id: null, type, createdAt };
+    localStorage.removeItem('lastActiveDocId');
+    localStorage.setItem('lastActiveDocType', type);
     if (filenameInput) filenameInput.value = formatDocFilename(new Date(createdAt));
 
     if (type === 'letter') {
@@ -293,12 +344,12 @@ function startNewDocument(type = getActiveTemplate()) {
     pageScale?.refresh();
 }
 
-function requestNewDocument(type = getActiveTemplate()) {
+async function requestNewDocument(type = getActiveTemplate()) {
     if (hasMeaningfulContent()) {
         const ok = confirm('Start a new document? Current work is already saved in History.');
         if (!ok) return;
     }
-    startNewDocument(type);
+    await startNewDocument(type);
 }
 
 function switchTemplate(template) {
@@ -314,7 +365,7 @@ function switchTemplate(template) {
             saveTimer = null;
         }
         await flushSave();
-        startNewDocument(template);
+        await startNewDocument(template);
         void loadHistoryFn?.();
     })();
 }
@@ -479,9 +530,12 @@ function setEditableCaret(el, offset) {
 }
 
 function attachTransliteration(el) {
-    el.addEventListener('input', function () {
+    el.addEventListener('input', function (e) {
         if (el.closest('.letter-page') || el.closest('.editor-diary')) {
             scheduleSave();
+        }
+        if (!e.isTrusted) {
+            return; // Ignore programmatic updates (e.g. after clicking a suggestion)
         }
         if (isDictatedInput) {
             suggestionsBox.style.display = 'none';
@@ -503,6 +557,8 @@ function attachTransliteration(el) {
                 const suggestions = await fetchSuggestions(currentWord);
                 if (suggestions && suggestions.length > 0) {
                     showSuggestions(suggestions, start, end, el);
+                } else {
+                    suggestionsBox.style.display = 'none';
                 }
             }, doneTypingInterval);
         } else {
@@ -547,7 +603,11 @@ function attachTransliteration(el) {
             const suggestions = await fetchSuggestions(word);
             if (suggestions && suggestions.length > 0) {
                 showSuggestions(suggestions, start, end, el);
+            } else {
+                suggestionsBox.style.display = 'none';
             }
+        } else {
+            suggestionsBox.style.display = 'none';
         }
     });
 }
@@ -672,6 +732,7 @@ if (suggestionsBox) {
 }
 
 function initApp() {
+    initPunctuationPanel();
     const addTemplateBtn = document.querySelector('.add-template-btn');
     const exportBtn = document.getElementById('exportBtn');
     const historyList = document.querySelector('.history-list');
@@ -927,41 +988,9 @@ function initApp() {
                     </div>
                 `;
 
-                function loadDoc() {
-                    if (saveTimer !== null) {
-                        clearTimeout(saveTimer);
-                        saveTimer = null;
-                    }
-                    currentDoc = {
-                        id: doc.id ?? null,
-                        type: doc.type,
-                        createdAt: doc.created_at || new Date().toISOString(),
-                    };
-                    filenameInput.value = doc.filename;
-                    if (doc.type === 'diary') {
-                        document.querySelector('.editor-letter').style.display = 'none';
-                        document.querySelector('.editor-diary').style.display = '';
-                        setTemplateSegmentUI('diary');
-                        setDiaryContent(doc.content);
-                        updatePageIndicator(1, diarySheet?.pageCount || 1);
-                    } else {
-                        document.querySelector('.editor-letter').style.display = '';
-                        document.querySelector('.editor-diary').style.display = 'none';
-                        setTemplateSegmentUI('letter');
-                        letterSheet?.setText(doc.content || '');
-                        letterSheet?.focus();
-                        updatePageIndicator(1, letterSheet?.pageCount || 1);
-                    }
-                    setSaveStatus('saved');
-                    updateDocumentTitle();
-                    syncFilenameWidth();
-                    pageScale?.refresh();
-                    void loadHistory();
-                }
-
-                item.addEventListener('click', (e) => {
+                item.addEventListener('click', async (e) => {
                     if (e.target.closest('.delete-btn')) return;
-                    loadDoc();
+                    await loadDocumentState(doc);
                 });
 
                 item.querySelector('.delete-btn').onclick = async (e) => {
@@ -972,7 +1001,7 @@ function initApp() {
                         : await softDeleteDocument(doc.type, doc.filename);
                     if (!row) { alert('Failed to delete document.'); return; }
                     if (currentDoc.id != null && currentDoc.id === doc.id) {
-                        startNewDocument(doc.type);
+                        await startNewDocument(doc.type);
                     }
                     showNotification('Document deleted.');
                     if (!isConnected() && !row.driveFileId) {
@@ -1059,7 +1088,24 @@ function initApp() {
 
     if (quillToolbarEl) initQuillToolbar(quillToolbarEl);
 
-    startNewDocument('diary');
+    const lastId = localStorage.getItem('lastActiveDocId');
+    const lastType = localStorage.getItem('lastActiveDocType') || 'diary';
+
+    if (lastId) {
+        getDocumentById(lastType, parseInt(lastId, 10)).then(async doc => {
+            if (doc) {
+                await loadDocumentState(doc);
+            } else {
+                await startNewDocument(lastType);
+            }
+        }).catch(async err => {
+            console.error('Failed to restore last document:', err);
+            await startNewDocument(lastType);
+        });
+    } else {
+        void startNewDocument(lastType);
+    }
+
     void loadHistory();
     void updateDriveChrome();
 
@@ -1211,9 +1257,7 @@ function initApp() {
             alert('Pop-up blocked. Allow pop-ups to export PDF.');
             return;
         }
-        printWindow.document.write(`
-            <!DOCTYPE html>
-            <html>
+        printWindow.document.documentElement.innerHTML = `
             <head>
                 <meta charset="UTF-8">
                 <title>Print Document</title>
@@ -1225,15 +1269,20 @@ function initApp() {
             <body>
                 ${content}
             </body>
-            </html>
-        `);
-        printWindow.document.close();
-        printWindow.onload = function () {
+        `;
+
+        const doPrint = () => {
             printWindow.print();
             printWindow.onafterprint = function () {
                 printWindow.close();
             };
         };
+
+        if (printWindow.document.fonts && printWindow.document.fonts.ready) {
+            printWindow.document.fonts.ready.then(doPrint);
+        } else {
+            setTimeout(doPrint, 500);
+        }
     }
 
     exportBtn?.addEventListener('click', () => { void runPdfExport(); });
@@ -1255,6 +1304,12 @@ function initApp() {
         document.body.classList.toggle('sidebar-open', open);
         // Do not shift main content with .shifted — layout-shell handles subtle recenter.
         mainContent?.classList.remove('shifted');
+        localStorage.setItem('historySidebarOpen', open ? '1' : '0');
+    }
+
+    const initialSidebarState = localStorage.getItem('historySidebarOpen') === '1';
+    if (initialSidebarState) {
+        setSidebarOpen(true);
     }
 
     switchBtn?.addEventListener('click', function (e) {
@@ -1262,8 +1317,12 @@ function initApp() {
         setSidebarOpen(!isToggled);
     });
 
-    // History stays open until the toggle is clicked again (no outside-click dismiss).
-
+    // Close history sidebar when clicking outside
+    document.addEventListener('click', function (e) {
+        if (isToggled && sidebar && !sidebar.contains(e.target) && switchBtn && !switchBtn.contains(e.target)) {
+            setSidebarOpen(false);
+        }
+    });
     pageScale = initPageScale();
 
     document.querySelectorAll('#templateSegment .segment-btn').forEach((btn) => {
@@ -1276,10 +1335,13 @@ function initApp() {
         btn.addEventListener('click', () => {
             isHindiMode = btn.dataset.lang === 'hindi';
             setLangSegmentUI(isHindiMode);
+            localStorage.setItem('langMode', btn.dataset.lang);
             suggestionsBox.style.display = 'none';
         });
     });
-    setLangSegmentUI(false);
+    const savedLang = localStorage.getItem('langMode') === 'hindi';
+    isHindiMode = savedLang;
+    setLangSegmentUI(savedLang);
 
     function onMobileInputModeChange() {
         if (mobileInputMq.matches && suggestionsBox) {
@@ -1291,8 +1353,6 @@ function initApp() {
     }
     if (typeof mobileInputMq.addEventListener === 'function') {
         mobileInputMq.addEventListener('change', onMobileInputModeChange);
-    } else if (typeof mobileInputMq.addListener === 'function') {
-        mobileInputMq.addListener(onMobileInputModeChange);
     }
     onMobileInputModeChange();
 
