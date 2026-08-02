@@ -1,33 +1,13 @@
 export function initPunctuationPanel() {
     const marks = [
         { symbol: "।", label: "पूर्ण विराम (।)", copy: "।" },
-        { symbol: ",", label: "अल्प विराम (,)", copy: "," },
-        { symbol: ":-", label: "विवरण चिह्न (:-)", copy: ":-" },
         { symbol: "“ ”", label: "दोहरा उद्धरण चिह्न (“ ”)", copy: "“ ”" },
-        { symbol: "( )", label: "कोष्ठक चिह्न - छोटा (( ))", copy: "()" },
-        
-        { symbol: "०", label: "लाघव चिह्न / संक्षेपसूचक (० / .)", copy: "०" },
-        { symbol: "-", label: "योजक चिह्न (-)", copy: "-" },
-        { symbol: "___", label: "रेखांकन चिह्न (___)", copy: "___" },
-        { symbol: "' '", label: "इकहरा उद्धरण चिह्न (' ')", copy: "''" },
-        { symbol: "?", label: "प्रश्नवाचक चिह्न (?)", copy: "?" },
-        
-        { symbol: ":", label: "उप विराम / अपूर्ण विराम (:)", copy: ":" },
-        { symbol: ";", label: "अर्ध विराम (;)", copy: ";" },
+        { symbol: "‘ ’", label: "इकहरा उद्धरण चिह्न (‘ ’)", copy: "‘ ’" },
+        { symbol: "०", label: "लाघव चिह्न (०)", copy: "०" },
         { symbol: "—", label: "निर्देशक चिह्न (—)", copy: "—" },
-        { symbol: "^", label: "त्रुटिपूरक चिह्न / हंसपद (^)", copy: "^" },
-        { symbol: "/", label: "विकल्प चिह्न (/)", copy: "/" },
-        
-        { symbol: ",,", label: "पुनरुक्तिसूचक चिह्न (,,)", copy: ",," },
-        { symbol: "...", label: "लोप चिह्न (...)", copy: "..." },
-        { symbol: "—०—", label: "समाप्तिसूचक चिह्न (—०— / ***)", copy: "—०—" },
-        { symbol: "=", label: "तुल्यतासूचक चिह्न (=)", copy: "=" },
-        { symbol: "!", label: "विस्मयादिबोधक चिह्न (!)", copy: "!" },
-        
-        { symbol: "*", label: "तारक चिह्न / पाद-टिप्पणी (*)", copy: "*" },
+        { symbol: "…", label: "लोप चिह्न (…)", copy: "…" },
+        { symbol: "—०—", label: "समाप्तिसूचक चिह्न (—०—)", copy: "—०—" },
         { symbol: "→", label: "संकेतक चिह्न / तीर (→)", copy: "→" },
-        { symbol: "[ ]", label: "कोष्ठक चिह्न - बड़ा ([ ])", copy: "[]" },
-        { symbol: "{ }", label: "कोष्ठक चिह्न - मंझला ({ })", copy: "{}" },
         { symbol: "ऽ", label: "दीर्घ उच्चारण चिह्न (ऽ)", copy: "ऽ" }
     ];
 
