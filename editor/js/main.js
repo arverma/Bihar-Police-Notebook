@@ -1599,3 +1599,40 @@ function getDiaryContent() {
 function setDiaryContent(content) {
     diarySheet?.setModel(content);
 }
+
+// Retain focus on editor when clicking header or sidebar controls
+let lastFocusedForRestore = null;
+
+document.addEventListener('mousedown', (e) => {
+    const target = e.target;
+    const inHeaderOrSidebar = target.closest('.header-frame, .sidebar');
+    const isTextInput = target.closest('input:not([type="checkbox"]):not([type="radio"]), textarea');
+    
+    if (inHeaderOrSidebar && !isTextInput) {
+        const active = document.activeElement;
+        const isEditorFocused = active && (
+            active.classList.contains('ql-editor') || 
+            (active.tagName === 'INPUT' && active.closest('.app-body')) || 
+            (active.tagName === 'TEXTAREA' && active.closest('.app-body'))
+        );
+        
+        if (isEditorFocused) {
+            console.log("BP-WritingTool: Retaining focus on mousedown");
+            e.preventDefault();
+            lastFocusedForRestore = active;
+        }
+    }
+});
+
+document.addEventListener('click', (e) => {
+    if (lastFocusedForRestore) {
+        // Use a short timeout because label clicks natively transfer focus to inputs AFTER the click event
+        setTimeout(() => {
+            if (lastFocusedForRestore && typeof lastFocusedForRestore.focus === 'function') {
+                console.log("BP-WritingTool: Restoring focus after click");
+                lastFocusedForRestore.focus();
+            }
+            lastFocusedForRestore = null;
+        }, 10);
+    }
+});
