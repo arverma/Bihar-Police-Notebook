@@ -1,0 +1,29 @@
+{
+  "name": "bp-writingtool",
+  "version": "1.0.0",
+  "description": "[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![Hindi](https://img.shields.io/badge/ह-Hindi%20Documentation-orange.svg)](README.hi.md)",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "vitest run editor/",
+    "test:e2e": "playwright test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/arverma/Bihar-Police-Notebook.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/arverma/Bihar-Police-Notebook/issues"
+  },
+  "homepage": "https://github.com/arverma/Bihar-Police-Notebook#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "vitest": "^3.2.7"
+  },
+  "type": "module"
+}

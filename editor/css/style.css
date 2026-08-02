@@ -2224,3 +2224,61 @@ span.diary-dotted-flow:focus {
 }
 
 /* Consolidated Diary Form Styles — see .diary-* rules near .editor-diary */
+/* Translit Toggle Switch */
+.translit-toggle-wrapper {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-right: 12px;
+}
+.translit-label {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--brand-primary);
+    user-select: none;
+    cursor: pointer;
+    font-family: 'Noto Sans Devanagari', sans-serif;
+}
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 36px;
+    height: 20px;
+}
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--color-text-muted);
+    transition: .3s;
+    border-radius: 20px;
+}
+.toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 14px;
+    width: 14px;
+    left: 3px;
+    bottom: 3px;
+    background-color: var(--brand-white);
+    transition: .3s;
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+.toggle-switch input:checked + .toggle-slider {
+    background-color: var(--brand-primary);
+}
+.toggle-switch input:focus-visible + .toggle-slider {
+    box-shadow: 0 0 0 2px var(--color-focus);
+}
+.toggle-switch input:checked + .toggle-slider:before {
+    transform: translateX(16px);
+}
