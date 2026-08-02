@@ -29,36 +29,36 @@
                         aria-label="Show document history" aria-pressed="false">
                         <span class="switch-icon" aria-hidden="true"></span>
                     </button>
-                    <img src="images/bihar-police-logo.svg" alt=""
-                        class="bihar-police-logo-header" width="32" height="32">
+                    <img src="images/bihar-police-logo.svg" alt="" class="bihar-police-logo-header" width="32"
+                        height="32">
                     <span class="brand-mark-hindi" aria-hidden="true">बिहार पुलिस</span>
                 </div>
                 <div class="doc-name-cluster">
                     <div class="filename-resize-wrap">
                         <span class="filename-sizer" aria-hidden="true"></span>
-                        <input type="text" class="filename-input" id="filenameInput"
-                            placeholder="Document name…" aria-label="Document name"
-                            title="Document name">
+                        <input type="text" class="filename-input" id="filenameInput" placeholder="Document name…"
+                            aria-label="Document name" title="Document name">
                     </div>
                 </div>
             </div>
             <div class="header-center">
                 <div class="segmented" id="templateSegment" role="group" aria-label="Document type">
-                    <button type="button" class="segment-btn" data-template="letter"
-                        title="Letter layout" aria-pressed="false">Letter</button>
-                    <button type="button" class="segment-btn is-active" data-template="diary"
-                        title="Diary layout" aria-pressed="true">Diary</button>
+                    <button type="button" class="segment-btn" data-template="letter" title="Letter layout"
+                        aria-pressed="false">Letter</button>
+                    <button type="button" class="segment-btn is-active" data-template="diary" title="Diary layout"
+                        aria-pressed="true">Diary</button>
                 </div>
             </div>
             <div class="header-right">
-                <div class="segmented" id="langSegment" role="group" aria-label="Input language">
-                    <button type="button" class="segment-btn is-active" data-lang="hinglish"
-                        title="Type in Roman -> Devanagari" aria-pressed="true">Hinglish</button>
-                    <button type="button" class="segment-btn" data-lang="hindi"
-                        title="Type in Hindi (Devanagari)" aria-pressed="false">हिंदी</button>
+                <div class="translit-toggle-wrapper" title="Phonetic Translation (Roman -> Devanagari)">
+                    <label class="translit-label" for="translitToggle">A:अ</label>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="translitToggle" checked aria-label="Toggle phonetic translation">
+                        <span class="toggle-slider"></span>
+                    </label>
                 </div>
-                <button class="action-btn export-btn" id="exportBtn" type="button"
-                    title="Print or save as PDF" aria-label="Print or save as PDF">
+                <button class="action-btn export-btn" id="exportBtn" type="button" title="Print or save as PDF"
+                    aria-label="Print or save as PDF">
                     <span class="btn-icon"><i class="fas fa-file-pdf" aria-hidden="true"></i></span>
                     <span>PDF</span>
                 </button>
@@ -76,10 +76,9 @@
                     </div>
                     <div class="sidebar-actions">
                         <div class="drive-control" id="driveControl">
-                            <button type="button" class="action-btn backup-btn" id="backupBtn"
-                                data-backup="needs-auth"
-                                title="Connect to back up" aria-label="Connect to back up"
-                                aria-haspopup="true" aria-expanded="false">
+                            <button type="button" class="action-btn backup-btn" id="backupBtn" data-backup="needs-auth"
+                                title="Connect to back up" aria-label="Connect to back up" aria-haspopup="true"
+                                aria-expanded="false">
                                 <span class="btn-icon">
                                     <span class="backup-glyph" aria-hidden="true"></span>
                                     <i class="fas fa-spinner backup-spinner" hidden aria-hidden="true"></i>
@@ -111,8 +110,8 @@
         </aside>
 
         <main class="main-content">
-            <div id="quillToolbar" class="quill-chrome-toolbar screen-only" hidden
-                role="toolbar" aria-label="Text formatting">
+            <div id="quillToolbar" class="quill-chrome-toolbar screen-only" hidden role="toolbar"
+                aria-label="Text formatting">
                 <button type="button" data-ql="bold" title="Bold" aria-label="Bold" aria-pressed="false">
                     <i class="fas fa-bold" aria-hidden="true"></i>
                 </button>
@@ -123,13 +122,16 @@
                     <i class="fas fa-underline" aria-hidden="true"></i>
                 </button>
                 <span class="quill-toolbar-sep" aria-hidden="true"></span>
-                <button type="button" data-ql="align:left" title="Align left" aria-label="Align left" aria-pressed="false">
+                <button type="button" data-ql="align:left" title="Align left" aria-label="Align left"
+                    aria-pressed="false">
                     <i class="fas fa-align-left" aria-hidden="true"></i>
                 </button>
-                <button type="button" data-ql="align:center" title="Align center" aria-label="Align center" aria-pressed="false">
+                <button type="button" data-ql="align:center" title="Align center" aria-label="Align center"
+                    aria-pressed="false">
                     <i class="fas fa-align-center" aria-hidden="true"></i>
                 </button>
-                <button type="button" data-ql="align:right" title="Align right" aria-label="Align right" aria-pressed="false">
+                <button type="button" data-ql="align:right" title="Align right" aria-label="Align right"
+                    aria-pressed="false">
                     <i class="fas fa-align-right" aria-hidden="true"></i>
                 </button>
                 <button type="button" data-ql="align:justify" title="Justify" aria-label="Justify" aria-pressed="false">
@@ -141,8 +143,8 @@
                 </button>
             </div>
             <div class="editor-stage" id="editorStage">
-                <button type="button" class="page-fit-chip" id="pageFitChip" hidden
-                    title="Fit page to width" aria-label="Fit page to width">
+                <button type="button" class="page-fit-chip" id="pageFitChip" hidden title="Fit page to width"
+                    aria-label="Fit page to width">
                     Fit
                 </button>
                 <div class="editor-scale" id="editorScale">
@@ -164,10 +166,9 @@
         <div class="diary-page">
             <div class="diary-page-chrome screen-only">
                 <span class="diary-page-label">Page 1</span>
-                <button type="button" class="diary-header-toggle" aria-pressed="true"
-                    title="Hide page header">Hide header</button>
-                <button type="button" class="diary-page-delete" title="Delete this page"
-                    aria-label="Delete this page">
+                <button type="button" class="diary-header-toggle" aria-pressed="true" title="Hide page header">Hide
+                    header</button>
+                <button type="button" class="diary-page-delete" title="Delete this page" aria-label="Delete this page">
                     <i class="fas fa-trash"></i>
                 </button>
             </div>
@@ -211,21 +212,18 @@
                 </div>
                 <div class="diary-meta-row diary-meta-row-flow">
                     <span class="diary-label">घटना की तिथि और स्थान</span>
-                    <span class="diary-dotted diary-dotted-wide diary-dotted-flow"
-                        contenteditable="true" role="textbox" tabindex="0"
-                        data-field="event_date_place"
-                        aria-label="घटना की तिथि और स्थान"></span>
+                    <span class="diary-dotted diary-dotted-wide diary-dotted-flow" contenteditable="true" role="textbox"
+                        tabindex="0" data-field="event_date_place" aria-label="घटना की तिथि और स्थान"></span>
                     <span class="diary-label">धारा</span>
-                    <span class="diary-dotted diary-dotted-wide diary-dotted-flow"
-                        contenteditable="true" role="textbox" tabindex="0"
-                        data-field="sections"
-                        aria-label="धारा"></span>
+                    <span class="diary-dotted diary-dotted-wide diary-dotted-flow" contenteditable="true" role="textbox"
+                        tabindex="0" data-field="sections" aria-label="धारा"></span>
                 </div>
             </div>
 
             <table class="fir-table">
                 <tr class="table-header diary-titles-row">
-                    <th class="left-column">किन तिथि को (समय सहित) कार्रवाई की गई, और किन-किन स्थानों को जाकर देखा गया</th>
+                    <th class="left-column">किन तिथि को (समय सहित) कार्रवाई की गई, और किन-किन स्थानों को जाकर देखा गया
+                    </th>
                     <th class="right-column">
                         अन्वेषण का अभिलेख
                         <input data-field="investigation_record" placeholder="1">
@@ -234,15 +232,15 @@
                 <tr class="diary-body-row">
                     <td class="left-column">
                         <div class="diary-cell">
-                            <textarea class="fir-input hinglish-input" data-col="left"
-                                placeholder="यहाँ विवरण लिखें..." autocomplete="off"></textarea>
+                            <textarea class="fir-input hinglish-input" data-col="left" placeholder="यहाँ विवरण लिखें..."
+                                autocomplete="off"></textarea>
                         </div>
                     </td>
                     <td class="right-column">
                         <div class="diary-cell">
                             <div class="fir-input hinglish-input" data-col="right"
-                                data-placeholder="यहाँ विवरण लिखें..."
-                                role="textbox" aria-label="अन्वेषण का अभिलेख"></div>
+                                data-placeholder="यहाँ विवरण लिखें..." role="textbox" aria-label="अन्वेषण का अभिलेख">
+                            </div>
                         </div>
                     </td>
                 </tr>
@@ -250,8 +248,8 @@
         </div>
     </template>
 
-    <a id="help-fab" class="help-fab" href="help.html"
-        title="Help — privacy, shortcuts &amp; about" aria-label="Help — privacy, shortcuts and about">
+    <a id="help-fab" class="help-fab" href="help.html" title="Help — privacy, shortcuts &amp; about"
+        aria-label="Help — privacy, shortcuts and about">
         <span aria-hidden="true">?</span>
     </a>
 
@@ -259,8 +257,7 @@
         <div class="dictation-cluster">
             <button type="button" class="dictation-lang" title="Switch to English"
                 aria-label="Switch to English">हिं</button>
-            <button type="button" class="dictation-end" hidden title="Stop dictation"
-                aria-label="Stop dictation">
+            <button type="button" class="dictation-end" hidden title="Stop dictation" aria-label="Stop dictation">
                 <i class="fas fa-xmark" aria-hidden="true"></i>
             </button>
             <div class="dictation-mic-wrap">
@@ -276,8 +273,7 @@
     <div id="dictationInterim" class="dictation-interim" hidden aria-live="polite"></div>
 
     <dialog id="dictationSheet" class="dictation-sheet">
-        <button type="button" class="dictation-sheet-close" title="Close"
-            aria-label="Close">
+        <button type="button" class="dictation-sheet-close" title="Close" aria-label="Close">
             <i class="fas fa-xmark" aria-hidden="true"></i>
         </button>
         <div class="dictation-sheet-body"></div>

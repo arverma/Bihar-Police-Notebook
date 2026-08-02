@@ -172,12 +172,11 @@ function setTemplateSegmentUI(type) {
     });
 }
 
-function setLangSegmentUI(hindi) {
-    document.querySelectorAll('#langSegment .segment-btn').forEach((btn) => {
-        const active = hindi ? btn.dataset.lang === 'hindi' : btn.dataset.lang === 'hinglish';
-        btn.classList.toggle('is-active', active);
-        btn.setAttribute('aria-pressed', active ? 'true' : 'false');
-    });
+function setTranslitToggleUI(translitEnabled) {
+    const toggle = document.getElementById('translitToggle');
+    if (toggle) {
+        toggle.checked = translitEnabled;
+    }
     applyEditorPlaceholders();
 }
 
@@ -1331,17 +1330,18 @@ function initApp() {
         });
     });
 
-    document.querySelectorAll('#langSegment .segment-btn').forEach((btn) => {
-        btn.addEventListener('click', () => {
-            isHindiMode = btn.dataset.lang === 'hindi';
-            setLangSegmentUI(isHindiMode);
-            localStorage.setItem('langMode', btn.dataset.lang);
+    const toggle = document.getElementById('translitToggle');
+    if (toggle) {
+        toggle.addEventListener('change', (e) => {
+            isHindiMode = !e.target.checked;
+            localStorage.setItem('langMode', isHindiMode ? 'hindi' : 'hinglish');
             suggestionsBox.style.display = 'none';
+            applyEditorPlaceholders();
         });
-    });
+    }
     const savedLang = localStorage.getItem('langMode') === 'hindi';
     isHindiMode = savedLang;
-    setLangSegmentUI(savedLang);
+    setTranslitToggleUI(!savedLang);
 
     function onMobileInputModeChange() {
         if (mobileInputMq.matches && suggestionsBox) {

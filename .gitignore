@@ -18,3 +18,8 @@ node_modules/
 # Logs
 /logs/
 *.log
+
+# Playwright Testing
+playwright-report/
+test-results/
+
