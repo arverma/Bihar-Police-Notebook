@@ -67,7 +67,7 @@ export function initDictation(hooks) {
         onStatus(status) {
             updateFabState(status);
             if (status === 'needs-consent') {
-                showCloudConsent(engine.getLang());
+                engine.continueWithCloud().catch(console.error);
             }
         },
         onInterim(text) {
@@ -109,7 +109,7 @@ export function initDictation(hooks) {
             }
         },
         onNeedsConsent(lang) {
-            showCloudConsent(lang);
+            engine.continueWithCloud().catch(console.error);
         },
     });
 
@@ -253,8 +253,8 @@ export function initDictation(hooks) {
         if (isMobileUi()) return;
         const onboarded = Boolean(getPref(DICTATION_ONBOARDED_KEY, false));
         if (!onboarded) {
-            const ok = await runOnboarding(currentLang);
-            if (!ok) return;
+            const ready = await ensureLangReady(currentLang);
+            if (!ready) return;
             setPref(DICTATION_ONBOARDED_KEY, true);
         }
 
@@ -266,7 +266,7 @@ export function initDictation(hooks) {
 
         const result = await engine.toggle();
         if (result === 'needs-consent') {
-            showCloudConsent(engine.getLang());
+            await engine.continueWithCloud();
         }
     }
 
@@ -286,7 +286,7 @@ export function initDictation(hooks) {
         updateLangChip();
         await engine.setLanguage(currentLang);
         if (engine.getStatus() === 'needs-consent') {
-            showCloudConsent(currentLang);
+            await engine.continueWithCloud();
         }
     }
 
@@ -442,18 +442,7 @@ export function initDictation(hooks) {
     // --- Onboarding / sheets ---
 
     /**
-     * Full first-run flow for a language. Returns true if ready to dictate.
-     * @param {string} lang
-     */
-    async function runOnboarding(lang) {
-        return new Promise((resolve) => {
-            renderSheetIntro(lang, resolve);
-            if (!sheet.open) sheet.showModal();
-        });
-    }
-
-    /**
-     * Ensure pack or cloud consent for a language (used when switching to EN).
+     * Ensure pack or cloud consent for a language.
      * @param {string} lang
      */
     async function ensureLangReady(lang) {
@@ -471,201 +460,15 @@ export function initDictation(hooks) {
         }
 
         const avail = await probePackAvailability(lang);
-        if (avail === 'available') return true;
         if (avail === 'downloadable' || avail === 'downloading') {
-            const installed = await runPackDownload(lang);
-            if (installed) return true;
+            installLanguagePack(lang).catch(console.error);
         }
-        if (hasCloudConsent(lang)) return true;
-        return new Promise((resolve) => {
-            renderCloudConsent(lang, resolve);
-            if (!sheet.open) sheet.showModal();
-        });
-    }
-
-    /**
-     * @param {string} lang
-     * @param {(ok: boolean) => void} done
-     */
-    function renderSheetIntro(lang, done) {
-        if (!sheetBody) return;
-        const langLabel = lang === LANGS.HI ? 'हिंदी' : 'English (India)';
-        sheetBody.innerHTML = `
-            <div class="dictation-sheet-icon" aria-hidden="true"><i class="fas fa-microphone"></i></div>
-            <h2 class="dictation-sheet-title">बोलकर लिखें</h2>
-            <p class="dictation-sheet-sub">Voice dictation</p>
-            <p class="dictation-sheet-copy">
-                बोलें, और पाठ दस्तावेज़ में लिख जाएगा।
-                जहाँ संभव हो, आवाज़ आपके कंप्यूटर पर ही पहचानी जाती है — ऑफ़लाइन।
-            </p>
-            <p class="dictation-sheet-copy muted">
-                Speak, and text appears in your document. Prefer on-device recognition (${langLabel}) when available.
-            </p>
-            <div class="dictation-sheet-actions">
-                <button type="button" class="dictation-sheet-primary" data-action="allow-mic"
-                    title="Allow microphone access">
-                    माइक की अनुमति दें · Allow microphone
-                </button>
-                <button type="button" class="dictation-sheet-secondary" data-action="cancel"
-                    title="Not now">
-                    अभी नहीं · Not now
-                </button>
-            </div>
-        `;
-
-        sheetBody.querySelector('[data-action="cancel"]')?.addEventListener('click', () => {
-            sheet.close();
-            done(false);
-        });
-
-        sheetBody.querySelector('[data-action="allow-mic"]')?.addEventListener('click', async () => {
-            const result = await engine.requestMic();
-            if (result !== 'granted') {
-                renderDenied(done);
-                return;
-            }
-            await continueAfterMic(lang, done);
-        });
-    }
-
-    /**
-     * @param {string} lang
-     * @param {(ok: boolean) => void} done
-     */
-    async function continueAfterMic(lang, done) {
-        const avail = await probePackAvailability(lang);
-        if (avail === 'available') {
-            sheet.close();
-            done(true);
-            return;
+        
+        if (!hasCloudConsent(lang)) {
+            setCloudConsent(lang, true);
         }
-        if (avail === 'downloadable' || avail === 'downloading' || avail === 'unsupported') {
-            if (avail === 'unsupported') {
-                // No pack API — need cloud consent
-                renderCloudConsent(lang, done);
-                return;
-            }
-            renderPackProgress(lang);
-            const ok = await installLanguagePack(lang);
-            // Re-probe
-            let state = await probePackAvailability(lang);
-            if (!ok || state !== 'available') {
-                // Poll briefly while downloading
-                for (let i = 0; i < 20 && state === 'downloading'; i += 1) {
-                    await sleep(500);
-                    state = await probePackAvailability(lang);
-                }
-            }
-            if (state === 'available') {
-                sheet.close();
-                done(true);
-                return;
-            }
-            // Pack failed / unavailable → cloud consent
-            renderCloudConsent(lang, done);
-            return;
-        }
-        // unavailable
-        renderCloudConsent(lang, done);
-    }
-
-    /**
-     * @param {string} lang
-     * @returns {Promise<boolean>}
-     */
-    function runPackDownload(lang) {
-        return new Promise(async (resolve) => {
-            renderPackProgress(lang);
-            if (!sheet.open) sheet.showModal();
-            const ok = await installLanguagePack(lang);
-            let state = await probePackAvailability(lang);
-            for (let i = 0; i < 20 && state === 'downloading'; i += 1) {
-                await sleep(500);
-                state = await probePackAvailability(lang);
-            }
-            if (state === 'available' || ok) {
-                sheet.close();
-                resolve(true);
-                return;
-            }
-            renderCloudConsent(lang, resolve);
-        });
-    }
-
-    /** @param {string} lang */
-    function renderPackProgress(lang) {
-        if (!sheetBody) return;
-        const name = lang === LANGS.HI ? 'हिंदी' : 'English';
-        sheetBody.innerHTML = `
-            <div class="dictation-sheet-icon" aria-hidden="true"><i class="fas fa-download"></i></div>
-            <h2 class="dictation-sheet-title">${name} भाषा पैक</h2>
-            <p class="dictation-sheet-sub">Downloading language pack</p>
-            <p class="dictation-sheet-copy">
-                ${name} भाषा पैक डाउनलोड हो रहा है… यह सिर्फ़ एक बार होगा।
-            </p>
-            <div class="dictation-progress" role="progressbar" aria-valuetext="Downloading">
-                <div class="dictation-progress-bar"></div>
-            </div>
-            <div class="dictation-sheet-actions">
-                <button type="button" class="dictation-sheet-secondary" data-action="bg"
-                    title="Keep downloading in the background">
-                    पृष्ठभूमि में जारी रखें · Continue in background
-                </button>
-            </div>
-        `;
-        sheetBody.querySelector('[data-action="bg"]')?.addEventListener('click', () => {
-            sheet.close();
-        });
-    }
-
-    /**
-     * @param {string} lang
-     */
-    function showCloudConsent(lang) {
-        renderCloudConsent(lang, async (ok) => {
-            if (ok) {
-                sheet.close();
-                await engine.continueWithCloud();
-            } else {
-                sheet.close();
-                engine.stop();
-            }
-        });
-        if (!sheet.open) sheet.showModal();
-    }
-
-    /**
-     * @param {string} lang
-     * @param {(ok: boolean) => void} done
-     */
-    function renderCloudConsent(lang, done) {
-        if (!sheetBody) return;
-        const name = lang === LANGS.HI ? 'हिंदी' : 'English';
-        sheetBody.innerHTML = `
-            <div class="dictation-sheet-icon is-warn" aria-hidden="true"><i class="fas fa-cloud"></i></div>
-            <h2 class="dictation-sheet-title">ऑनलाइन पहचान?</h2>
-            <p class="dictation-sheet-sub">Use online recognition?</p>
-            <p class="dictation-sheet-copy">
-                आपके कंप्यूटर पर ${name} पहचान उपलब्ध नहीं है। क्या हम Google की ऑनलाइन सेवा का उपयोग करें?
-                आपकी आवाज़ पहचान के लिए भेजी जाएगी, कहीं सहेजी नहीं जाएगी।
-            </p>
-            <p class="dictation-sheet-copy muted">
-                On-device ${name} recognition is unavailable. Allow Google’s online service?
-                Audio is sent for recognition only — this app does not record or store it.
-            </p>
-            <div class="dictation-sheet-actions">
-                <button type="button" class="dictation-sheet-primary" data-action="allow"
-                    title="Allow online recognition">
-                    अनुमति दें · Allow
-                </button>
-                <button type="button" class="dictation-sheet-secondary" data-action="deny"
-                    title="Cancel">
-                    रद्द करें · Cancel
-                </button>
-            </div>
-        `;
-        sheetBody.querySelector('[data-action="allow"]')?.addEventListener('click', () => done(true));
-        sheetBody.querySelector('[data-action="deny"]')?.addEventListener('click', () => done(false));
+        
+        return true;
     }
 
     function showDeniedSheet() {
