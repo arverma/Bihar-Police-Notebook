@@ -199,126 +199,57 @@
         <h1>Help</h1>
         <p class="updated">Last updated: July 29, 2026</p>
 
-        <details class="help-section" open id="privacy">
-            <summary>Privacy policy</summary>
+        <details class="help-section" open id="about">
+            <summary>App info</summary>
             <div class="help-section-body">
                 <p>
-                    This policy covers the Bihar Police Notebook website editor — the static
-                    site where you write letters and diaries. Your documents stay on your device
-                    by default. Optional Google Drive backup is off until you choose to connect.
-                </p>
-
-                <h3>Data collection</h3>
-                <p>
-                    We do not run our own accounts or analytics for your notes. There is no
-                    mandatory sign-in. If you connect Google Drive, authentication is handled by
-                    Google; this app only receives an access token to write/read files it creates
-                    in your Drive (`drive.file` scope).
+                    <strong>Bihar Police Notebook</strong> is a browser tool for writing Hindi
+                    letters and FIR case diaries. Type in Hinglish for Devanagari suggestions,
+                    or use बोलकर लिखें to dictate.
                 </p>
                 <ul>
-                    <li>No analytics, tracking, cookies, or fingerprinting by this app</li>
-                    <li>No ads</li>
-                    <li>No selling or sharing of your data</li>
+                    <li><strong>Letter</strong> and <strong>Diary</strong> templates with print-ready layout</li>
+                    <li><strong>Punctuation panel</strong> for quick insertion of standard marks</li>
+                    <li>Document history stored locally in your browser (IndexedDB)</li>
+                    <li>
+                        Optional Google Drive backup — <strong>Sync all</strong> (pull + push) or
+                        <strong>Sync new</strong> (upload pending only)
+                    </li>
+                    <li>
+                        Live editor (bpdiary):
+                        <a href="https://bpdiary.arverma.dev/">bpdiary.arverma.dev</a>
+                    </li>
                 </ul>
+            </div>
+        </details>
 
-                <h3>Local storage</h3>
+        <details class="help-section" id="data-loss">
+            <summary>Data Loss & Backup / डेटा डिलीट होने के कारण</summary>
+            <div class="help-section-body">
                 <p>
-                    Letters and diaries are stored in your browser (IndexedDB) on this device.
-                    The host that serves the editor files does not receive your notes.
-                </p>
-
-                <h3>Google Drive backup (optional)</h3>
-                <p>
-                    Use the <strong>backup</strong> icon at the top of the History panel to connect
-                    Google Drive. Reload does not open a Google sign-in popup and does not sync
-                    automatically. Sync runs only when you use the backup menu:
+                    <strong>महत्वपूर्ण (Important):</strong> हम आपका डेटा अपने किसी भी सर्वर या डेटाबेस में सेव नहीं करते हैं। आपकी फाइलें सिर्फ आपके ब्राउज़र में होती हैं। इसलिए, निम्न स्थितियों में आपका डेटा डिलीट या गायब हो सकता है:
                 </p>
                 <ul>
                     <li>
-                        <strong>Sync all</strong> — downloads updates from your Drive folder into
-                        this browser, then uploads any new or changed local documents.
+                        <strong>Clear Browser History (ब्राउज़र का डेटा क्लियर करना):</strong> अगर आप अपने ब्राउज़र की History, Cookies या Site Data क्लियर करते हैं, तो ऐप का सारा डेटा हमेशा के लिए डिलीट हो जाएगा।
                     </li>
                     <li>
-                        <strong>Sync new</strong> — uploads only new or changed local documents
-                        to Drive (does not pull from Drive).
+                        <strong>Incognito / Private Mode (प्राइवेट ब्राउज़िंग):</strong> अगर आप Incognito टैब या प्राइवेट विंडो में कुछ लिखते हैं, तो विंडो बंद करते ही आपका सारा काम मिट जाएगा। यह कभी सेव नहीं होता।
+                    </li>
+                    <li>
+                        <strong>Changing Devices (दूसरे मोबाइल/PC में खोलना):</strong> चूँकि डेटा आपके डिवाइस में है, इसलिए अगर आप दूसरे फोन या कम्प्यूटर पर ऐप खोलेंगे, तो पुरानी फाइलें नहीं दिखेंगी। (इसके लिए Google Drive Backup का उपयोग करें)।
+                    </li>
+                    <li>
+                        <strong>Link / URL Change (वेबसाइट का लिंक बदलना):</strong> अगर वेबसाइट का डोमेन या लिंक बदलता है, तो डेटा नई वेबसाइट पर अपने आप नहीं जाएगा।
+                    </li>
+                    <li>
+                        <strong>Browser Errors (ब्राउज़र में खराबी):</strong> कभी-कभी फोन की मेमोरी फुल होने पर या ब्राउज़र अपडेट के कारण डेटा करप्ट हो सकता है।
                     </li>
                 </ul>
                 <p>
-                    The app creates or reuses a folder named
-                    <strong>Bihar Police Notebook Backup — do not delete</strong>
-                    in your My Drive and stores each document as a JSON file. Local edits still
-                    save quickly in the browser (IndexedDB). If that folder was deleted, the next
-                    sync recreates it and re-uploads your local documents.
-                </p>
-                <ul>
-                    <li>
-                        When Drive is connected, History items show a cloud badge for backup
-                        status (backed up, pending, or error).
-                    </li>
-                    <li>
-                        History is <strong>grouped by date created</strong>. Each item shows when
-                        it was last updated.
-                    </li>
-                    <li>
-                        <strong>Disconnect</strong> revokes access from this browser. It does not
-                        delete the folder or files already in your Drive.
-                    </li>
-                    <li>
-                        After you connect, a short-lived access token may be stored in this browser
-                        (IndexedDB) for up to one day. Reload will not force a Google sign-in
-                        popup; use the backup icon when you want to connect or refresh the session.
-                    </li>
-                    <li>Data stays in <em>your</em> Google account. We do not host your notes.</li>
-                </ul>
-
-                <h3>Transliteration</h3>
-                <p>
-                    When you type in Hinglish mode, suggestion requests go to Google Input Tools
-                    over the network so Devanagari candidates can be shown. Only the text you are
-                    typing for suggestions is sent in those requests — not your saved document
-                    history. Offline typing still works without suggestions.
-                </p>
-
-                <h3>बोलकर लिखें (Dictation)</h3>
-                <p>
-                    On desktop and tablet, the floating microphone lets you write by speaking
-                    (Hindi or English–India). On phones the in-app mic is hidden — use your
-                    keyboard’s microphone instead. When the in-app mic is used, it is on only
-                    while dictation is listening — you will see a clear
-                    indicator on the button.
-                </p>
-                <ul>
-                    <li>
-                        Whenever Chrome’s offline language pack is installed, speech is converted
-                        <strong>on your computer</strong>. Audio does not leave the device.
-                    </li>
-                    <li>
-                        If an offline pack is not available, we ask you first before using Google’s
-                        online recognition. Only if you allow it is audio sent for recognition.
-                    </li>
-                    <li>
-                        This app does not record, store, or upload your audio. Recognition text is
-                        inserted into your document on this device like normal typing.
-                    </li>
-                </ul>
-                <p>
-                    Note: Hinglish typing suggestions already use Google Input Tools over the
-                    network, so the app is not fully offline in that mode either.
-                </p>
-
-                <h3>Data deletion</h3>
-                <ul>
-                    <li>Delete a document from History anytime.</li>
-                    <li>
-                        Clear all documents by clearing this site’s data in your browser settings.
-                    </li>
-                </ul>
-
-                <h3>Your rights (GDPR)</h3>
-                <p>
-                    Because we do not collect or store your personal data on our servers,
-                    there is nothing for us to access, export, or delete on your behalf.
-                    You control everything that lives in your browser.
+                    <strong>डेटा कैसे सुरक्षित रखें? (How to stay safe?)</strong> <br>
+                    1. ज़रूरी फाइलों को हमेशा <strong>PDF</strong> (Export/Print) बनाकर अपने फोन/PC में सेव कर लें।<br>
+                    2. History पैनल से <strong>Google Drive Backup</strong> चालू करें, ताकि आपका डेटा आपके Drive में सुरक्षित रहे और आप उसे किसी भी डिवाइस में वापस पा सकें।
                 </p>
             </div>
         </details>
@@ -360,69 +291,32 @@
             </div>
         </details>
 
-        <details class="help-section" id="about">
-            <summary>App info</summary>
+        <details class="help-section" id="privacy">
+            <summary>Privacy Policy / प्राइवेसी पॉलिसी</summary>
             <div class="help-section-body">
                 <p>
-                    <strong>Bihar Police Notebook</strong> is a browser tool for writing Hindi
-                    letters and FIR case diaries. Type in Hinglish for Devanagari suggestions,
-                    or use बोलकर लिखें to dictate.
-                </p>
-                <ul>
-                    <li><strong>Letter</strong> and <strong>Diary</strong> templates with print-ready layout</li>
-                    <li><strong>Punctuation panel</strong> for quick insertion of standard marks</li>
-                    <li>Document history stored locally in your browser (IndexedDB)</li>
-                    <li>
-                        Optional Google Drive backup — <strong>Sync all</strong> (pull + push) or
-                        <strong>Sync new</strong> (upload pending only)
-                    </li>
-                    <li>
-                        Live editor (bpdiary):
-                        <a href="https://bpdiary.arverma.dev/">bpdiary.arverma.dev</a>
-                    </li>
-                </ul>
-            </div>
-        </details>
-
-        <details class="help-section" id="data-loss">
-            <summary>When data can be lost or corrupted</summary>
-            <div class="help-section-body">
-                <p>
-                    Local History lives in this browser for this website’s origin. Clearing site
-                    data or using another origin can empty History. Optional Google Drive backup
-                    (when connected) keeps copies in your Drive folder so you can restore on the
-                    same or another browser after signing in again.
+                    <strong>Bihar Police Notebook</strong> पूरी तरह से सुरक्षित है। आपका डेटा आपके डिवाइस (कम्प्यूटर या मोबाइल) पर ही रहता है।
                 </p>
                 <ul>
                     <li>
-                        <strong>Domain or URL change</strong> — IndexedDB is tied to the site origin
-                        (e.g. a custom domain vs GitHub Pages). Opening a new address looks like an
-                        empty History even if old docs still exist on the previous origin. Connect
-                        Drive and use Sync all to restore from your Drive folder if you had backed up.
+                        <strong>Local Storage (लोकल स्टोरेज):</strong> आपके लिखे गए Letters और Diaries सिर्फ आपके ब्राउज़र (डिवाइस) में सेव होते हैं। हमारा कोई सर्वर नहीं है, इसलिए हम आपका डेटा नहीं देख सकते।
                     </li>
                     <li>
-                        <strong>Clearing site data</strong> — browser settings that clear cookies /
-                        site data for this site also wipe local letters and diaries (Drive copies
-                        remain if you had connected).
+                        <strong>Google Drive Backup (वैकल्पिक बैकअप):</strong> अगर आप Google Drive बैकअप चालू करते हैं, तो आपका डेटा सुरक्षित तरीके से सिर्फ आपके पर्सनल Google Drive के "Bihar Police Notebook Backup" फोल्डर में सेव होता है।
                     </li>
                     <li>
-                        <strong>Private / Incognito</strong> — storage is temporary and is discarded
-                        when the private window closes.
+                        <strong>Hindi Typing (हिंदी टाइपिंग):</strong> जब आप (<code>A:अ</code>) टॉगल को <strong>ON</strong> करके टाइप करते हैं, तो सही हिंदी शब्द दिखाने के लिए सिर्फ आपका टाइप किया हुआ शब्द Google Input Tools को भेजा जाता है। आपकी पूरी फाइल कभी नहीं भेजी जाती। जब टॉगल OFF रहता है, तो कुछ भी नहीं भेजा जाता।
                     </li>
                     <li>
-                        <strong>Another device or Chrome profile</strong> — local history does not
-                        sync by itself; use Drive backup and <strong>Sync all</strong> after
-                        connecting on the other device.
+                        <strong>Voice Typing (बोलकर लिखें):</strong> हम आपकी आवाज़ रिकॉर्ड या सेव नहीं करते। ऑडियो सीधे आपके डिवाइस या Google Speech सर्विस द्वारा टेक्स्ट में बदल दिया जाता है।
                     </li>
                     <li>
-                        <strong>Storage full or browser bugs</strong> — rare IndexedDB failures or
-                        quota limits can prevent saves or leave data unreadable.
+                        <strong>No Tracking & Ads (कोई ट्रैकिंग या विज्ञापन नहीं):</strong> इस ऐप में कोई भी ट्रैकिंग, कुकीज़ या विज्ञापन (Ads) नहीं हैं। आपका डेटा कभी किसी को बेचा या शेयर नहीं किया जाता।
+                    </li>
+                    <li>
+                        <strong>Data Deletion (डेटा हटाना):</strong> आप History पैनल से कभी भी अपनी फाइल डिलीट कर सकते हैं। अपना ब्राउज़र डेटा (Clear Site Data) क्लियर करने से ऐप का सारा डेटा पूरी तरह से मिट जाएगा।
                     </li>
                 </ul>
-                <p>
-                    Tip: use Export / Print (PDF) for important documents so you have a copy outside
-                    the browser. Drive backup is an additional safety net when enabled.
-                </p>
             </div>
         </details>
 

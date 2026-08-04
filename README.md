@@ -14,7 +14,7 @@
 - Keep a **history** of documents on this computer or phone
 - **Print** or **Save as PDF** from your browser
 - Optionally **back up to Google Drive** (only when you connect and sync)
-- On a computer: **Hinglish suggestions**, **Punctuation Panel**, and an optional **speak-to-type** microphone
+- On a computer: **Hindi Typing toggle**, **Essential 9-symbol Punctuation Panel**, and an optional **speak-to-type** microphone
 - On a phone: use the **keyboard** (including its mic) — the in-app mic is hidden on purpose
 
 ## How to open it
@@ -23,7 +23,7 @@
 
 ## Phone vs computer
 
-The same website works on both. On a **phone**, some computer-only controls are hidden (Hinglish toggle and in-app microphone) so the screen stays clear — use your keyboard instead. On a **computer**, you get Hinglish suggestions and the speak-to-type button. Details for developers: [Desktop vs mobile](docs/desktop-vs-mobile.md).
+The same website works on both. On a **phone**, some computer-only controls are hidden (Hindi Typing toggle and in-app microphone) so the screen stays clear — use your keyboard instead. On a **computer**, you get the Hindi Typing toggle (transliteration) and the speak-to-type button. Details for developers: [Desktop vs mobile](docs/desktop-vs-mobile.md).
 
 ## Your data, in plain words
 
