@@ -4,7 +4,7 @@ test('retains focus when clicking buttons', async ({ page }) => {
   await page.goto('/');
   
   // Wait for editor
-  const editor = page.locator('.ql-editor').first();
+  const editor = page.locator('.ql-editor:visible').first();
   await editor.click();
   await editor.type('Hello');
   
@@ -16,12 +16,10 @@ test('retains focus when clicking buttons', async ({ page }) => {
   const slider = page.locator('.toggle-slider');
   await slider.click();
   
-  // Verify toggle state changed but focus is still in editor
+  // Verify toggle state changed
   const toggle = page.locator('#translitToggle');
   await expect(toggle).not.toBeChecked();
   
-  const postActiveElementClass = await page.evaluate(() => document.activeElement.className);
-  console.log("Post Active element class:", postActiveElementClass);
-  
-  expect(postActiveElementClass).toContain('ql-editor');
+  // Wait for focus to return to editor (handled by setTimeout in main.js)
+  await expect(editor).toBeFocused();
 });

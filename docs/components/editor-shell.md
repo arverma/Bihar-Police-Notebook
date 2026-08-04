@@ -22,7 +22,7 @@ flowchart TB
 
 | Region | Responsibility |
 |--------|----------------|
-| Header | History toggle, brand, document name, Letter/Diary, PDF (Hinglish control on wider screens) |
+| Header | History toggle, brand, document name, Letter/Diary, PDF (Hindi Typing toggle on wider screens) |
 | History sidebar | Document list, Drive backup icon, New document |
 | `main-content` | Desktop vertical scrollport; padding for fixed header |
 | `editor-stage` | Page preview; on mobile also the scroll / pinch viewport |

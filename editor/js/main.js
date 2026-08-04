@@ -1605,7 +1605,7 @@ let lastFocusedForRestore = null;
 
 document.addEventListener('mousedown', (e) => {
     const target = e.target;
-    const inHeaderOrSidebar = target.closest('.header-frame, .sidebar');
+    const inHeaderOrSidebar = target.closest('.header-frame') || target.closest('.history-sidebar') || target.closest('.punctuation-panel') || target.closest('.punctuation-toggle');
     const isTextInput = target.closest('input:not([type="checkbox"]):not([type="radio"]), textarea');
     
     if (inHeaderOrSidebar && !isTextInput) {
