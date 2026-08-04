@@ -5,6 +5,7 @@ test('retains focus when clicking buttons', async ({ page }) => {
   
   // Wait for editor
   const editor = page.locator('.ql-editor:visible').first();
+  const editor = page.locator('.ql-editor').first();
   await editor.click();
   await editor.type('Hello');
   
