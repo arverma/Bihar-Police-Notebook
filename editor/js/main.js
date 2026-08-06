@@ -369,21 +369,22 @@ function switchTemplate(template) {
     })();
 }
 
-function getCaretPosition(input) {
-    // Get the bounding rectangle of the textarea
-    const rect = input.getBoundingClientRect();
-
+function getCaretPosition(input, indexOverride) {
     // Create a temporary div to measure text
     const div = document.createElement('div');
     div.style.cssText = window.getComputedStyle(input, null).cssText;
     div.style.height = 'auto';
     div.style.position = 'absolute';
     div.style.whiteSpace = 'pre-wrap';
+    div.style.overflowWrap = 'break-word';
     div.style.top = '-9999px';
+    div.style.left = '-9999px';
     div.style.opacity = '0';
+    div.style.overflow = 'hidden';
 
+    const index = typeof indexOverride === 'number' ? indexOverride : input.selectionStart;
     // Get the text before the cursor
-    const textBeforeCursor = input.value.substring(0, input.selectionStart);
+    const textBeforeCursor = input.value.substring(0, index);
     div.textContent = textBeforeCursor;
 
     // Add a span at the end to measure cursor position
@@ -394,9 +395,10 @@ function getCaretPosition(input) {
 
     // Calculate position
     const spanRect = span.getBoundingClientRect();
+    const divRect = div.getBoundingClientRect();
     const position = {
-        top: spanRect.top - rect.top + input.scrollTop,
-        left: spanRect.left - rect.left + input.scrollLeft
+        top: spanRect.top - divRect.top,
+        left: spanRect.left - divRect.left
     };
 
     // Clean up
@@ -545,24 +547,24 @@ function attachTransliteration(el) {
             return;
         }
         clearTimeout(typingTimer);
-        const value = getEditableText(el);
-        const cursor = getEditableCaret(el);
-        const [start, end] = getWordBoundaries(value, Math.max(0, cursor - 1));
-        const currentWord = value.slice(start, end);
+        typingTimer = setTimeout(async () => {
+            if (!isTransliterationEnabled()) return;
+            const value = getEditableText(el);
+            const cursor = getEditableCaret(el);
+            const [start, end] = getWordBoundaries(value, Math.max(0, cursor - 1));
+            const currentWord = value.slice(start, end);
 
-        if (currentWord.trim()) {
-            typingTimer = setTimeout(async () => {
-                if (!isTransliterationEnabled()) return;
+            if (currentWord.trim()) {
                 const suggestions = await fetchSuggestions(currentWord);
                 if (suggestions && suggestions.length > 0) {
                     showSuggestions(suggestions, start, end, el);
                 } else {
                     suggestionsBox.style.display = 'none';
                 }
-            }, doneTypingInterval);
-        } else {
-            suggestionsBox.style.display = 'none';
-        }
+            } else {
+                suggestionsBox.style.display = 'none';
+            }
+        }, doneTypingInterval);
     });
 
     el.addEventListener('keydown', async function (e) {
@@ -581,7 +583,7 @@ function attachTransliteration(el) {
         }
 
         let suggestions = await fetchSuggestions(word);
-        if (suggestions && suggestions.length > 0) {
+        if (suggestions && suggestions.length > 0 && suggestions[0] !== word) {
             const suggestion = suggestions[0];
             replaceEditableRange(el, start, end, suggestion + ' ');
         } else {
@@ -627,19 +629,41 @@ function showSuggestions(suggestions, wordStart, wordEnd, targetEl) {
 
     const scale = pageScale?.getScale() || 1;
     const inputRect = targetEl.getBoundingClientRect();
-    const style = window.getComputedStyle(targetEl);
-    const lineHeight = (parseInt(style.lineHeight) || 24) * scale;
-    const paddingTop = (parseInt(style.paddingTop) || 0) * scale;
-    const paddingLeft = (parseInt(style.paddingLeft) || 0) * scale;
-    const value = getEditableText(targetEl);
-    const textBeforeWord = value.substring(0, wordStart);
-    const lines = textBeforeWord.split('\n').length - 1;
-    const currentLineText = textBeforeWord.split('\n').pop();
-    const textWidth = getTextWidth(currentLineText, targetEl) * scale;
+    let boxLeft, boxTop;
+    const field = isQuillEditor(targetEl) ? getFieldForEditor(targetEl) : null;
+    
+    if (field && field.quill) {
+        // Quill has built-in bounds tracking which correctly handles soft-wraps
+        const bounds = field.quill.getBounds(wordEnd);
+        boxLeft = inputRect.left + (bounds.left * scale);
+        // Place it just below the text
+        boxTop = inputRect.top + (bounds.bottom * scale) + 5;
+    } else if (targetEl.tagName === 'TEXTAREA' || targetEl.tagName === 'INPUT') {
+        // Use the hidden div method for textareas to handle soft-wraps
+        const pos = getCaretPosition(targetEl, wordEnd);
+        const style = window.getComputedStyle(targetEl);
+        const lineHeight = parseInt(style.lineHeight) || parseInt(style.fontSize) * 1.2 || 24;
+        boxLeft = inputRect.left + (pos.left * scale) - ((targetEl.scrollLeft || 0) * scale);
+        boxTop = inputRect.top + (pos.top * scale) + (lineHeight * scale) + 5 - ((targetEl.scrollTop || 0) * scale);
+    } else {
+        // Fallback for generic contenteditable (naive approach)
+        const style = window.getComputedStyle(targetEl);
+        const lineHeight = (parseInt(style.lineHeight) || 24) * scale;
+        const paddingTop = (parseInt(style.paddingTop) || 0) * scale;
+        const paddingLeft = (parseInt(style.paddingLeft) || 0) * scale;
+        const value = getEditableText(targetEl);
+        const textBeforeWord = value.substring(0, wordStart);
+        const lines = textBeforeWord.split('\n').length - 1;
+        const currentLineText = textBeforeWord.split('\n').pop();
+        const textWidth = getTextWidth(currentLineText, targetEl) * scale;
+
+        boxLeft = inputRect.left + paddingLeft + Math.min(textWidth, Math.max(40 * scale, inputRect.width - paddingLeft - 200 * scale));
+        boxTop = inputRect.top + paddingTop + (lines + 1) * lineHeight + 5 - ((targetEl.scrollTop || 0) * scale);
+    }
 
     suggestionsBox.style.position = 'fixed';
-    suggestionsBox.style.left = (inputRect.left + paddingLeft + Math.min(textWidth, Math.max(40 * scale, inputRect.width - paddingLeft - 200 * scale))) + 'px';
-    suggestionsBox.style.top = (inputRect.top + paddingTop + (lines + 1) * lineHeight + 5 - ((targetEl.scrollTop || 0) * scale)) + 'px';
+    suggestionsBox.style.left = boxLeft + 'px';
+    suggestionsBox.style.top = boxTop + 'px';
 
     suggestions.forEach((suggestion) => {
         const div = document.createElement('div');
