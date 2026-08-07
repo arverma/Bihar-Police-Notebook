@@ -622,14 +622,14 @@ span.diary-dotted-flow:focus {
     flex: 0 0 auto;
 }
 
-.diary-page-header input[data-field="thana"],
-.diary-page-header input[data-field="district"] {
+.diary-page-header [data-field="thana"],
+.diary-page-header [data-field="district"] {
     flex: 1 1 0;
     min-width: 72px;
     max-width: none;
 }
 
-.diary-page-header input[data-field="fir_number"] {
+.diary-page-header [data-field="fir_number"] {
     max-width: 88px;
     min-width: 56px;
     flex: 0 1 auto;
