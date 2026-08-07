@@ -84,7 +84,7 @@ async function mountPrintCloneInIframe(page, template) {
     })));
 
     if (doc.fonts?.load) {
-      const size = tpl === 'letter' ? 16 : 15;
+      const size = 16;
       await doc.fonts.load(`${size}px "Noto Sans Devanagari"`);
       await doc.fonts.ready;
     }
@@ -158,7 +158,7 @@ test.describe('Print parity (live clone)', () => {
     // Ensure editor fonts are ready before measuring wraps
     await page.evaluate(async () => {
       if (document.fonts?.load) {
-        await document.fonts.load('15px "Noto Sans Devanagari"');
+        await document.fonts.load('16px "Noto Sans Devanagari"');
         await document.fonts.ready;
       }
     });
@@ -344,24 +344,22 @@ test.describe('Print parity (live clone)', () => {
     expect(printBreaks).toEqual(screenBreaks);
   });
 
-  test('PDF export opens print popup with cloned pages (print stubbed)', async ({ page, context }) => {
+  test('PDF export opens print dialog with cloned pages (print stubbed)', async ({ page }) => {
     await page.evaluate(() => {
       window.__printOpened = false;
-      const origOpen = window.open.bind(window);
-      window.open = (url, target, features) => {
-        const w = origOpen(url, target, features);
-        if (w) {
-          const origPrint = w.print.bind(w);
-          w.print = () => {
-            window.__printOpened = true;
-            window.__printDocTitle = w.document.title;
-            window.__printHasDiary = !!w.document.querySelector('.diary-page');
-            // Do not call real print / close
-          };
-        }
-        window.__printWin = w;
-        return w;
-      };
+      // Continuously re-bind: document.open/write can reset contentWindow.print.
+      const poll = setInterval(() => {
+        const frame = document.getElementById('bp-print-iframe');
+        if (!(frame instanceof HTMLIFrameElement)) return;
+        const w = frame.contentWindow;
+        if (!w) return;
+        w.print = () => {
+          window.__printOpened = true;
+          window.__printDocTitle = w.document.title;
+          window.__printHasDiary = !!w.document.querySelector('.diary-page');
+        };
+      }, 10);
+      setTimeout(() => clearInterval(poll), 20000);
     });
 
     const editor = page.locator('.editor-diary .diary-page .ql-editor').first();

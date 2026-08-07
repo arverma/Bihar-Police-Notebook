@@ -1272,9 +1272,7 @@ function initApp() {
         }
 
         const result = await openPrintCloneWindow(activeTemplate);
-        if (result === 'blocked') {
-            alert('Pop-up blocked. Allow pop-ups to export PDF.');
-        } else if (result === 'empty') {
+        if (result === 'empty') {
             alert('Cannot export empty document!');
         }
     }
