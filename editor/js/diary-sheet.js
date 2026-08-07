@@ -414,6 +414,8 @@ export function measureTitlesRowHeightPx(investigationRecord = '') {
 }
 
 /**
+ * @deprecated Prefer live-page clone via print-clone.js (runPdfExport).
+ * Kept for rollback / measurement helpers that reuse header CSS fragments.
  * Print stylesheet — screen and print share the same A4 geometry.
  */
 export function diaryPrintCss() {
@@ -479,6 +481,8 @@ export function diaryPrintCss() {
     }
     .diary-print-body {
       white-space: pre-wrap;
+      tab-size: 4;
+      -moz-tab-size: 4;
       overflow-wrap: break-word;
       word-break: normal;
       font-size: ${FONT_PX}px;
@@ -488,9 +492,7 @@ export function diaryPrintCss() {
       box-sizing: border-box;
       overflow: hidden;
     }
-    .diary-print-body.ql-print {
-      white-space: normal;
-    }
+    /* ql-print white-space comes from quillPrintCssFragment (pre-wrap). */
     ${quillPrintCssFragment()}
   `;
 }
@@ -537,6 +539,7 @@ function printHeaderHtml(header) {
 }
 
 /**
+ * @deprecated Prefer live-page clone via print-clone.js (runPdfExport).
  * Build print HTML from the diary model (same geometry as screen).
  */
 export function diaryPagesHtml(model) {

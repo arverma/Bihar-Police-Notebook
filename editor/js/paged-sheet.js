@@ -47,6 +47,7 @@ const LETTER_STYLE = {
 };
 
 /**
+ * @deprecated Prefer live-page clone via print-clone.js (runPdfExport).
  * Print stylesheet — one A4 page card per letter page.
  */
 export function letterPrintCss() {
@@ -68,13 +69,13 @@ export function letterPrintCss() {
       font-size: ${FONT_PX}px;
       line-height: ${LINE_HEIGHT_PX}px;
       white-space: pre-wrap;
+      tab-size: 4;
+      -moz-tab-size: 4;
       word-break: break-word;
       page-break-after: always;
       overflow: hidden;
     }
-    .letter-print-page.ql-print {
-      white-space: normal;
-    }
+    /* ql-print white-space comes from quillPrintCssFragment (pre-wrap). */
     .letter-print-page:last-child {
       page-break-after: auto;
     }
@@ -83,6 +84,7 @@ export function letterPrintCss() {
 }
 
 /**
+ * @deprecated Prefer live-page clone via print-clone.js (runPdfExport).
  * @param {string[]} pages
  */
 export function letterPagesHtml(pages) {

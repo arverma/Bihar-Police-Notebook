@@ -10,11 +10,9 @@ import {
     previewText,
     backupStatus,
 } from './store.js';
-import { initPagedSheet, letterPrintCss, letterPagesHtml } from './paged-sheet.js';
+import { initPagedSheet } from './paged-sheet.js';
 import {
     initDiarySheet,
-    diaryPrintCss,
-    diaryPagesHtml,
     diaryHasMeaningfulContent,
     emptyModel,
 } from './diary-sheet.js';
@@ -42,6 +40,7 @@ import {
     getFieldForEditor,
     stripHtmlToPlain,
 } from './quill-fields.js';
+import { openPrintCloneWindow } from './print-clone.js';
 
 const letterPagesEl = document.getElementById('letterPages');
 const suggestionsBox = document.getElementById('suggestions');
@@ -1264,47 +1263,19 @@ function initApp() {
     }
 
     async function runPdfExport() {
-        const activeTemplate = getActiveTemplate();
-        let content = '';
+        const activeTemplate = getActiveTemplate() === 'letter' ? 'letter' : 'diary';
+        // Sync model from live DOM so spill/page state is current before clone.
         if (activeTemplate === 'letter') {
-            content = letterPagesHtml(letterSheet?.getPages() ?? ['']);
+            letterSheet?.getPages?.();
         } else {
-            const model = diarySheet?.getModel() ?? emptyModel();
-            content = diaryPagesHtml(model);
+            diarySheet?.getModel?.();
         }
-        if (!content) return alert('Cannot export empty document!');
 
-        const printStyles = activeTemplate === 'letter' ? letterPrintCss() : diaryPrintCss();
-        const printWindow = window.open('', '_blank');
-        if (!printWindow) {
+        const result = await openPrintCloneWindow(activeTemplate);
+        if (result === 'blocked') {
             alert('Pop-up blocked. Allow pop-ups to export PDF.');
-            return;
-        }
-        printWindow.document.documentElement.innerHTML = `
-            <head>
-                <meta charset="UTF-8">
-                <title>Print Document</title>
-                <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;500;700&display=swap" rel="stylesheet">
-                <style>
-                    ${printStyles}
-                </style>
-            </head>
-            <body>
-                ${content}
-            </body>
-        `;
-
-        const doPrint = () => {
-            printWindow.print();
-            printWindow.onafterprint = function () {
-                printWindow.close();
-            };
-        };
-
-        if (printWindow.document.fonts && printWindow.document.fonts.ready) {
-            printWindow.document.fonts.ready.then(doPrint);
-        } else {
-            setTimeout(doPrint, 500);
+        } else if (result === 'empty') {
+            alert('Cannot export empty document!');
         }
     }
 

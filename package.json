@@ -23,6 +23,7 @@
   "homepage": "https://github.com/arverma/Bihar-Police-Notebook#readme",
   "devDependencies": {
     "@playwright/test": "^1.62.1",
+    "jsdom": "^27.0.1",
     "vitest": "^3.2.7"
   },
   "type": "module"
