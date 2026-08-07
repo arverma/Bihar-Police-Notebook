@@ -5,7 +5,6 @@
  */
 
 const PRINT_IFRAME_ID = 'bp-print-iframe';
-
 const FONT_LINK =
   'https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;500;700&display=swap';
 const QUILL_SNOW =
@@ -421,7 +420,6 @@ export async function openPrintCloneWindow(template) {
   } catch (_) {
     await new Promise((r) => setTimeout(r, 500));
   }
-
   void doc.body?.offsetHeight;
   const contentH = doc.documentElement?.scrollHeight || 0;
   if (contentH > 0) {
