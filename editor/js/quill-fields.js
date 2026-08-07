@@ -54,7 +54,10 @@ export function stripHtmlToPlain(html) {
 export function sanitizeQuillHtml(html) {
   const raw = String(html ?? '');
   if (!raw.trim()) return '';
-  if (isPlainDocContent(raw)) return raw;
+  // Plain text may still carry Quill getSemanticHTML() &nbsp; / U+00A0.
+  if (isPlainDocContent(raw)) {
+    return raw.replace(/\u00a0/g, ' ').replace(/&nbsp;/gi, ' ');
+  }
 
   const tpl = document.createElement('template');
   tpl.innerHTML = raw;
@@ -62,7 +65,14 @@ export function sanitizeQuillHtml(html) {
   const walk = (node) => {
     const children = [...node.childNodes];
     for (const child of children) {
-      if (child.nodeType === Node.TEXT_NODE) continue;
+      if (child.nodeType === Node.TEXT_NODE) {
+        // Quill getSemanticHTML() replaces every space with &nbsp;, which
+        // prevents soft wrapping under white-space:normal. Normalize to U+0020.
+        if (child.nodeValue && child.nodeValue.includes('\u00a0')) {
+          child.nodeValue = child.nodeValue.replace(/\u00a0/g, ' ');
+        }
+        continue;
+      }
       if (child.nodeType !== Node.ELEMENT_NODE) {
         child.remove();
         continue;
@@ -132,14 +142,27 @@ function escapePrintText(str) {
     .replace(/"/g, '&quot;');
 }
 
-/** CSS fragment for Quill-formatted print bodies. */
+/** CSS fragment for Quill-formatted print bodies (match live .ql-editor). */
 export function quillPrintCssFragment() {
   return `
+    .ql-print {
+      white-space: pre-wrap;
+      tab-size: 4;
+      -moz-tab-size: 4;
+      overflow-wrap: break-word;
+      word-wrap: break-word;
+      word-break: normal;
+    }
     .ql-print strong, .ql-print b { font-weight: 700; }
     .ql-print em, .ql-print i { font-style: italic; }
     .ql-print u { text-decoration: underline; }
-    .ql-print ul { margin: 0; padding-left: 1.4em; }
+    .ql-print ul,
+    .ql-print ol {
+      margin: 0;
+      padding-left: 1.4em;
+    }
     .ql-print li { list-style: disc; }
+    .ql-print ol > li { list-style: decimal; }
     .ql-print img { max-width: 100%; height: auto; display: block; margin: 0.25em 0; }
     .ql-print .ql-align-center, .ql-print [style*="text-align: center"] { text-align: center; }
     .ql-print .ql-align-right, .ql-print [style*="text-align: right"] { text-align: right; }
