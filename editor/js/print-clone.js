@@ -1,9 +1,10 @@
 /**
- * Clone live A4 page cards into a print popup so PDF wrapping matches the editor.
+ * Clone live A4 page cards into a print iframe so PDF wrapping matches the editor.
  * Screen chrome is stripped; header controls become static spans; left column
  * stays a textarea (same wrap engine); Quill bodies keep live HTML (real spaces).
  */
 
+const PRINT_IFRAME_ID = 'bp-print-iframe';
 const FONT_LINK =
   'https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;500;700&display=swap';
 const QUILL_SNOW =
@@ -99,7 +100,7 @@ export function printCloneExtraCss() {
     .print-pages .diary-cell .print-static-quill {
       padding: 4px 6px;
       font-family: 'Noto Sans Devanagari', Arial, sans-serif;
-      font-size: 15px;
+      font-size: 16px;
       line-height: 24px;
       height: 100%;
       max-height: none;
@@ -345,20 +346,46 @@ export function buildPrintCloneBody(template) {
 }
 
 /**
- * Open a print popup with cloned pages and trigger print after fonts load.
+ * Remove the print iframe if it is still in the document.
+ * @param {HTMLIFrameElement} frame
+ */
+function removePrintIframe(frame) {
+  try {
+    if (frame.isConnected) frame.remove();
+  } catch (_) { /* ignore */ }
+}
+
+/**
+ * Open a same-page print iframe with cloned pages and trigger print after styles/fonts load.
  * @param {'diary'|'letter'} template
- * @returns {Promise<'ok'|'blocked'|'empty'>}
+ * @returns {Promise<'ok'|'empty'>}
  */
 export async function openPrintCloneWindow(template) {
   const built = buildPrintCloneBody(template);
   if (!built || !built.html) return 'empty';
 
-  const printWindow = window.open('', '_blank');
-  if (!printWindow) return 'blocked';
+  const existing = document.getElementById(PRINT_IFRAME_ID);
+  if (existing) existing.remove();
 
-  const fontSize = template === 'letter' ? 16 : 15;
-  printWindow.document.documentElement.innerHTML = `
-    <head>
+  const frame = document.createElement('iframe');
+  frame.id = PRINT_IFRAME_ID;
+  frame.setAttribute('aria-hidden', 'true');
+  frame.setAttribute('scrolling', 'no');
+  // Offscreen — never display:none / visibility:hidden (blank prints).
+  frame.style.cssText =
+    'position:fixed;left:-20000px;top:0;width:210mm;height:4000px;border:0;overflow:hidden;';
+  document.body.appendChild(frame);
+
+  const doc = frame.contentDocument;
+  const win = frame.contentWindow;
+  if (!doc || !win) {
+    removePrintIframe(frame);
+    return 'empty';
+  }
+
+  const fontSize = 16;
+  doc.open();
+  doc.write(`<!DOCTYPE html><html><head>
       <meta charset="UTF-8">
       <title>Print Document</title>
       ${printCloneStylesheetLinks()}
@@ -366,33 +393,54 @@ export async function openPrintCloneWindow(template) {
     </head>
     <body class="print-root">
       ${built.html}
-    </body>
-  `;
-  try {
-    printWindow.document.close();
-  } catch (_) { /* ignore */ }
+    </body></html>`);
+  doc.close();
 
-  const doPrint = () => {
-    printWindow.print();
-    printWindow.onafterprint = () => {
-      printWindow.close();
-    };
-  };
-
-  try {
-    if (printWindow.document.fonts?.load) {
-      await printWindow.document.fonts.load(`${fontSize}px "Noto Sans Devanagari"`);
-      await printWindow.document.fonts.load(`700 ${fontSize}px "Noto Sans Devanagari"`);
+  const links = [...doc.querySelectorAll('link[rel="stylesheet"]')];
+  await Promise.all(links.map((link) => new Promise((resolve) => {
+    if (link.sheet) {
+      resolve();
+      return;
     }
-    if (printWindow.document.fonts?.ready) {
-      await printWindow.document.fonts.ready;
+    link.addEventListener('load', () => resolve(), { once: true });
+    link.addEventListener('error', () => resolve(), { once: true });
+    setTimeout(resolve, 3000);
+  })));
+
+  try {
+    if (doc.fonts?.load) {
+      await doc.fonts.load(`${fontSize}px "Noto Sans Devanagari"`);
+      await doc.fonts.load(`700 ${fontSize}px "Noto Sans Devanagari"`);
+    }
+    if (doc.fonts?.ready) {
+      await doc.fonts.ready;
     } else {
       await new Promise((r) => setTimeout(r, 400));
     }
   } catch (_) {
     await new Promise((r) => setTimeout(r, 500));
   }
+  void doc.body?.offsetHeight;
+  const contentH = doc.documentElement?.scrollHeight || 0;
+  if (contentH > 0) {
+    frame.style.height = `${contentH}px`;
+  }
 
-  doPrint();
+  let cleaned = false;
+  const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
+    removePrintIframe(frame);
+  };
+
+  win.addEventListener('afterprint', () => {
+    setTimeout(cleanup, 500);
+  }, { once: true });
+  setTimeout(cleanup, 60_000);
+
+  try {
+    win.focus();
+  } catch (_) { /* ignore */ }
+  win.print();
   return 'ok';
 }
