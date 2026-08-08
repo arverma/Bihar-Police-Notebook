@@ -267,19 +267,151 @@ export async function generateClientPdf(options) {
   }
 }
 /**
- * Deliver a PDF blob: prefer opening in a reserved window, else download.
- * Callers on iOS should pass a window opened synchronously before awaiting generation.
+ * Show a "PDF ready" sheet whose button is a real link the user taps.
+ *
+ * Synthetic `a.click()` on a blob URL is unreliable in WKWebView browsers
+ * (notably Chrome on iOS), and Web Share needs live user activation that a
+ * multi-second render may have already consumed. A genuine tap restores both.
+ *
+ * @param {string} url object URL for the PDF
+ * @param {string} filename
+ * @param {Blob} blob
+ * @returns {Promise<'download'|'share'>}
+ */
+function showPdfReadySheet(url, filename, blob) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'bp-pdf-ready-overlay';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-label', 'PDF ready');
+    overlay.style.cssText = [
+      'position:fixed', 'inset:0', 'z-index:2147483000',
+      'display:flex', 'align-items:center', 'justify-content:center',
+      'padding:20px', 'background:rgba(0,0,0,0.45)',
+    ].join(';');
+
+    const card = document.createElement('div');
+    card.style.cssText = [
+      'background:#fff', 'border-radius:12px', 'padding:20px',
+      'max-width:340px', 'width:100%', 'text-align:center',
+      'font-family:Roboto,Helvetica,sans-serif',
+      'box-shadow:0 10px 30px rgba(0,0,0,0.25)',
+    ].join(';');
+
+    const title = document.createElement('div');
+    title.textContent = 'PDF ready';
+    title.style.cssText = 'font-size:17px;font-weight:600;margin-bottom:6px;color:#111';
+
+    const sub = document.createElement('div');
+    sub.textContent = filename;
+    sub.style.cssText = 'font-size:13px;color:#555;margin-bottom:16px;word-break:break-word';
+
+    const openLink = document.createElement('a');
+    openLink.href = url;
+    openLink.download = filename;
+    openLink.target = '_blank';
+    openLink.rel = 'noopener';
+    openLink.textContent = 'Open / Save PDF';
+    openLink.style.cssText = [
+      'display:block', 'padding:12px 16px', 'border-radius:8px',
+      'background:#1a56b8', 'color:#fff', 'text-decoration:none',
+      'font-size:15px', 'font-weight:600',
+    ].join(';');
+
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.textContent = 'Close';
+    close.style.cssText = [
+      'margin-top:10px', 'padding:10px 16px', 'width:100%',
+      'border:1px solid #ccc', 'border-radius:8px', 'background:#fff',
+      'color:#333', 'font-size:14px', 'cursor:pointer',
+    ].join(';');
+
+    let settled = false;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      overlay.remove();
+      resolve(result);
+    };
+
+    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+      const shareBtn = document.createElement('button');
+      shareBtn.type = 'button';
+      shareBtn.textContent = 'Share PDF';
+      shareBtn.style.cssText = [
+        'margin-top:10px', 'padding:10px 16px', 'width:100%',
+        'border:1px solid #1a56b8', 'border-radius:8px', 'background:#fff',
+        'color:#1a56b8', 'font-size:14px', 'font-weight:600', 'cursor:pointer',
+      ].join(';');
+      shareBtn.addEventListener('click', async () => {
+        try {
+          const file = new File([blob], filename, { type: 'application/pdf' });
+          if (!navigator.canShare || navigator.canShare({ files: [file] })) {
+            await navigator.share({ files: [file], title: filename });
+            finish('share');
+            return;
+          }
+        } catch (_) { /* keep the sheet open so the link is still reachable */ }
+      });
+      card.append(title, sub, openLink, shareBtn, close);
+    } else {
+      card.append(title, sub, openLink, close);
+    }
+
+    openLink.addEventListener('click', () => {
+      setTimeout(() => finish('download'), 400);
+    });
+    close.addEventListener('click', () => finish('download'));
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) finish('download');
+    });
+
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+    openLink.focus();
+  });
+}
+
+/**
+ * Deliver a PDF blob.
+ *
+ * Never pre-open a tab before generation: iOS backgrounds the editor tab, which
+ * throttles rendering and stalls rasterization (symptom: permanent blank tab).
+ * Generate first, then hand the finished blob to the OS.
  *
  * @param {Blob} blob
  * @param {string} filename
- * @param {{ previewWindow?: Window | null, revokeDelayMs?: number }} [opts]
- * @returns {'preview'|'download'}
+ * @param {{
+ *   previewWindow?: Window | null,
+ *   revokeDelayMs?: number,
+ *   share?: boolean,
+ *   sheet?: boolean,
+ * }} [opts]
+ * @returns {Promise<'share'|'preview'|'download'>}
  */
-export function deliverPdfBlob(blob, filename, opts = {}) {
-  const url = URL.createObjectURL(blob);
-  const revokeDelay = opts.revokeDelayMs ?? 60_000;
+export async function deliverPdfBlob(blob, filename, opts = {}) {
+  const revokeDelay = opts.revokeDelayMs ?? 5 * 60_000;
   const preview = opts.previewWindow;
+  const allowShare = opts.share !== false;
+  const allowSheet = opts.sheet !== false;
 
+  // Try the native sheet first: if activation survived the render, this is the
+  // best iOS outcome (Save to Files / Print / Mail) with no extra tap.
+  if (allowShare && typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+    try {
+      const file = new File([blob], filename, { type: 'application/pdf' });
+      if (!navigator.canShare || navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: filename });
+        return 'share';
+      }
+    } catch (err) {
+      if (err && err.name === 'AbortError') return 'share';
+    }
+  }
+
+  const url = URL.createObjectURL(blob);
   const revokeLater = () => {
     setTimeout(() => {
       try { URL.revokeObjectURL(url); } catch (_) { /* ignore */ }
@@ -296,6 +428,12 @@ export function deliverPdfBlob(blob, filename, opts = {}) {
     }
   }
 
+  if (allowSheet && isWebKitMobile()) {
+    const result = await showPdfReadySheet(url, filename, blob);
+    revokeLater();
+    return result;
+  }
+
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;
@@ -306,4 +444,17 @@ export function deliverPdfBlob(blob, filename, opts = {}) {
   a.remove();
   revokeLater();
   return 'download';
+}
+
+/**
+ * iOS/iPadOS browsers are all WKWebView, including Chrome (CriOS) and Firefox (FxiOS).
+ * @returns {boolean}
+ */
+function isWebKitMobile() {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  if (/Android/i.test(ua)) return false;
+  if (/iPhone|iPod|iPad/i.test(ua)) return true;
+  return (/Macintosh/i.test(ua) || navigator.platform === 'MacIntel')
+    && Number(navigator.maxTouchPoints) > 1;
 }

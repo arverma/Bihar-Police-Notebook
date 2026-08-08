@@ -396,7 +396,7 @@ test.describe('Print parity (live clone)', () => {
       window.__clientPdfDone = false;
       window.__clientPdfMeta = null;
       window.__clientPdfErrors = [];
-
+      window.__tabsOpened = 0;
       const origError = console.error.bind(console);
       console.error = (...args) => {
         window.__clientPdfErrors.push(args.map(String).join(' '));
@@ -412,37 +412,39 @@ test.describe('Print parity (live clone)', () => {
       }, 10);
       setTimeout(() => clearInterval(poll), 60000);
 
-      const preview = {
-        closed: false,
-        location: {
-          set href(v) {
-            this._href = v;
-            window.__clientPdfHref = v;
-            if (typeof v === 'string' && v.startsWith('blob:')) {
-              fetch(v).then(async (r) => {
-                const buf = await r.arrayBuffer();
-                const bytes = new Uint8Array(buf);
-                const head = String.fromCharCode(...bytes.slice(0, 5));
+      // A blank tab opened before generation is exactly the iOS failure mode.
+      window.open = () => { window.__tabsOpened += 1; return null; };
+
+      // Intercept the download anchor to inspect the produced blob.
+      const origCreate = document.createElement.bind(document);
+      document.createElement = (tag, ...rest) => {
+        const el = origCreate(tag, ...rest);
+        if (String(tag).toLowerCase() === 'a') {
+          el.click = () => {
+            const href = el.getAttribute('href') || '';
+            window.__clientPdfDownloadName = el.download;
+            if (href.startsWith('blob:')) {
+              fetch(href).then(async (r) => {
+                const bytes = new Uint8Array(await r.arrayBuffer());
                 const text = new TextDecoder('latin1').decode(bytes);
-                const pageMatches = text.match(/\/Type\s*\/Page[^s]/g) || [];
                 window.__clientPdfMeta = {
-                  header: head,
+                  header: String.fromCharCode(...bytes.slice(0, 5)),
                   byteLength: bytes.byteLength,
-                  pageCount: pageMatches.length,
+                  pageCount: (text.match(/\/Type\s*\/Page[^s]/g) || []).length,
                 };
                 window.__clientPdfDone = true;
               }).catch((err) => {
                 window.__clientPdfMeta = { error: String(err) };
                 window.__clientPdfDone = true;
               });
+            } else {
+              window.__clientPdfMeta = { error: `unexpected href: ${href}` };
+              window.__clientPdfDone = true;
             }
-          },
-          get href() { return this._href || ''; },
-          _href: '',
-        },
-        close() { this.closed = true; },
+          };
+        }
+        return el;
       };
-      window.open = () => preview;
     });
 
     const editor = page.locator('.editor-diary .diary-page .ql-editor').first();
@@ -468,10 +470,14 @@ test.describe('Print parity (live clone)', () => {
       printOpened: window.__printOpened,
       meta: window.__clientPdfMeta,
       errors: window.__clientPdfErrors,
+      tabsOpened: window.__tabsOpened,
+      downloadName: window.__clientPdfDownloadName,
     }));
 
     expect(result.meta?.error, JSON.stringify(result)).toBeUndefined();
     expect(result.printOpened).toBe(false);
+    expect(result.tabsOpened).toBe(0);
+    expect(result.downloadName).toMatch(/\.pdf$/);
     expect(result.meta?.header).toBe('%PDF-');
     expect(result.meta?.byteLength).toBeGreaterThan(1000);
     expect(result.meta?.pageCount).toBe(liveMeta.pageCount);

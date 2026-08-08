@@ -139,15 +139,56 @@ test('generateClientPdf throws empty and still cleans up when no pages', async (
   expect(cleaned).toBe(true);
 });
 
-test('deliverPdfBlob uses preview window when available', () => {
+test('deliverPdfBlob prefers the native share sheet when files are shareable', async () => {
+  const blob = new Blob(['%PDF'], { type: 'application/pdf' });
+  const shared = [];
+  navigator.canShare = () => true;
+  navigator.share = async (data) => { shared.push(data); };
+  try {
+    const mode = await deliverPdfBlob(blob, 'Doc.pdf', { revokeDelayMs: 1 });
+    expect(mode).toBe('share');
+    expect(shared[0].files[0].name).toBe('Doc.pdf');
+  } finally {
+    delete navigator.canShare;
+    delete navigator.share;
+  }
+});
+
+test('deliverPdfBlob uses preview window when share is unavailable', async () => {
   const preview = { closed: false, location: { href: '' } };
   const blob = new Blob(['%PDF'], { type: 'application/pdf' });
-  const mode = deliverPdfBlob(blob, 'Doc.pdf', { previewWindow: preview, revokeDelayMs: 1 });
+  const mode = await deliverPdfBlob(blob, 'Doc.pdf', {
+    previewWindow: preview,
+    revokeDelayMs: 1,
+    share: false,
+  });
   expect(mode).toBe('preview');
   expect(preview.location.href).toMatch(/^blob:/);
 });
 
-test('deliverPdfBlob falls back to download anchor', () => {
+test('deliverPdfBlob shows a tap-to-save sheet on iOS browsers', async () => {
+  const blob = new Blob(['%PDF'], { type: 'application/pdf' });
+  const origUa = navigator.userAgent;
+  Object.defineProperty(navigator, 'userAgent', {
+    value: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 CriOS/120.0 Mobile/15E148 Safari/604.1',
+    configurable: true,
+  });
+  try {
+    const pending = deliverPdfBlob(blob, 'Doc.pdf', { revokeDelayMs: 1, share: false });
+    const link = document.querySelector('.bp-pdf-ready-overlay a');
+    expect(link).toBeTruthy();
+    expect(link.getAttribute('download')).toBe('Doc.pdf');
+    expect(link.getAttribute('href')).toMatch(/^blob:/);
+
+    document.querySelector('.bp-pdf-ready-overlay button').click();
+    await pending;
+    expect(document.querySelector('.bp-pdf-ready-overlay')).toBeNull();
+  } finally {
+    Object.defineProperty(navigator, 'userAgent', { value: origUa, configurable: true });
+  }
+});
+
+test('deliverPdfBlob falls back to download anchor', async () => {
   const blob = new Blob(['%PDF'], { type: 'application/pdf' });
   const clicks = [];
   const origCreate = document.createElement.bind(document);
@@ -166,3 +207,17 @@ test('deliverPdfBlob falls back to download anchor', () => {
     document.createElement = origCreate;
   }
 });
+
+test('deliverPdfBlob never opens a blank tab before generation', async () => {
+  const blob = new Blob(['%PDF'], { type: 'application/pdf' });
+  let opened = 0;
+  const origOpen = window.open;
+  window.open = () => { opened += 1; return null; };
+  try {
+    await deliverPdfBlob(blob, 'Doc.pdf', { revokeDelayMs: 1, share: false });
+    expect(opened).toBe(0);
+  } finally {
+    window.open = origOpen;
+  }
+});
+  

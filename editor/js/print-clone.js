@@ -372,14 +372,21 @@ async function waitForPrintCloneReady(doc) {
     setTimeout(resolve, 3000);
   })));
 
+  // Every wait below must be bounded: a throttled WebKit tab can leave font and
+  // image promises permanently pending, which would hang export with no error.
+  const capped = (promise, ms) => Promise.race([
+    Promise.resolve(promise).catch(() => undefined),
+    new Promise((r) => setTimeout(r, ms)),
+  ]);
+
   const fontSize = 16;
   try {
     if (doc.fonts?.load) {
-      await doc.fonts.load(`${fontSize}px "Noto Sans Devanagari"`);
-      await doc.fonts.load(`700 ${fontSize}px "Noto Sans Devanagari"`);
+      await capped(doc.fonts.load(`${fontSize}px "Noto Sans Devanagari"`), 3000);
+      await capped(doc.fonts.load(`700 ${fontSize}px "Noto Sans Devanagari"`), 3000);
     }
     if (doc.fonts?.ready) {
-      await doc.fonts.ready;
+      await capped(doc.fonts.ready, 5000);
     } else {
       await new Promise((r) => setTimeout(r, 400));
     }
