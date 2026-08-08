@@ -190,9 +190,8 @@
 
 /*
  * Mobile only (≤768px):
- *  [panel+logo LEFT] [spacer] [filename | Letter/Diary | PDF] [spacer]
- * Spacers share free width so the control cluster sits in the remaining
- * space instead of looking pinned left with a dead zone on the right.
+ *  [panel+logo LEFT] [spacer] [filename | Letter/Diary] [spacer] [PDF RIGHT]
+ * Spacers share free width; PDF stays flush right like desktop header-right.
  */
 @media (max-width: 768px) {
     .header-content {
@@ -225,7 +224,7 @@
         display: none;
     }
 
-    /* Leading spacer — balances free space after the brand */
+    /* Leading spacer — free space after the brand */
     .header-content::before {
         content: '';
         order: 2;
@@ -250,26 +249,31 @@
         display: none !important;
     }
 
+    .translit-toggle-wrapper {
+        display: none !important;
+    }
+
+    /* Trailing spacer — pushes PDF to the right edge */
+    .header-content::after {
+        content: '';
+        order: 5;
+        flex: 1 1 0;
+        min-width: 4px;
+        max-width: 100%;
+    }
+
     #exportBtn {
         display: inline-flex !important;
-        order: 5;
+        order: 6;
         flex: 0 0 auto;
         width: 36px;
         padding: 0;
         justify-content: center;
+        margin-left: 0;
     }
 
     #exportBtn span:not(.btn-icon) {
         display: none;
-    }
-
-    /* Trailing spacer — matches ::before so cluster isn't left-biased */
-    .header-content::after {
-        content: '';
-        order: 6;
-        flex: 1 1 0;
-        min-width: 4px;
-        max-width: 100%;
     }
 
     .segment-btn {
