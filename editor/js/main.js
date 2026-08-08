@@ -40,7 +40,7 @@ import {
     getFieldForEditor,
     stripHtmlToPlain,
 } from './quill-fields.js';
-import { openPrintCloneWindow } from './print-clone.js';
+import { runPdfExport as runRoutedPdfExport } from './pdf-export.js';
 
 const letterPagesEl = document.getElementById('letterPages');
 const suggestionsBox = document.getElementById('suggestions');
@@ -1271,10 +1271,19 @@ function initApp() {
             diarySheet?.getModel?.();
         }
 
-        const result = await openPrintCloneWindow(activeTemplate);
-        if (result === 'empty') {
-            alert('Cannot export empty document!');
-        }
+        const filename = (filenameInput?.value || '').trim()
+            || formatDocFilename(new Date(currentDoc.createdAt));
+        // Optional test/dev override: window.__bpExportMode = 'client-pdf' | 'native-print'
+        const modeOverride = typeof window !== 'undefined' && window.__bpExportMode
+            ? window.__bpExportMode
+            : null;
+        await runRoutedPdfExport({
+            template: activeTemplate,
+            filename,
+            mode: modeOverride === 'client-pdf' || modeOverride === 'native-print'
+                ? modeOverride
+                : null,
+        });
     }
 
     exportBtn?.addEventListener('click', () => { void runPdfExport(); });
