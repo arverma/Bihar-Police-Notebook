@@ -6,9 +6,10 @@ import {
   A4_WIDTH_PT,
   A4_HEIGHT_PT,
   normalizePdfFilename,
-  generateClientPdf,
+  generateRasterPdf,
   deliverPdfBlob,
-} from './client-pdf.js';
+  prepareCloneForRaster,
+} from './raster-pdf.js';
 
 beforeEach(() => {
   if (typeof URL.createObjectURL !== 'function') {
@@ -26,7 +27,83 @@ test('normalizePdfFilename appends .pdf once and strips unsafe chars', () => {
   expect(normalizePdfFilename('   ')).toBe('Document.pdf');
 });
 
-test('generateClientPdf builds one A4 page per clone card and cleans up', async () => {
+test('prepareCloneForRaster swaps textareas for wrapping static boxes', () => {
+  const host = document.createElement('div');
+  host.innerHTML = `
+    <table class="fir-table"><tbody><tr>
+      <td class="left-column"><textarea class="fir-input" data-col="left"></textarea></td>
+    </tr></tbody></table>
+  `;
+  document.body.appendChild(host);
+  const ta = host.querySelector('textarea');
+  ta.value = 'पहली पंक्ति\nदूसरी पंक्ति';
+
+  try {
+    prepareCloneForRaster(document);
+
+    expect(host.querySelector('textarea')).toBeNull();
+    const box = host.querySelector('.fir-input');
+    expect(box.tagName).toBe('DIV');
+    expect(box.textContent).toBe('पहली पंक्ति\nदूसरी पंक्ति');
+    expect(box.style.whiteSpace).toBe('pre-wrap');
+    expect(box.style.overflow).toBe('hidden');
+    expect(box.dataset.col).toBe('left');
+  } finally {
+    host.remove();
+  }
+});
+
+test('prepareCloneForRaster gives each table edge a single owner', () => {
+  const host = document.createElement('div');
+  host.innerHTML = `
+    <table class="fir-table"><tbody>
+      <tr><th class="left-column">a</th><th class="right-column">b</th></tr>
+      <tr><td class="left-column">c</td><td class="right-column">d</td></tr>
+    </tbody></table>
+  `;
+  document.body.appendChild(host);
+  try {
+    prepareCloneForRaster(document);
+
+    const cell = (r, c) => host.querySelectorAll('tr')[r].cells[c];
+    // Only the left cell draws the shared vertical edge.
+    expect(cell(0, 0).style.borderRightWidth).toBe('1px');
+    expect(cell(0, 1).style.borderLeftWidth).toBe('0px');
+    // Only the top row draws the shared horizontal edge.
+    expect(cell(0, 0).style.borderBottomWidth).toBe('1px');
+    expect(cell(1, 0).style.borderTopWidth).toBe('0px');
+    // Edge cells draw the frame, at the same weight as the inner rules.
+    expect(cell(0, 0).style.borderTopWidth).toBe('1px');
+    expect(cell(0, 0).style.borderLeftWidth).toBe('1px');
+    expect(cell(1, 1).style.borderRightWidth).toBe('1px');
+    expect(cell(1, 1).style.borderBottomWidth).toBe('1px');
+    // A table border would sit under the opaque cell backgrounds.
+    expect(host.querySelector('.fir-table').style.borderWidth).toBe('0px');
+  } finally {
+    host.remove();
+  }
+});
+
+test('prepareCloneForRaster frames the first visible row on header-less pages', () => {
+  const host = document.createElement('div');
+  host.innerHTML = `
+    <table class="fir-table"><tbody>
+      <tr class="diary-titles-row" hidden><th>a</th><th>b</th></tr>
+      <tr class="diary-body-row"><td>c</td><td>d</td></tr>
+    </tbody></table>
+  `;
+  document.body.appendChild(host);
+  try {
+    prepareCloneForRaster(document);
+
+    const body = host.querySelector('.diary-body-row');
+    expect(body.cells[0].style.borderTopWidth).toBe('1px');
+  } finally {
+    host.remove();
+  }
+});
+
+test('generateRasterPdf builds one A4 page per clone card and cleans up', async () => {
   const formats = [];
   const images = [];
   let cleaned = false;
@@ -46,7 +123,7 @@ test('generateClientPdf builds one A4 page per clone card and cleans up', async 
     getContext: () => ({ clearRect() {} }),
   };
 
-  const result = await generateClientPdf({
+  const result = await generateRasterPdf({
     template: 'diary',
     filename: 'केस',
     title: 'केस',
@@ -103,9 +180,9 @@ test('generateClientPdf builds one A4 page per clone card and cleans up', async 
   expect(images[0].type).toBe('JPEG');
 });
 
-test('generateClientPdf throws empty and still cleans up when no pages', async () => {
+test('generateRasterPdf throws empty and still cleans up when no pages', async () => {
   let cleaned = false;
-  await expect(generateClientPdf({
+  await expect(generateRasterPdf({
     template: 'letter',
     filename: 'x',
     mount: async () => ({

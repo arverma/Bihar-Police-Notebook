@@ -1,5 +1,5 @@
 /**
- * Clone live A4 page cards into a print iframe so PDF wrapping matches the editor.
+ * Build a sanitized A4 print document from live page cards so PDF wrapping matches the editor.
  * Screen chrome is stripped; header controls become static spans; left column
  * stays a textarea (same wrap engine); Quill bodies keep live HTML (real spaces).
  */
@@ -13,7 +13,7 @@ const QUILL_SNOW =
 /**
  * Extra CSS for the print popup (live page cards already include page padding).
  */
-export function printCloneExtraCss() {
+export function printDocumentExtraCss() {
   return `
     @page {
       size: A4;
@@ -23,6 +23,10 @@ export function printCloneExtraCss() {
       margin: 0;
       padding: 0;
       background: #fff;
+      /* WebKit inflates fonts in blocks wider than the device viewport; the
+         clone is a fixed 210mm sheet, so boosting must be off. */
+      -webkit-text-size-adjust: 100%;
+      text-size-adjust: 100%;
     }
     body.print-root {
       margin: 0;
@@ -68,6 +72,17 @@ export function printCloneExtraCss() {
       background: transparent;
       color: #000;
       -webkit-text-fill-color: #000;
+    }
+    /* Static replacement for the titles-row input keeps its own line (the live
+       rule targets input, which no longer matches after flattening). */
+    .print-pages .fir-table th.right-column .print-static {
+      display: block;
+      width: 48px;
+      margin: 4px auto 0;
+      text-align: center;
+      font-size: 12px;
+      font-weight: 400;
+      border-bottom: 1px dotted #333;
     }
     .print-pages .diary-dotted.print-static {
       display: inline-block;
@@ -122,7 +137,7 @@ export function printCloneExtraCss() {
 }
 
 /**
- * @param {string} relativePath path under editor/ (e.g. css/style.css)
+ * @param {string} relativePath path under editor/ (e.g. css/editor.css)
  * @returns {string}
  */
 function absUrl(relativePath) {
@@ -133,12 +148,12 @@ function absUrl(relativePath) {
  * Stylesheet links shared with the live editor.
  * @returns {string}
  */
-export function printCloneStylesheetLinks() {
+export function printDocumentStylesheetLinks() {
   // Match editor/index.html order: app CSS first, Quill snow last.
   return [
     `<link rel="stylesheet" href="${FONT_LINK}">`,
     `<link rel="stylesheet" href="${absUrl('css/tokens.css')}">`,
-    `<link rel="stylesheet" href="${absUrl('css/style.css')}">`,
+    `<link rel="stylesheet" href="${absUrl('css/editor.css')}">`,
     `<link rel="stylesheet" href="${QUILL_SNOW}">`,
   ].join('\n');
 }
@@ -225,7 +240,7 @@ function flattenQuillHosts(pageEl) {
  * @param {HTMLElement} pageEl
  * @returns {HTMLElement}
  */
-export function sanitizePageClone(pageEl) {
+export function sanitizeExportPage(pageEl) {
   pageEl.querySelectorAll('.screen-only').forEach((el) => el.remove());
   pageEl.querySelectorAll('.diary-page-chrome, .letter-page-chrome').forEach((el) => el.remove());
   pageEl.classList.remove('diary-box-overflow');
@@ -266,7 +281,7 @@ export function sanitizePageClone(pageEl) {
  * @param {'diary'|'letter'} template
  * @returns {{ html: string, pageCount: number } | null}
  */
-export function buildPrintCloneBody(template) {
+export function buildPrintDocumentHtml(template) {
   const wrapperSel = template === 'letter' ? '.editor-wrapper.editor-letter' : '.editor-wrapper.editor-diary';
   const pageSel = template === 'letter' ? '.letter-page' : '.diary-page';
   const wrapper = document.querySelector(wrapperSel);
@@ -326,7 +341,7 @@ export function buildPrintCloneBody(template) {
       }
     });
 
-    sanitizePageClone(clone);
+    sanitizeExportPage(clone);
     // Textarea .value is not serialized by outerHTML — put it in text content.
     clone.querySelectorAll('textarea').forEach((ta) => {
       if (ta instanceof HTMLTextAreaElement) {
@@ -356,7 +371,7 @@ function removePrintIframe(frame) {
 }
 
 /**
- * Wait for stylesheets, fonts, and images in a print-clone document.
+ * Wait for stylesheets, fonts, and images in a print-document.
  * @param {Document} doc
  * @returns {Promise<void>}
  */
@@ -408,7 +423,7 @@ async function waitForPrintCloneReady(doc) {
 }
 
 /**
- * @typedef {object} MountedPrintClone
+ * @typedef {object} MountedPrintDocument
  * @property {HTMLIFrameElement} frame
  * @property {Document} doc
  * @property {Window} win
@@ -421,10 +436,10 @@ async function waitForPrintCloneReady(doc) {
  * Mount sanitized A4 page cards in an offscreen iframe (shared by native print + client PDF).
  * @param {'diary'|'letter'} template
  * @param {{ title?: string }} [options]
- * @returns {Promise<MountedPrintClone | null>}
+ * @returns {Promise<MountedPrintDocument | null>}
  */
-export async function mountPrintCloneIframe(template, options = {}) {
-  const built = buildPrintCloneBody(template);
+export async function mountPrintDocument(template, options = {}) {
+  const built = buildPrintDocumentHtml(template);
   if (!built || !built.html) return null;
 
   const existing = document.getElementById(PRINT_IFRAME_ID);
@@ -450,9 +465,10 @@ export async function mountPrintCloneIframe(template, options = {}) {
   doc.open();
   doc.write(`<!DOCTYPE html><html><head>
       <meta charset="UTF-8">
+      <meta name="viewport" content="width=794">
       <title>${title.replace(/</g, '')}</title>
-      ${printCloneStylesheetLinks()}
-      <style>${printCloneExtraCss()}</style>
+      ${printDocumentStylesheetLinks()}
+      <style>${printDocumentExtraCss()}</style>
     </head>
     <body class="print-root">
       ${built.html}
@@ -494,8 +510,8 @@ export async function mountPrintCloneIframe(template, options = {}) {
  * @param {'diary'|'letter'} template
  * @returns {Promise<'ok'|'empty'>}
  */
-export async function openPrintCloneWindow(template) {
-  const mounted = await mountPrintCloneIframe(template);
+export async function triggerNativePrint(template) {
+  const mounted = await mountPrintDocument(template);
   if (!mounted) return 'empty';
 
   const { win, cleanup } = mounted;

@@ -48,11 +48,11 @@ async function lineBreakOffsets(locator) {
  * @param {import('@playwright/test').Page} page
  * @param {'diary'|'letter'} template
  */
-async function mountPrintCloneInIframe(page, template) {
+async function mountPrintDocumentInIframe(page, template) {
   return page.evaluate(async (tpl) => {
-    const mod = await import('/js/print-clone.js');
-    const built = mod.buildPrintCloneBody(tpl);
-    if (!built) throw new Error('buildPrintCloneBody returned null');
+    const mod = await import('/js/export/print-document.js');
+    const built = mod.buildPrintDocumentHtml(tpl);
+    if (!built) throw new Error('buildPrintDocumentHtml returned null');
 
     let iframe = document.getElementById('print-parity-iframe');
     if (iframe) iframe.remove();
@@ -66,8 +66,8 @@ async function mountPrintCloneInIframe(page, template) {
     if (!doc) throw new Error('no iframe document');
     doc.open();
     doc.write(`<!DOCTYPE html><html><head>
-      ${mod.printCloneStylesheetLinks()}
-      <style>${mod.printCloneExtraCss()}</style>
+      ${mod.printDocumentStylesheetLinks()}
+      <style>${mod.printDocumentExtraCss()}</style>
     </head><body class="print-root">${built.html}</body></html>`);
     doc.close();
 
@@ -127,7 +127,7 @@ test.describe('Print parity (live clone)', () => {
     await page.locator('.diary-page-label').first().click({ force: true }).catch(() => {});
 
     const html = await page.evaluate(async () => {
-      const mod = await import('/js/quill-fields.js');
+      const mod = await import('/js/quill-pages.js');
       const root = document.querySelector('.editor-diary .ql-editor');
       // Prefer live sanitize of semantic-like nbsp HTML
       const poisoned = '<p>यह&nbsp;एक&nbsp;परीक्षण</p>';
@@ -164,7 +164,7 @@ test.describe('Print parity (live clone)', () => {
     });
     const screenBreaks = await lineBreakOffsets(editor);
 
-    const mounted = await mountPrintCloneInIframe(page, 'diary');
+    const mounted = await mountPrintDocumentInIframe(page, 'diary');
     expect(mounted.pageCount).toBeGreaterThanOrEqual(1);
     expect(mounted.sampleWidth).toMatch(/width:\s*\d+px/);
 
@@ -200,7 +200,7 @@ test.describe('Print parity (live clone)', () => {
       scrollHeight: el.scrollHeight,
     }));
 
-    await mountPrintCloneInIframe(page, 'diary');
+    await mountPrintDocumentInIframe(page, 'diary');
     const printMeta = await page.frameLocator('#print-parity-iframe')
       .locator('textarea[data-col="left"]').first()
       .evaluate((el) => ({
@@ -217,7 +217,7 @@ test.describe('Print parity (live clone)', () => {
   });
 
   test('print clone has no editor chrome', async ({ page }) => {
-    await mountPrintCloneInIframe(page, 'diary');
+    await mountPrintDocumentInIframe(page, 'diary');
     const frame = page.frameLocator('#print-parity-iframe');
     await expect(frame.locator('.diary-page-chrome')).toHaveCount(0);
     await expect(frame.locator('#quillToolbar')).toHaveCount(0);
@@ -243,7 +243,7 @@ test.describe('Print parity (live clone)', () => {
     const liveCount = await page.locator('.editor-diary .diary-page').count();
     expect(liveCount).toBeGreaterThanOrEqual(2);
 
-    const mounted = await mountPrintCloneInIframe(page, 'diary');
+    const mounted = await mountPrintDocumentInIframe(page, 'diary');
     expect(mounted.pageCount).toBe(liveCount);
 
     const overflow = await page.frameLocator('#print-parity-iframe')
@@ -296,7 +296,7 @@ test.describe('Print parity (live clone)', () => {
     expect(liveAligns.length).toBe(4);
     expect(liveAligns.map((p) => p.text)).toEqual(['चार', 'सेंटर', 'राइट', 'जस्टिफाई']);
 
-    await mountPrintCloneInIframe(page, 'diary');
+    await mountPrintDocumentInIframe(page, 'diary');
     const printParas = page.frameLocator('#print-parity-iframe')
       .locator('.diary-page .print-static-quill p');
     await expect(printParas).toHaveCount(4);
@@ -336,7 +336,7 @@ test.describe('Print parity (live clone)', () => {
 
     await page.waitForTimeout(200);
     const screenBreaks = await lineBreakOffsets(editor);
-    await mountPrintCloneInIframe(page, 'letter');
+    await mountPrintDocumentInIframe(page, 'letter');
     const printEditor = page.frameLocator('#print-parity-iframe')
       .locator('.letter-page .print-static-quill, .letter-page .ql-editor').first();
     await expect(printEditor).toBeVisible({ timeout: 10000 });
@@ -379,28 +379,28 @@ test.describe('Print parity (live clone)', () => {
     expect(meta.hasDiary).toBe(true);
   });
 
-  test('forced client-pdf path builds A4 blob without calling print', async ({ page }) => {
+  test('forced raster-pdf path builds A4 blob without calling print', async ({ page }) => {
     test.setTimeout(90_000);
 
     page.on('dialog', async (dialog) => {
       await page.evaluate((msg) => {
-        window.__clientPdfMeta = { error: `dialog:${msg}` };
-        window.__clientPdfDone = true;
+        window.__rasterPdfMeta = { error: `dialog:${msg}` };
+        window.__rasterPdfDone = true;
       }, dialog.message());
       await dialog.dismiss();
     });
 
     await page.evaluate(() => {
-      window.__bpExportMode = 'client-pdf';
+      window.__bpExportMode = 'raster-pdf';
       window.__printOpened = false;
-      window.__clientPdfDone = false;
-      window.__clientPdfMeta = null;
-      window.__clientPdfErrors = [];
+      window.__rasterPdfDone = false;
+      window.__rasterPdfMeta = null;
+      window.__rasterPdfErrors = [];
       window.__tabsOpened = 0;
 
       const origError = console.error.bind(console);
       console.error = (...args) => {
-        window.__clientPdfErrors.push(args.map(String).join(' '));
+        window.__rasterPdfErrors.push(args.map(String).join(' '));
         origError(...args);
       };
 
@@ -423,24 +423,24 @@ test.describe('Print parity (live clone)', () => {
         if (String(tag).toLowerCase() === 'a') {
           el.click = () => {
             const href = el.getAttribute('href') || '';
-            window.__clientPdfDownloadName = el.download;
+            window.__rasterPdfDownloadName = el.download;
             if (href.startsWith('blob:')) {
               fetch(href).then(async (r) => {
                 const bytes = new Uint8Array(await r.arrayBuffer());
                 const text = new TextDecoder('latin1').decode(bytes);
-                window.__clientPdfMeta = {
+                window.__rasterPdfMeta = {
                   header: String.fromCharCode(...bytes.slice(0, 5)),
                   byteLength: bytes.byteLength,
                   pageCount: (text.match(/\/Type\s*\/Page[^s]/g) || []).length,
                 };
-                window.__clientPdfDone = true;
+                window.__rasterPdfDone = true;
               }).catch((err) => {
-                window.__clientPdfMeta = { error: String(err) };
-                window.__clientPdfDone = true;
+                window.__rasterPdfMeta = { error: String(err) };
+                window.__rasterPdfDone = true;
               });
             } else {
-              window.__clientPdfMeta = { error: `unexpected href: ${href}` };
-              window.__clientPdfDone = true;
+              window.__rasterPdfMeta = { error: `unexpected href: ${href}` };
+              window.__rasterPdfDone = true;
             }
           };
         }
@@ -465,14 +465,14 @@ test.describe('Print parity (live clone)', () => {
     expect(liveMeta.width).toBeGreaterThan(700);
 
     await page.locator('#exportBtn').click();
-    await page.waitForFunction(() => window.__clientPdfDone === true, null, { timeout: 60000 });
+    await page.waitForFunction(() => window.__rasterPdfDone === true, null, { timeout: 60000 });
 
     const result = await page.evaluate(() => ({
       printOpened: window.__printOpened,
-      meta: window.__clientPdfMeta,
-      errors: window.__clientPdfErrors,
+      meta: window.__rasterPdfMeta,
+      errors: window.__rasterPdfErrors,
       tabsOpened: window.__tabsOpened,
-      downloadName: window.__clientPdfDownloadName,
+      downloadName: window.__rasterPdfDownloadName,
     }));
 
     expect(result.meta?.error, JSON.stringify(result)).toBeUndefined();

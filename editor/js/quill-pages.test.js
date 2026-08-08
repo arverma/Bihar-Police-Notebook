@@ -6,7 +6,7 @@ import {
   sanitizeQuillHtml,
   contentToPrintHtml,
   quillPrintCssFragment,
-} from './quill-fields.js';
+} from './quill-pages.js';
 
 test('sanitizeQuillHtml converts U+00A0 and &nbsp; to normal spaces in rich HTML', () => {
   const html = '<p>hello&nbsp;world\u00a0there</p>';

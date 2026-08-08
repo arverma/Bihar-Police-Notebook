@@ -24,7 +24,7 @@ import {
     markSynced,
     needsBackup,
     upsertFromRemote,
-} from './store.js';
+} from './document-store.js';
 
 const FOLDER_ID_KEY = 'drive.folderId';
 const FOLDER_MIME = 'application/vnd.google-apps.folder';

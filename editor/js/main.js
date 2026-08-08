@@ -1,4 +1,4 @@
-import { getWordBoundaries } from './utils.js';
+import { getWordBoundaries } from './word-boundaries.js';
 import { fetchSuggestions } from './translit.js';
 import {
     getDocuments,
@@ -9,8 +9,8 @@ import {
     hardDeleteById,
     previewText,
     backupStatus,
-} from './store.js';
-import { initPagedSheet } from './paged-sheet.js';
+} from './document-store.js';
+import { initLetterSheet } from './letter-sheet.js';
 import {
     initDiarySheet,
     diaryHasMeaningfulContent,
@@ -39,8 +39,8 @@ import {
     initQuillToolbar,
     getFieldForEditor,
     stripHtmlToPlain,
-} from './quill-fields.js';
-import { runPdfExport as runRoutedPdfExport } from './pdf-export.js';
+} from './quill-pages.js';
+import { runDocumentExport } from './export/router.js';
 
 const letterPagesEl = document.getElementById('letterPages');
 const suggestionsBox = document.getElementById('suggestions');
@@ -90,7 +90,7 @@ function syncFilenameWidth() {
     document.documentElement.style.setProperty('--filename-max', `${maxW}px`);
 }
 
-/** @type {ReturnType<typeof initPagedSheet> | null} */
+/** @type {ReturnType<typeof initLetterSheet> | null} */
 let letterSheet = null;
 
 /** @type {ReturnType<typeof initDiarySheet> | null} */
@@ -1063,7 +1063,7 @@ function initApp() {
     loadHistoryFn = loadHistory;
 
     if (letterPagesEl) {
-        letterSheet = initPagedSheet(letterPagesEl, pageIndicator, {
+        letterSheet = initLetterSheet(letterPagesEl, pageIndicator, {
             onChange: scheduleSave,
             onAttachField: (el) => {
                 attachTransliteration(el);
@@ -1262,7 +1262,7 @@ function initApp() {
         }
     }
 
-    async function runPdfExport() {
+    async function handleDocumentExport() {
         const activeTemplate = getActiveTemplate() === 'letter' ? 'letter' : 'diary';
         // Sync model from live DOM so spill/page state is current before clone.
         if (activeTemplate === 'letter') {
@@ -1273,20 +1273,20 @@ function initApp() {
 
         const filename = (filenameInput?.value || '').trim()
             || formatDocFilename(new Date(currentDoc.createdAt));
-        // Optional test/dev override: window.__bpExportMode = 'client-pdf' | 'native-print'
+        // Optional test/dev override: window.__bpExportMode = 'raster-pdf' | 'native-print'
         const modeOverride = typeof window !== 'undefined' && window.__bpExportMode
             ? window.__bpExportMode
             : null;
-        await runRoutedPdfExport({
+        await runDocumentExport({
             template: activeTemplate,
             filename,
-            mode: modeOverride === 'client-pdf' || modeOverride === 'native-print'
+            mode: modeOverride === 'raster-pdf' || modeOverride === 'native-print'
                 ? modeOverride
                 : null,
         });
     }
 
-    exportBtn?.addEventListener('click', () => { void runPdfExport(); });
+    exportBtn?.addEventListener('click', () => { void handleDocumentExport(); });
 
     const switchBtn = document.querySelector('.switch-btn');
     const sidebar = document.getElementById('sidebar');
@@ -1377,7 +1377,7 @@ function initApp() {
 
         if (e.key === 'p' || e.key === 'P') {
             e.preventDefault();
-            void runPdfExport();
+            void handleDocumentExport();
             return;
         }
         if (e.key === 'n' || e.key === 'N') {
