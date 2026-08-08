@@ -4,7 +4,7 @@
  * stays a textarea (same wrap engine); Quill bodies keep live HTML (real spaces).
  */
 
-const PRINT_IFRAME_ID = 'bp-print-iframe';
+export const PRINT_IFRAME_ID = 'bp-print-iframe';
 const FONT_LINK =
   'https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;500;700&display=swap';
 const QUILL_SNOW =
@@ -356,46 +356,11 @@ function removePrintIframe(frame) {
 }
 
 /**
- * Open a same-page print iframe with cloned pages and trigger print after styles/fonts load.
- * @param {'diary'|'letter'} template
- * @returns {Promise<'ok'|'empty'>}
+ * Wait for stylesheets, fonts, and images in a print-clone document.
+ * @param {Document} doc
+ * @returns {Promise<void>}
  */
-export async function openPrintCloneWindow(template) {
-  const built = buildPrintCloneBody(template);
-  if (!built || !built.html) return 'empty';
-
-  const existing = document.getElementById(PRINT_IFRAME_ID);
-  if (existing) existing.remove();
-
-  const frame = document.createElement('iframe');
-  frame.id = PRINT_IFRAME_ID;
-  frame.setAttribute('aria-hidden', 'true');
-  frame.setAttribute('scrolling', 'no');
-  // Offscreen — never display:none / visibility:hidden (blank prints).
-  frame.style.cssText =
-    'position:fixed;left:-20000px;top:0;width:210mm;height:4000px;border:0;overflow:hidden;';
-  document.body.appendChild(frame);
-
-  const doc = frame.contentDocument;
-  const win = frame.contentWindow;
-  if (!doc || !win) {
-    removePrintIframe(frame);
-    return 'empty';
-  }
-
-  const fontSize = 16;
-  doc.open();
-  doc.write(`<!DOCTYPE html><html><head>
-      <meta charset="UTF-8">
-      <title>Print Document</title>
-      ${printCloneStylesheetLinks()}
-      <style>${printCloneExtraCss()}</style>
-    </head>
-    <body class="print-root">
-      ${built.html}
-    </body></html>`);
-  doc.close();
-
+async function waitForPrintCloneReady(doc) {
   const links = [...doc.querySelectorAll('link[rel="stylesheet"]')];
   await Promise.all(links.map((link) => new Promise((resolve) => {
     if (link.sheet) {
@@ -407,6 +372,7 @@ export async function openPrintCloneWindow(template) {
     setTimeout(resolve, 3000);
   })));
 
+  const fontSize = 16;
   try {
     if (doc.fonts?.load) {
       await doc.fonts.load(`${fontSize}px "Noto Sans Devanagari"`);
@@ -420,11 +386,84 @@ export async function openPrintCloneWindow(template) {
   } catch (_) {
     await new Promise((r) => setTimeout(r, 500));
   }
+
+  const images = [...doc.images];
+  await Promise.all(images.map((img) => {
+    if (img.complete) return Promise.resolve();
+    return new Promise((resolve) => {
+      img.addEventListener('load', () => resolve(), { once: true });
+      img.addEventListener('error', () => resolve(), { once: true });
+      setTimeout(resolve, 3000);
+    });
+  }));
+
   void doc.body?.offsetHeight;
+}
+
+/**
+ * @typedef {object} MountedPrintClone
+ * @property {HTMLIFrameElement} frame
+ * @property {Document} doc
+ * @property {Window} win
+ * @property {number} pageCount
+ * @property {HTMLElement[]} pageEls
+ * @property {() => void} cleanup
+ */
+
+/**
+ * Mount sanitized A4 page cards in an offscreen iframe (shared by native print + client PDF).
+ * @param {'diary'|'letter'} template
+ * @param {{ title?: string }} [options]
+ * @returns {Promise<MountedPrintClone | null>}
+ */
+export async function mountPrintCloneIframe(template, options = {}) {
+  const built = buildPrintCloneBody(template);
+  if (!built || !built.html) return null;
+
+  const existing = document.getElementById(PRINT_IFRAME_ID);
+  if (existing) existing.remove();
+
+  const frame = document.createElement('iframe');
+  frame.id = PRINT_IFRAME_ID;
+  frame.setAttribute('aria-hidden', 'true');
+  frame.setAttribute('scrolling', 'no');
+  // Offscreen — never display:none / visibility:hidden (blank prints / blank captures).
+  frame.style.cssText =
+    'position:fixed;left:-20000px;top:0;width:210mm;height:4000px;border:0;overflow:hidden;';
+  document.body.appendChild(frame);
+
+  const doc = frame.contentDocument;
+  const win = frame.contentWindow;
+  if (!doc || !win) {
+    removePrintIframe(frame);
+    return null;
+  }
+
+  const title = options.title || 'Print Document';
+  doc.open();
+  doc.write(`<!DOCTYPE html><html><head>
+      <meta charset="UTF-8">
+      <title>${title.replace(/</g, '')}</title>
+      ${printCloneStylesheetLinks()}
+      <style>${printCloneExtraCss()}</style>
+    </head>
+    <body class="print-root">
+      ${built.html}
+    </body></html>`);
+  doc.close();
+
+  await waitForPrintCloneReady(doc);
+
   const contentH = doc.documentElement?.scrollHeight || 0;
   if (contentH > 0) {
     frame.style.height = `${contentH}px`;
   }
+
+  const pageSel = template === 'letter' ? '.letter-page' : '.diary-page';
+  // Do not use parent-window `instanceof HTMLElement` — iframe nodes fail that check.
+  const pageEls = [...doc.querySelectorAll(pageSel)].filter(
+    (el) => el && el.nodeType === 1,
+  );
 
   let cleaned = false;
   const cleanup = () => {
@@ -433,6 +472,26 @@ export async function openPrintCloneWindow(template) {
     removePrintIframe(frame);
   };
 
+  return {
+    frame,
+    doc,
+    win,
+    pageCount: built.pageCount,
+    pageEls,
+    cleanup,
+  };
+}
+
+/**
+ * Open a same-page print iframe with cloned pages and trigger print after styles/fonts load.
+ * @param {'diary'|'letter'} template
+ * @returns {Promise<'ok'|'empty'>}
+ */
+export async function openPrintCloneWindow(template) {
+  const mounted = await mountPrintCloneIframe(template);
+  if (!mounted) return 'empty';
+
+  const { win, cleanup } = mounted;
   win.addEventListener('afterprint', () => {
     setTimeout(cleanup, 500);
   }, { once: true });

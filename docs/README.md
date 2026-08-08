@@ -8,6 +8,7 @@ Architecture and how the pieces fit together. For everyday use (opening the app,
 |-----|----------------|
 | [Architecture](architecture.md) | High-level system map and links into each component |
 | [Desktop vs mobile](desktop-vs-mobile.md) | What is available on phone vs computer |
+| [Tests](../tests/README.md) | Vitest (`editor/js/*.test.js`) vs Playwright (`tests/*.spec.js`) |
 
 ## Components
 

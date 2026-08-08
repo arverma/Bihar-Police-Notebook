@@ -13,7 +13,7 @@ flowchart LR
   IDB[(IndexedDB)]
   GIT[Google_Input_Tools]
   Drive[Google_Drive]
-  Print[Browser_print_PDF]
+  Print[Native_print_or_client_PDF]
 
   User --> Editor
   Editor --> IDB
@@ -28,7 +28,7 @@ flowchart LR
 | [IndexedDB](components/storage.md) | Local autosave on this device |
 | [Google Input Tools](components/typing.md) | Hinglish → Hindi suggestions (network; desktop/tablet) |
 | [Google Drive](components/drive-backup.md) | Manual backup / restore into your Drive folder |
-| [Print](components/templates.md) | Browser print dialog → Save as PDF |
+| [Print / PDF](components/templates.md) | Shared A4 print clone → native print (desktop) or client PDF (iOS/iPadOS) |
 
 ## Editor internals (modules)
 
@@ -54,7 +54,7 @@ flowchart TB
 | Module area | Files | Detail page |
 |-------------|-------|-------------|
 | Shell / History / save | `editor/js/main.js` | [Editor shell](components/editor-shell.md) |
-| Letter / Diary / print | `paged-sheet.js`, `diary-sheet.js` | [Templates](components/templates.md) |
+| Letter / Diary / print | `paged-sheet.js`, `diary-sheet.js`, `print-clone.js`, `pdf-export.js`, `client-pdf.js` | [Templates](components/templates.md) |
 | Screen scale | `page-scale.js` | [Page preview](components/page-preview.md) |
 | Local DB | `store.js` | [Storage](components/storage.md) |
 | Drive | `drive-config.js`, `drive-auth.js`, `drive-sync.js` | [Drive backup](components/drive-backup.md) |
@@ -66,6 +66,15 @@ flowchart TB
 ## Phone vs computer
 
 Behavior changes at **768px** width. See [Desktop vs mobile](desktop-vs-mobile.md).
+
+## Testing
+
+| Layer | Location | Command |
+|-------|----------|---------|
+| Unit (Vitest) | `editor/js/*.test.js` | `npm test` |
+| E2E (Playwright) | `tests/*.spec.js` | `npm run test:e2e` |
+
+See [tests/README.md](../tests/README.md).
 
 ## Important constants
 

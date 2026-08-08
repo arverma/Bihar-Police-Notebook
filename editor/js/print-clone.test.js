@@ -111,3 +111,46 @@ test('sanitizePageClone formats date inputs as dd/mm/yyyy', () => {
   sanitizePageClone(page);
   expect(page.querySelector('[data-field="fir_date"]')?.textContent).toBe('04/08/2026');
 });
+
+test('buildPrintCloneBody returns null without live pages', async () => {
+  const { buildPrintCloneBody } = await import('./print-clone.js');
+  expect(buildPrintCloneBody('diary')).toBeNull();
+  expect(buildPrintCloneBody('letter')).toBeNull();
+});
+
+test('buildPrintCloneBody clones diary pages and preserves CSS vars', async () => {
+  const { buildPrintCloneBody } = await import('./print-clone.js');
+  const wrap = document.createElement('div');
+  wrap.className = 'editor-wrapper editor-diary';
+  const pagesHost = document.createElement('div');
+  pagesHost.id = 'diaryPages';
+  pagesHost.style.setProperty('--diary-left-col', '22%');
+  const page = document.createElement('div');
+  page.className = 'diary-page';
+  page.style.setProperty('--diary-box-h', '800px');
+  page.innerHTML = `
+    <textarea class="fir-input" data-col="left">left</textarea>
+    <div class="diary-cell">
+      <div class="fir-input ql-container bp-ql-container">
+        <div class="ql-editor bp-ql-editor" style="width:400px;height:200px"><p>right</p></div>
+      </div>
+    </div>
+  `;
+  // Fake layout metrics for jsdom
+  Object.defineProperty(page.querySelector('.ql-editor'), 'clientWidth', { value: 400 });
+  Object.defineProperty(page.querySelector('.ql-editor'), 'clientHeight', { value: 200 });
+  Object.defineProperty(page.querySelector('textarea'), 'clientWidth', { value: 80 });
+  Object.defineProperty(page.querySelector('textarea'), 'clientHeight', { value: 200 });
+  pagesHost.appendChild(page);
+  wrap.appendChild(pagesHost);
+  document.body.appendChild(wrap);
+
+  const built = buildPrintCloneBody('diary');
+  expect(built).toBeTruthy();
+  expect(built?.pageCount).toBe(1);
+  expect(built?.html).toContain('print-pages');
+  expect(built?.html).toContain('--diary-left-col');
+  expect(built?.html).toContain('right');
+  expect(built?.html).toContain('left');
+  wrap.remove();
+});

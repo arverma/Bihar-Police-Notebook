@@ -346,6 +346,7 @@ test.describe('Print parity (live clone)', () => {
 
   test('PDF export opens print dialog with cloned pages (print stubbed)', async ({ page }) => {
     await page.evaluate(() => {
+      window.__bpExportMode = 'native-print';
       window.__printOpened = false;
       // Continuously re-bind: document.open/write can reset contentWindow.print.
       const poll = setInterval(() => {
@@ -376,5 +377,103 @@ test.describe('Print parity (live clone)', () => {
     }));
     expect(meta.title).toBe('Print Document');
     expect(meta.hasDiary).toBe(true);
+  });
+
+  test('forced client-pdf path builds A4 blob without calling print', async ({ page }) => {
+    test.setTimeout(90_000);
+
+    page.on('dialog', async (dialog) => {
+      await page.evaluate((msg) => {
+        window.__clientPdfMeta = { error: `dialog:${msg}` };
+        window.__clientPdfDone = true;
+      }, dialog.message());
+      await dialog.dismiss();
+    });
+
+    await page.evaluate(() => {
+      window.__bpExportMode = 'client-pdf';
+      window.__printOpened = false;
+      window.__clientPdfDone = false;
+      window.__clientPdfMeta = null;
+      window.__clientPdfErrors = [];
+
+      const origError = console.error.bind(console);
+      console.error = (...args) => {
+        window.__clientPdfErrors.push(args.map(String).join(' '));
+        origError(...args);
+      };
+
+      const poll = setInterval(() => {
+        const frame = document.getElementById('bp-print-iframe');
+        if (!(frame instanceof HTMLIFrameElement)) return;
+        const w = frame.contentWindow;
+        if (!w) return;
+        w.print = () => { window.__printOpened = true; };
+      }, 10);
+      setTimeout(() => clearInterval(poll), 60000);
+
+      const preview = {
+        closed: false,
+        location: {
+          set href(v) {
+            this._href = v;
+            window.__clientPdfHref = v;
+            if (typeof v === 'string' && v.startsWith('blob:')) {
+              fetch(v).then(async (r) => {
+                const buf = await r.arrayBuffer();
+                const bytes = new Uint8Array(buf);
+                const head = String.fromCharCode(...bytes.slice(0, 5));
+                const text = new TextDecoder('latin1').decode(bytes);
+                const pageMatches = text.match(/\/Type\s*\/Page[^s]/g) || [];
+                window.__clientPdfMeta = {
+                  header: head,
+                  byteLength: bytes.byteLength,
+                  pageCount: pageMatches.length,
+                };
+                window.__clientPdfDone = true;
+              }).catch((err) => {
+                window.__clientPdfMeta = { error: String(err) };
+                window.__clientPdfDone = true;
+              });
+            }
+          },
+          get href() { return this._href || ''; },
+          _href: '',
+        },
+        close() { this.closed = true; },
+      };
+      window.open = () => preview;
+    });
+
+    const editor = page.locator('.editor-diary .diary-page .ql-editor').first();
+    await editor.click();
+    await editor.evaluate((el) => {
+      document.execCommand('insertText', false, 'मोबाइल पीडीएफ परीक्षण');
+    });
+
+    const liveMeta = await page.evaluate(() => {
+      const pages = [...document.querySelectorAll('.editor-diary .diary-page')];
+      return {
+        pageCount: pages.length,
+        width: pages[0]?.getBoundingClientRect().width ?? 0,
+      };
+    });
+    expect(liveMeta.pageCount).toBeGreaterThanOrEqual(1);
+    expect(liveMeta.width).toBeGreaterThan(700);
+
+    await page.locator('#exportBtn').click();
+    await page.waitForFunction(() => window.__clientPdfDone === true, null, { timeout: 60000 });
+
+    const result = await page.evaluate(() => ({
+      printOpened: window.__printOpened,
+      meta: window.__clientPdfMeta,
+      errors: window.__clientPdfErrors,
+    }));
+
+    expect(result.meta?.error, JSON.stringify(result)).toBeUndefined();
+    expect(result.printOpened).toBe(false);
+    expect(result.meta?.header).toBe('%PDF-');
+    expect(result.meta?.byteLength).toBeGreaterThan(1000);
+    expect(result.meta?.pageCount).toBe(liveMeta.pageCount);
   });
 });
