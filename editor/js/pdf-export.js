@@ -92,6 +92,7 @@ export async function runPdfExport(deps) {
     }
     return 'ok';
   }
+
   // Deliberately no pre-opened tab: on iOS that backgrounds the editor tab and
   // throttles the rendering the rasterizer depends on.
   try {
