@@ -3,10 +3,10 @@
  */
 import { expect, test } from 'vitest';
 import {
-  shouldUseClientPdf,
+  shouldUseRasterPdf,
   resolveExportMode,
-  runPdfExport,
-} from './pdf-export.js';
+  runDocumentExport,
+} from './router.js';
 
 const IPHONE_UA =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
@@ -21,37 +21,37 @@ const ANDROID_UA =
 const DESKTOP_CHROME_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
-test('shouldUseClientPdf detects iPhone and iPad', () => {
-  expect(shouldUseClientPdf(IPHONE_UA)).toBe(true);
-  expect(shouldUseClientPdf(IPAD_UA)).toBe(true);
+test('shouldUseRasterPdf detects iPhone and iPad', () => {
+  expect(shouldUseRasterPdf(IPHONE_UA)).toBe(true);
+  expect(shouldUseRasterPdf(IPAD_UA)).toBe(true);
 });
 
-test('shouldUseClientPdf detects iPadOS desktop mode via touch points', () => {
-  expect(shouldUseClientPdf(IPADOS_DESKTOP_UA, {
+test('shouldUseRasterPdf detects iPadOS desktop mode via touch points', () => {
+  expect(shouldUseRasterPdf(IPADOS_DESKTOP_UA, {
     maxTouchPoints: 5,
     platform: 'MacIntel',
   })).toBe(true);
 });
 
-test('shouldUseClientPdf leaves macOS Safari, Android, and desktop on native print', () => {
-  expect(shouldUseClientPdf(MAC_SAFARI_UA, {
+test('shouldUseRasterPdf leaves macOS Safari, Android, and desktop on native print', () => {
+  expect(shouldUseRasterPdf(MAC_SAFARI_UA, {
     maxTouchPoints: 0,
     platform: 'MacIntel',
   })).toBe(false);
-  expect(shouldUseClientPdf(ANDROID_UA)).toBe(false);
-  expect(shouldUseClientPdf(DESKTOP_CHROME_UA)).toBe(false);
+  expect(shouldUseRasterPdf(ANDROID_UA)).toBe(false);
+  expect(shouldUseRasterPdf(DESKTOP_CHROME_UA)).toBe(false);
 });
 
 test('resolveExportMode honors explicit override', () => {
-  expect(resolveExportMode({ mode: 'client-pdf', ua: DESKTOP_CHROME_UA })).toBe('client-pdf');
+  expect(resolveExportMode({ mode: 'raster-pdf', ua: DESKTOP_CHROME_UA })).toBe('raster-pdf');
   expect(resolveExportMode({ mode: 'native-print', ua: IPHONE_UA })).toBe('native-print');
-  expect(resolveExportMode({ ua: IPHONE_UA })).toBe('client-pdf');
+  expect(resolveExportMode({ ua: IPHONE_UA })).toBe('raster-pdf');
   expect(resolveExportMode({ ua: DESKTOP_CHROME_UA })).toBe('native-print');
 });
 
-test('runPdfExport desktop path calls nativePrint only', async () => {
-  const calls = { native: 0, client: 0, deliver: 0 };
-  const result = await runPdfExport({
+test('runDocumentExport desktop path calls nativePrint only', async () => {
+  const calls = { native: 0, raster: 0, deliver: 0 };
+  const result = await runDocumentExport({
     template: 'diary',
     filename: 'Test',
     mode: 'native-print',
@@ -59,8 +59,8 @@ test('runPdfExport desktop path calls nativePrint only', async () => {
       calls.native += 1;
       return 'ok';
     },
-    clientPdf: async () => {
-      calls.client += 1;
+    rasterPdf: async () => {
+      calls.raster += 1;
       return { blob: new Blob(['%PDF']), filename: 'Test.pdf', pageCount: 1 };
     },
     deliver: () => {
@@ -69,22 +69,22 @@ test('runPdfExport desktop path calls nativePrint only', async () => {
     },
   });
   expect(result).toBe('ok');
-  expect(calls).toEqual({ native: 1, client: 0, deliver: 0 });
+  expect(calls).toEqual({ native: 1, raster: 0, deliver: 0 });
 });
 
-test('runPdfExport iOS path calls clientPdf and deliver, not nativePrint', async () => {
-  const calls = { native: 0, client: 0, deliver: 0 };
+test('runDocumentExport iOS path calls rasterPdf and deliver, not nativePrint', async () => {
+  const calls = { native: 0, raster: 0, deliver: 0 };
   const order = [];
-  const result = await runPdfExport({
+  const result = await runDocumentExport({
     template: 'diary',
     filename: 'केस दैनिकी',
-    mode: 'client-pdf',
+    mode: 'raster-pdf',
     nativePrint: async () => {
       calls.native += 1;
       return 'ok';
     },
-    clientPdf: async (opts) => {
-      calls.client += 1;
+    rasterPdf: async (opts) => {
+      calls.raster += 1;
       order.push('generate');
       expect(opts.template).toBe('diary');
       expect(opts.filename).toBe('केस दैनिकी');
@@ -99,14 +99,14 @@ test('runPdfExport iOS path calls clientPdf and deliver, not nativePrint', async
     },
   });
   expect(result).toBe('ok');
-  expect(calls).toEqual({ native: 0, client: 1, deliver: 1 });
+  expect(calls).toEqual({ native: 0, raster: 1, deliver: 1 });
   // Delivery must happen after generation — never reserve a tab up front on iOS.
   expect(order).toEqual(['generate', 'deliver']);
 });
 
-test('runPdfExport empty native path alerts and returns empty', async () => {
+test('runDocumentExport empty native path alerts and returns empty', async () => {
   const alerts = [];
-  const result = await runPdfExport({
+  const result = await runDocumentExport({
     template: 'letter',
     mode: 'native-print',
     nativePrint: async () => 'empty',
@@ -116,13 +116,13 @@ test('runPdfExport empty native path alerts and returns empty', async () => {
   expect(alerts[0]).toMatch(/empty/i);
 });
 
-test('runPdfExport client empty alerts without delivering', async () => {
+test('runDocumentExport raster empty alerts without delivering', async () => {
   const alerts = [];
   let delivered = 0;
-  const result = await runPdfExport({
+  const result = await runDocumentExport({
     template: 'diary',
-    mode: 'client-pdf',
-    clientPdf: async () => {
+    mode: 'raster-pdf',
+    rasterPdf: async () => {
       throw new Error('empty');
     },
     deliver: async () => {
@@ -136,14 +136,14 @@ test('runPdfExport client empty alerts without delivering', async () => {
   expect(alerts[0]).toMatch(/empty/i);
 });
 
-test('runPdfExport aborts a hung generation instead of waiting forever', async () => {
+test('runDocumentExport aborts a hung generation instead of waiting forever', async () => {
   const alerts = [];
   let delivered = 0;
-  const result = await runPdfExport({
+  const result = await runDocumentExport({
     template: 'diary',
-    mode: 'client-pdf',
+    mode: 'raster-pdf',
     timeoutMs: 20,
-    clientPdf: () => new Promise(() => {}),
+    rasterPdf: () => new Promise(() => {}),
     deliver: async () => {
       delivered += 1;
       return 'download';
@@ -155,17 +155,17 @@ test('runPdfExport aborts a hung generation instead of waiting forever', async (
   expect(alerts[0]).toMatch(/too long/i);
 });
 
-test('runPdfExport client failure surfaces error without native fallback', async () => {
+test('runDocumentExport raster failure surfaces error without native fallback', async () => {
   const alerts = [];
   let nativeCalls = 0;
-  const result = await runPdfExport({
+  const result = await runDocumentExport({
     template: 'diary',
-    mode: 'client-pdf',
+    mode: 'raster-pdf',
     nativePrint: async () => {
       nativeCalls += 1;
       return 'ok';
     },
-    clientPdf: async () => {
+    rasterPdf: async () => {
       throw new Error('boom');
     },
     alert: (msg) => alerts.push(msg),

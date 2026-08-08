@@ -11,7 +11,7 @@ import {
   quillPrintCssFragment,
   splitRichToFit,
   stripHtmlToPlain,
-} from './quill-fields.js';
+} from './quill-pages.js';
 
 const DPI = 96;
 const MM_PER_IN = 25.4;
@@ -414,7 +414,7 @@ export function measureTitlesRowHeightPx(investigationRecord = '') {
 }
 
 /**
- * @deprecated Prefer live-page clone via print-clone.js (runPdfExport).
+ * @deprecated Prefer live-page clone via export/print-document.js (runDocumentExport).
  * Kept for rollback / measurement helpers that reuse header CSS fragments.
  * Print stylesheet — screen and print share the same A4 geometry.
  */
@@ -539,7 +539,7 @@ function printHeaderHtml(header) {
 }
 
 /**
- * @deprecated Prefer live-page clone via print-clone.js (runPdfExport).
+ * @deprecated Prefer live-page clone via export/print-document.js (runDocumentExport).
  * Build print HTML from the diary model (same geometry as screen).
  */
 export function diaryPagesHtml(model) {

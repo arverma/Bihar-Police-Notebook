@@ -1,6 +1,6 @@
 # Local storage (IndexedDB)
 
-Documents autosave on the device that is running the editor. Database name: **`bp-writing-tool`** (`editor/js/store.js`).
+Documents autosave on the device that is running the editor. Database name: **`bp-writing-tool`** (`editor/js/document-store.js`).
 
 ## Save sequence
 
@@ -9,7 +9,7 @@ sequenceDiagram
   participant User
   participant Sheet as Letter_or_Diary
   participant Main as main.js
-  participant Store as store.js
+  participant Store as document-store.js
   participant IDB as IndexedDB
 
   User->>Sheet: Type_or_edit

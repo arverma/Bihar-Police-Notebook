@@ -1,5 +1,5 @@
 /**
- * Client-side A4 PDF generation from print-clone page cards.
+ * Raster A4 PDF generation from shared print-document page cards.
  * Used on iOS/iPadOS where WebKit print clips full-bleed A4 cards.
  *
  * Vendored libs (lazy-loaded on first use only):
@@ -7,7 +7,7 @@
  *   editor/vendor/jspdf.umd.min.js     (jsPDF 2.5.2)
  */
 
-import { mountPrintCloneIframe } from './print-clone.js';
+import { mountPrintDocument } from './print-document.js';
 
 /** A4 portrait in PDF points (1 pt = 1/72 in). */
 export const A4_WIDTH_PT = 595.28;
@@ -18,6 +18,9 @@ export const CAPTURE_SCALE = 2;
 
 /** JPEG quality for embedded page images. */
 export const JPEG_QUALITY = 0.92;
+
+/** Single weight for every table rule the rasterizer draws. */
+const GRID_LINE = '1px solid #000';
 
 /**
  * @param {string} relativePath path under editor/
@@ -57,7 +60,7 @@ function loadScriptOnce(src, markerAttr) {
 }
 
 /**
- * @typedef {object} ClientPdfLibs
+ * @typedef {object} RasterPdfLibs
  * @property {(el: HTMLElement, opts?: object) => Promise<HTMLCanvasElement>} html2canvas
  * @property {new (opts?: object) => {
  *   internal: { pageSize: { getWidth: () => number, getHeight: () => number } },
@@ -70,12 +73,12 @@ function loadScriptOnce(src, markerAttr) {
 
 /**
  * Load vendored html2canvas + jsPDF (or use injected adapters in tests).
- * @param {Partial<ClientPdfLibs>} [inject]
- * @returns {Promise<ClientPdfLibs>}
+ * @param {Partial<RasterPdfLibs>} [inject]
+ * @returns {Promise<RasterPdfLibs>}
  */
-export async function loadClientPdfLibs(inject = {}) {
+export async function loadRasterPdfLibs(inject = {}) {
   if (inject.html2canvas && inject.jsPDF) {
-    return /** @type {ClientPdfLibs} */ (inject);
+    return /** @type {RasterPdfLibs} */ (inject);
   }
 
   await loadScriptOnce(absUrl('vendor/html2canvas.min.js'), 'data-bp-html2canvas');
@@ -121,12 +124,12 @@ function releaseCanvas(canvas) {
 }
 
 /**
- * @typedef {object} GenerateClientPdfOptions
+ * @typedef {object} GenerateRasterPdfOptions
  * @property {'diary'|'letter'} template
  * @property {string} [filename]
  * @property {string} [title]
- * @property {Partial<ClientPdfLibs>} [libs]
- * @property {(template: 'diary'|'letter', options?: object) => Promise<import('./print-clone.js').MountedPrintClone | null>} [mount]
+ * @property {Partial<RasterPdfLibs>} [libs]
+ * @property {(template: 'diary'|'letter', options?: object) => Promise<import('./print-document.js').MountedPrintDocument | null>} [mount]
  * @property {typeof CAPTURE_SCALE} [scale]
  * @property {typeof JPEG_QUALITY} [quality]
  */
@@ -162,23 +165,82 @@ function injectScriptIntoDocument(doc, src, markerAttr) {
 }
 
 /**
- * Build an A4 PDF blob from live print-clone page cards.
- * @param {GenerateClientPdfOptions} options
+ * Rasterizer-only fixes applied to the mounted clone.
+ *
+ * These compensate for html2canvas limitations and must not touch the native
+ * print path, which renders the same DOM correctly via the browser.
+ *
+ * @param {Document} doc
+ */
+export function prepareCloneForRaster(doc) {
+  // html2canvas cannot lay out textarea content (no soft wrapping), so swap in
+  // an equivalent static box that keeps the same metrics and wrap behavior.
+  doc.querySelectorAll('textarea').forEach((ta) => {
+    const view = doc.defaultView;
+    const cs = view ? view.getComputedStyle(ta) : null;
+    const div = doc.createElement('div');
+    div.className = ta.className;
+    Object.keys(ta.dataset || {}).forEach((k) => { div.dataset[k] = ta.dataset[k]; });
+    div.textContent = ta.value || ta.textContent || '';
+
+    const copy = [
+      'width', 'height', 'padding', 'margin', 'boxSizing', 'border',
+      'fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing',
+      'color', 'textAlign', 'direction', 'background',
+    ];
+    if (cs) copy.forEach((p) => { div.style[p] = cs[p]; });
+    div.style.whiteSpace = 'pre-wrap';
+    div.style.overflowWrap = 'break-word';
+    div.style.wordBreak = 'normal';
+    div.style.overflow = 'hidden';
+    div.style.display = 'block';
+    ta.replaceWith(div);
+  });
+
+  // html2canvas ignores border-collapse, so it paints every cell's own border
+  // and each shared edge comes out as two adjacent lines. Emulate collapse by
+  // giving each edge exactly one owner. The frame is drawn by the edge cells
+  // too, not by the table: a table border sits under the opaque cell
+  // backgrounds and gets partly painted over, so it renders thinner.
+  const view = doc.defaultView;
+  const isVisible = (el) => (view ? view.getComputedStyle(el).display !== 'none' : !el.hidden);
+
+  doc.querySelectorAll('.fir-table').forEach((table) => {
+    table.style.border = '0';
+    const rows = [...table.rows].filter(isVisible);
+    rows.forEach((row, rowIndex) => {
+      const cells = [...row.cells].filter(isVisible);
+      cells.forEach((cell, cellIndex) => {
+        cell.style.border = '0';
+        cell.style.borderRight = GRID_LINE;
+        cell.style.borderBottom = GRID_LINE;
+        if (rowIndex === 0) cell.style.borderTop = GRID_LINE;
+        if (cellIndex === 0) cell.style.borderLeft = GRID_LINE;
+      });
+    });
+  });
+
+  void doc.body?.offsetHeight;
+}
+
+/**
+ * Build an A4 PDF blob from live print-document page cards.
+ * @param {GenerateRasterPdfOptions} options
  * @returns {Promise<{ blob: Blob, filename: string, pageCount: number }>}
  */
-export async function generateClientPdf(options) {
+export async function generateRasterPdf(options) {
   const {
     template,
     filename: rawName = 'Document',
     title = rawName,
     libs: injectLibs,
-    mount = mountPrintCloneIframe,
+    mount = mountPrintDocument,
     scale = CAPTURE_SCALE,
     quality = JPEG_QUALITY,
   } = options;
 
   const filename = normalizePdfFilename(rawName);
-  const libs = await loadClientPdfLibs(injectLibs || {});
+  const libs = await loadRasterPdfLibs(injectLibs || {});
 
   const mounted = await mount(template, { title: filename });
   if (!mounted || !mounted.pageEls.length) {
@@ -210,7 +272,9 @@ export async function generateClientPdf(options) {
       }
     }
 
-    /** @type {InstanceType<ClientPdfLibs['jsPDF']> | null} */
+    if (mounted.doc) prepareCloneForRaster(mounted.doc);
+
+    /** @type {InstanceType<RasterPdfLibs['jsPDF']> | null} */
     let pdf = null;
 
     for (let i = 0; i < mounted.pageEls.length; i++) {

@@ -3,26 +3,39 @@
  */
 import { expect, test } from 'vitest';
 import {
-  printCloneExtraCss,
-  printCloneStylesheetLinks,
-  sanitizePageClone,
-} from './print-clone.js';
+  printDocumentExtraCss,
+  printDocumentStylesheetLinks,
+  sanitizeExportPage,
+} from './print-document.js';
 
-test('printCloneExtraCss uses zero @page margin (padding is on page cards)', () => {
-  const css = printCloneExtraCss();
+test('printDocumentExtraCss uses zero @page margin (padding is on page cards)', () => {
+  const css = printDocumentExtraCss();
   expect(css).toMatch(/@page\s*\{[^}]*margin:\s*0/s);
   expect(css).toMatch(/page-break-after:\s*always/);
 });
 
-test('printCloneStylesheetLinks loads Quill snow after app CSS', () => {
-  const html = printCloneStylesheetLinks();
-  const styleIdx = html.indexOf('css/style.css');
+test('printDocumentExtraCss disables WebKit font boosting', () => {
+  const css = printDocumentExtraCss();
+  expect(css).toMatch(/-webkit-text-size-adjust:\s*100%/);
+  expect(css).toMatch(/[^-]text-size-adjust:\s*100%/);
+});
+
+test('printDocumentExtraCss keeps the titles-row field on its own line', () => {
+  const css = printDocumentExtraCss();
+  expect(css).toMatch(
+    /\.print-pages \.fir-table th\.right-column \.print-static\s*\{[^}]*display:\s*block/s,
+  );
+});
+
+test('printDocumentStylesheetLinks loads Quill snow after app CSS', () => {
+  const html = printDocumentStylesheetLinks();
+  const styleIdx = html.indexOf('css/editor.css');
   const quillIdx = html.indexOf('quill.snow.css');
   expect(styleIdx).toBeGreaterThan(-1);
   expect(quillIdx).toBeGreaterThan(styleIdx);
 });
 
-test('sanitizePageClone removes screen chrome and locks left textarea', () => {
+test('sanitizeExportPage removes screen chrome and locks left textarea', () => {
   const page = document.createElement('div');
   page.className = 'diary-page';
   page.innerHTML = `
@@ -41,7 +54,7 @@ test('sanitizePageClone removes screen chrome and locks left textarea', () => {
     </div>
   `;
 
-  sanitizePageClone(page);
+  sanitizeExportPage(page);
 
   expect(page.querySelector('.screen-only')).toBeNull();
   expect(page.querySelector('.diary-page-chrome')).toBeNull();
@@ -63,7 +76,7 @@ test('sanitizePageClone removes screen chrome and locks left textarea', () => {
   expect(body.querySelector('p')?.textContent).toBe('right text');
 });
 
-test('sanitizePageClone preserves Quill paragraphs and align classes', () => {
+test('sanitizeExportPage preserves Quill paragraphs and align classes', () => {
   const page = document.createElement('div');
   page.className = 'diary-page';
   page.innerHTML = `
@@ -82,7 +95,7 @@ test('sanitizePageClone preserves Quill paragraphs and align classes', () => {
     </div>
   `;
 
-  sanitizePageClone(page);
+  sanitizeExportPage(page);
 
   const paras = page.querySelectorAll('.print-static-quill p');
   expect(paras).toHaveLength(4);
@@ -104,22 +117,22 @@ test('sanitizePageClone preserves Quill paragraphs and align classes', () => {
   expect(page.querySelector('[contenteditable]')).toBeNull();
 });
 
-test('sanitizePageClone formats date inputs as dd/mm/yyyy', () => {
+test('sanitizeExportPage formats date inputs as dd/mm/yyyy', () => {
   const page = document.createElement('div');
   page.className = 'diary-page';
   page.innerHTML = `<input class="diary-dotted" data-field="fir_date" type="date" value="2026-08-04">`;
-  sanitizePageClone(page);
+  sanitizeExportPage(page);
   expect(page.querySelector('[data-field="fir_date"]')?.textContent).toBe('04/08/2026');
 });
 
-test('buildPrintCloneBody returns null without live pages', async () => {
-  const { buildPrintCloneBody } = await import('./print-clone.js');
-  expect(buildPrintCloneBody('diary')).toBeNull();
-  expect(buildPrintCloneBody('letter')).toBeNull();
+test('buildPrintDocumentHtml returns null without live pages', async () => {
+  const { buildPrintDocumentHtml } = await import('./print-document.js');
+  expect(buildPrintDocumentHtml('diary')).toBeNull();
+  expect(buildPrintDocumentHtml('letter')).toBeNull();
 });
 
-test('buildPrintCloneBody clones diary pages and preserves CSS vars', async () => {
-  const { buildPrintCloneBody } = await import('./print-clone.js');
+test('buildPrintDocumentHtml clones diary pages and preserves CSS vars', async () => {
+  const { buildPrintDocumentHtml } = await import('./print-document.js');
   const wrap = document.createElement('div');
   wrap.className = 'editor-wrapper editor-diary';
   const pagesHost = document.createElement('div');
@@ -145,7 +158,7 @@ test('buildPrintCloneBody clones diary pages and preserves CSS vars', async () =
   wrap.appendChild(pagesHost);
   document.body.appendChild(wrap);
 
-  const built = buildPrintCloneBody('diary');
+  const built = buildPrintDocumentHtml('diary');
   expect(built).toBeTruthy();
   expect(built?.pageCount).toBe(1);
   expect(built?.html).toContain('print-pages');

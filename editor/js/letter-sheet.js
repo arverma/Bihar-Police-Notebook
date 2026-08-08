@@ -1,5 +1,5 @@
 /**
- * A4 paged letter sheet — Quill editors with continuous typing + spill.
+ * A4 letter sheet — Quill editors with continuous typing + spill.
  *
  * At 96dpi: 1in = 96px exactly.
  * Content height is snapped to a whole number of 24px lines so no line
@@ -13,7 +13,7 @@ import {
   quillPrintCssFragment,
   splitRichToFit,
   stripHtmlToPlain,
-} from './quill-fields.js';
+} from './quill-pages.js';
 
 const DPI = 96;
 const MM_PER_IN = 25.4;
@@ -47,7 +47,7 @@ const LETTER_STYLE = {
 };
 
 /**
- * @deprecated Prefer live-page clone via print-clone.js (runPdfExport).
+ * @deprecated Prefer live-page clone via export/print-document.js (runDocumentExport).
  * Print stylesheet — one A4 page card per letter page.
  */
 export function letterPrintCss() {
@@ -84,7 +84,7 @@ export function letterPrintCss() {
 }
 
 /**
- * @deprecated Prefer live-page clone via print-clone.js (runPdfExport).
+ * @deprecated Prefer live-page clone via export/print-document.js (runDocumentExport).
  * @param {string[]} pages
  */
 export function letterPagesHtml(pages) {
@@ -116,7 +116,7 @@ function paginateText(text) {
  *   onSpill?: (info: { fromPage: number, toPage: number }) => void,
  * }} [hooks]
  */
-export function initPagedSheet(container, indicatorEl, hooks = {}) {
+export function initLetterSheet(container, indicatorEl, hooks = {}) {
   /** @type {string[]} */
   let pages = [''];
   let spilling = false;

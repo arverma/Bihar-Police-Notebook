@@ -1,11 +1,11 @@
 /**
- * Platform-routed PDF export:
- *   desktop / Android → native browser print (print-clone iframe)
- *   iOS / iPadOS      → client-generated A4 PDF (avoids WebKit clip)
+ * Platform-routed document export:
+ *   desktop / Android → native browser print (print-document iframe)
+ *   iOS / iPadOS      → raster A4 PDF (avoids WebKit clip)
  */
 
-import { openPrintCloneWindow } from './print-clone.js';
-import { generateClientPdf, deliverPdfBlob } from './client-pdf.js';
+import { triggerNativePrint } from './print-document.js';
+import { generateRasterPdf, deliverPdfBlob } from './raster-pdf.js';
 
 /**
  * Detect iPhone / iPad / iPod, including iPadOS desktop-mode Safari.
@@ -15,7 +15,7 @@ import { generateClientPdf, deliverPdfBlob } from './client-pdf.js';
  * @param {{ maxTouchPoints?: number, platform?: string }} [nav]
  * @returns {boolean}
  */
-export function shouldUseClientPdf(ua, nav) {
+export function shouldUseRasterPdf(ua, nav) {
   const agent = ua ?? (typeof navigator !== 'undefined' ? navigator.userAgent : '');
   const touchPoints = Number(
     nav?.maxTouchPoints
@@ -34,49 +34,49 @@ export function shouldUseClientPdf(ua, nav) {
 }
 
 /**
- * @typedef {'native-print'|'client-pdf'} ExportMode
+ * @typedef {'native-print'|'raster-pdf'} ExportMode
  */
 
 /**
- * Resolve export mode. Explicit override wins (tests / forced client path).
+ * Resolve export mode. Explicit override wins (tests / forced raster path).
  * @param {{ mode?: ExportMode | null, ua?: string, nav?: { maxTouchPoints?: number, platform?: string } }} [opts]
  * @returns {ExportMode}
  */
 export function resolveExportMode(opts = {}) {
-  if (opts.mode === 'native-print' || opts.mode === 'client-pdf') {
+  if (opts.mode === 'native-print' || opts.mode === 'raster-pdf') {
     return opts.mode;
   }
-  return shouldUseClientPdf(opts.ua, opts.nav) ? 'client-pdf' : 'native-print';
+  return shouldUseRasterPdf(opts.ua, opts.nav) ? 'raster-pdf' : 'native-print';
 }
 
 /**
- * @typedef {object} RunPdfExportDeps
+ * @typedef {object} RunDocumentExportDeps
  * @property {'diary'|'letter'} template
  * @property {string} [filename]
  * @property {ExportMode | null} [mode]
  * @property {string} [ua]
  * @property {{ maxTouchPoints?: number, platform?: string }} [nav]
  * @property {(template: 'diary'|'letter') => Promise<'ok'|'empty'>} [nativePrint]
- * @property {(opts: { template: 'diary'|'letter', filename: string, title?: string }) => Promise<{ blob: Blob, filename: string, pageCount: number }>} [clientPdf]
+ * @property {(opts: { template: 'diary'|'letter', filename: string, title?: string }) => Promise<{ blob: Blob, filename: string, pageCount: number }>} [rasterPdf]
  * @property {(blob: Blob, filename: string, opts?: object) => Promise<string> | string} [deliver]
  * @property {number} [timeoutMs] abort generation instead of hanging silently
  * @property {(msg: string) => void} [alert]
  */
 
 /**
- * Run platform-routed PDF export.
- * @param {RunPdfExportDeps} deps
+ * Run platform-routed document export.
+ * @param {RunDocumentExportDeps} deps
  * @returns {Promise<'ok'|'empty'|'error'>}
  */
-export async function runPdfExport(deps) {
+export async function runDocumentExport(deps) {
   const {
     template,
     filename = 'Document',
     mode = null,
     ua,
     nav,
-    nativePrint = openPrintCloneWindow,
-    clientPdf = generateClientPdf,
+    nativePrint = triggerNativePrint,
+    rasterPdf = generateRasterPdf,
     deliver = deliverPdfBlob,
     timeoutMs = 60_000,
     alert: alertFn = (msg) => { window.alert(msg); },
@@ -97,7 +97,7 @@ export async function runPdfExport(deps) {
   // throttles the rendering the rasterizer depends on.
   try {
     const generated = await withTimeout(
-      clientPdf({ template, filename, title: filename }),
+      rasterPdf({ template, filename, title: filename }),
       timeoutMs,
       'timeout',
     );
@@ -109,7 +109,7 @@ export async function runPdfExport(deps) {
       alertFn('Cannot export empty document!');
       return 'empty';
     }
-    console.error('[pdf-export] client PDF failed', err);
+    console.error('[document-export] raster PDF failed', err);
     alertFn(message === 'timeout'
       ? 'PDF is taking too long. Keep this tab open and try again.'
       : 'Could not create PDF. Please try again.');
