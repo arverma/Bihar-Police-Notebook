@@ -58,8 +58,8 @@ export function resolveExportMode(opts = {}) {
  * @property {{ maxTouchPoints?: number, platform?: string }} [nav]
  * @property {(template: 'diary'|'letter') => Promise<'ok'|'empty'>} [nativePrint]
  * @property {(opts: { template: 'diary'|'letter', filename: string, title?: string }) => Promise<{ blob: Blob, filename: string, pageCount: number }>} [clientPdf]
- * @property {(blob: Blob, filename: string, opts?: object) => 'preview'|'download'} [deliver]
- * @property {() => Window | null} [openPreviewWindow]
+ * @property {(blob: Blob, filename: string, opts?: object) => Promise<string> | string} [deliver]
+ * @property {number} [timeoutMs] abort generation instead of hanging silently
  * @property {(msg: string) => void} [alert]
  */
 
@@ -78,13 +78,7 @@ export async function runPdfExport(deps) {
     nativePrint = openPrintCloneWindow,
     clientPdf = generateClientPdf,
     deliver = deliverPdfBlob,
-    openPreviewWindow = () => {
-      try {
-        return window.open('', '_blank');
-      } catch (_) {
-        return null;
-      }
-    },
+    timeoutMs = 60_000,
     alert: alertFn = (msg) => { window.alert(msg); },
   } = deps;
 
@@ -99,31 +93,47 @@ export async function runPdfExport(deps) {
     return 'ok';
   }
 
-  // Reserve a tab synchronously before any await (iOS popup blocker).
-  let previewWindow = null;
+  // Deliberately no pre-opened tab: on iOS that backgrounds the editor tab and
+  // throttles the rendering the rasterizer depends on.
   try {
-    previewWindow = openPreviewWindow();
-  } catch (_) {
-    previewWindow = null;
-  }
-
-  try {
-    const generated = await clientPdf({
-      template,
-      filename,
-      title: filename,
-    });
-    deliver(generated.blob, generated.filename, { previewWindow });
+    const generated = await withTimeout(
+      clientPdf({ template, filename, title: filename }),
+      timeoutMs,
+      'timeout',
+    );
+    await deliver(generated.blob, generated.filename);
     return 'ok';
   } catch (err) {
-    try { previewWindow?.close(); } catch (_) { /* ignore */ }
     const message = err instanceof Error ? err.message : String(err);
     if (message === 'empty') {
       alertFn('Cannot export empty document!');
       return 'empty';
     }
     console.error('[pdf-export] client PDF failed', err);
-    alertFn('Could not create PDF. Please try again.');
+    alertFn(message === 'timeout'
+      ? 'PDF is taking too long. Keep this tab open and try again.'
+      : 'Could not create PDF. Please try again.');
     return 'error';
   }
+}
+
+/**
+ * Reject rather than hang: a throttled or suspended tab can leave rendering
+ * promises pending forever, which would leave the user with no feedback.
+ *
+ * @template T
+ * @param {Promise<T>} promise
+ * @param {number} ms
+ * @param {string} reason
+ * @returns {Promise<T>}
+ */
+function withTimeout(promise, ms, reason) {
+  if (!ms || ms <= 0) return promise;
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(reason)), ms);
+    promise.then(
+      (v) => { clearTimeout(timer); resolve(v); },
+      (e) => { clearTimeout(timer); reject(e); },
+    );
+  });
 }

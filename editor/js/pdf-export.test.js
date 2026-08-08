@@ -74,32 +74,34 @@ test('runPdfExport desktop path calls nativePrint only', async () => {
 
 test('runPdfExport iOS path calls clientPdf and deliver, not nativePrint', async () => {
   const calls = { native: 0, client: 0, deliver: 0 };
-  const preview = { closed: false, location: { href: '' }, close() {} };
+  const order = [];
   const result = await runPdfExport({
     template: 'diary',
     filename: 'केस दैनिकी',
     mode: 'client-pdf',
-    openPreviewWindow: () => preview,
     nativePrint: async () => {
       calls.native += 1;
       return 'ok';
     },
     clientPdf: async (opts) => {
       calls.client += 1;
+      order.push('generate');
       expect(opts.template).toBe('diary');
       expect(opts.filename).toBe('केस दैनिकी');
       return { blob: new Blob(['%PDF-1.4']), filename: 'केस दैनिकी.pdf', pageCount: 2 };
     },
-    deliver: (blob, filename, opts) => {
+    deliver: async (blob, filename) => {
       calls.deliver += 1;
+      order.push('deliver');
       expect(blob).toBeInstanceOf(Blob);
       expect(filename).toBe('केस दैनिकी.pdf');
-      expect(opts?.previewWindow).toBe(preview);
-      return 'preview';
+      return 'download';
     },
   });
   expect(result).toBe('ok');
   expect(calls).toEqual({ native: 0, client: 1, deliver: 1 });
+  // Delivery must happen after generation — never reserve a tab up front on iOS.
+  expect(order).toEqual(['generate', 'deliver']);
 });
 
 test('runPdfExport empty native path alerts and returns empty', async () => {
@@ -114,26 +116,43 @@ test('runPdfExport empty native path alerts and returns empty', async () => {
   expect(alerts[0]).toMatch(/empty/i);
 });
 
-test('runPdfExport client empty closes preview and alerts', async () => {
+test('runPdfExport client empty alerts without delivering', async () => {
   const alerts = [];
-  let closed = false;
-  const preview = {
-    closed: false,
-    location: { href: '' },
-    close() { closed = true; this.closed = true; },
-  };
+  let delivered = 0;
   const result = await runPdfExport({
     template: 'diary',
     mode: 'client-pdf',
-    openPreviewWindow: () => preview,
     clientPdf: async () => {
       throw new Error('empty');
+    },
+    deliver: async () => {
+      delivered += 1;
+      return 'download';
     },
     alert: (msg) => alerts.push(msg),
   });
   expect(result).toBe('empty');
-  expect(closed).toBe(true);
+  expect(delivered).toBe(0);
   expect(alerts[0]).toMatch(/empty/i);
+});
+
+test('runPdfExport aborts a hung generation instead of waiting forever', async () => {
+  const alerts = [];
+  let delivered = 0;
+  const result = await runPdfExport({
+    template: 'diary',
+    mode: 'client-pdf',
+    timeoutMs: 20,
+    clientPdf: () => new Promise(() => {}),
+    deliver: async () => {
+      delivered += 1;
+      return 'download';
+    },
+    alert: (msg) => alerts.push(msg),
+  });
+  expect(result).toBe('error');
+  expect(delivered).toBe(0);
+  expect(alerts[0]).toMatch(/too long/i);
 });
 
 test('runPdfExport client failure surfaces error without native fallback', async () => {
@@ -142,7 +161,6 @@ test('runPdfExport client failure surfaces error without native fallback', async
   const result = await runPdfExport({
     template: 'diary',
     mode: 'client-pdf',
-    openPreviewWindow: () => null,
     nativePrint: async () => {
       nativeCalls += 1;
       return 'ok';
