@@ -92,7 +92,6 @@ export async function runPdfExport(deps) {
     }
     return 'ok';
   }
-
   // Deliberately no pre-opened tab: on iOS that backgrounds the editor tab and
   // throttles the rendering the rasterizer depends on.
   try {
@@ -110,6 +109,7 @@ export async function runPdfExport(deps) {
       return 'empty';
     }
     console.error('[pdf-export] client PDF failed', err);
+    fix_rendering1
     alertFn(message === 'timeout'
       ? 'PDF is taking too long. Keep this tab open and try again.'
       : 'Could not create PDF. Please try again.');
@@ -136,4 +136,8 @@ function withTimeout(promise, ms, reason) {
       (e) => { clearTimeout(timer); reject(e); },
     );
   });
+}
+    alertFn('Could not create PDF. Please try again.');
+    return 'error';
+  }
 }

@@ -200,11 +200,7 @@ test('deliverPdfBlob falls back to download anchor', async () => {
     return el;
   };
   try {
-    const mode = await deliverPdfBlob(blob, 'Doc.pdf', {
-      previewWindow: null,
-      revokeDelayMs: 1,
-      share: false,
-    });
+    const mode = deliverPdfBlob(blob, 'Doc.pdf', { previewWindow: null, revokeDelayMs: 1 });
     expect(mode).toBe('download');
     expect(clicks).toEqual(['Doc.pdf']);
   } finally {
@@ -224,3 +220,4 @@ test('deliverPdfBlob never opens a blank tab before generation', async () => {
     window.open = origOpen;
   }
 });
+  
