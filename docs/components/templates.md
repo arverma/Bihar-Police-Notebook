@@ -41,7 +41,6 @@ flowchart TD
 - **iOS / iPadOS:** WebKit’s print pipeline clips full-bleed A4 cards, so export builds a client-side A4 PDF ([`editor/js/client-pdf.js`](../../editor/js/client-pdf.js)) from the same clone cards (raster pages via vendored html2canvas + jsPDF). Text in that PDF is not selectable; visual completeness is the goal. Verify on a real iPhone/iPad — desktop Playwright WebKit does not reproduce iOS Quartz print.
 - **Delivery order (iOS):** generate the blob first, then Web Share sheet → download anchor → same-tab navigation. Never open a tab before generation: backgrounding the editor tab throttles rendering and stalls rasterization, which shows up as a permanently blank `about:blank` tab.
 
-
 Routing lives in [`editor/js/pdf-export.js`](../../editor/js/pdf-export.js); orchestration still starts at `runPdfExport()` in `editor/js/main.js`.
 
 Deprecated rebuild helpers (`diaryPagesHtml` / `letterPagesHtml` and matching print CSS) remain in the sheet modules for rollback only; export no longer calls them.

@@ -79,7 +79,6 @@ test('runPdfExport iOS path calls clientPdf and deliver, not nativePrint', async
     template: 'diary',
     filename: 'केस दैनिकी',
     mode: 'client-pdf',
-    openPreviewWindow: () => preview,
     nativePrint: async () => {
       calls.native += 1;
       return 'ok';
@@ -154,28 +153,6 @@ test('runPdfExport aborts a hung generation instead of waiting forever', async (
   expect(result).toBe('error');
   expect(delivered).toBe(0);
   expect(alerts[0]).toMatch(/too long/i);
-});
-
-test('runPdfExport client empty closes preview and alerts', async () => {
-  const alerts = [];
-  let closed = false;
-  const preview = {
-    closed: false,
-    location: { href: '' },
-    close() { closed = true; this.closed = true; },
-  };
-  const result = await runPdfExport({
-    template: 'diary',
-    mode: 'client-pdf',
-    openPreviewWindow: () => preview,
-    clientPdf: async () => {
-      throw new Error('empty');
-    },
-    alert: (msg) => alerts.push(msg),
-  });
-  expect(result).toBe('empty');
-  expect(closed).toBe(true);
-  expect(alerts[0]).toMatch(/empty/i);
 });
 
 test('runPdfExport client failure surfaces error without native fallback', async () => {

@@ -397,6 +397,7 @@ test.describe('Print parity (live clone)', () => {
       window.__clientPdfMeta = null;
       window.__clientPdfErrors = [];
       window.__tabsOpened = 0;
+
       const origError = console.error.bind(console);
       console.error = (...args) => {
         window.__clientPdfErrors.push(args.map(String).join(' '));
