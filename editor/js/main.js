@@ -15,6 +15,10 @@ import {
     initDiarySheet,
     diaryHasMeaningfulContent,
     emptyModel,
+    diaryFirNumber,
+    autoDiaryFilename,
+    isAutoDiaryFilename,
+    DIARY_NON_TRANSLIT_HEADER_FIELDS,
 } from './diary-sheet.js';
 import { initDictation } from './dictation-ui.js';
 import { initPunctuationPanel } from './punctuation.js';
@@ -104,6 +108,12 @@ const AUTOSAVE_DELAY_MS = 600;
 /** @type {(() => Promise<void>) | null} */
 let loadHistoryFn = null;
 
+/** Skip treating the next filename input as a user rename. */
+let filenameProgrammatic = false;
+
+/** When true, FIR/date must not overwrite the header filename input. */
+let diaryFilenameManual = false;
+
 /** When true, skip Hinglish transliteration (direct Devanagari typing). */
 let isHindiMode = false;
 const mobileInputMq = window.matchMedia('(max-width: 768px)');
@@ -128,6 +138,37 @@ function formatDocFilename(date = new Date()) {
         month: 'short',
         year: 'numeric',
     });
+}
+
+/**
+ * @param {string} value
+ */
+function setFilenameInputProgrammatic(value) {
+    if (!filenameInput) return;
+    filenameProgrammatic = true;
+    filenameInput.value = value;
+    updateDocumentTitle();
+    syncFilenameWidth();
+    requestAnimationFrame(() => {
+        filenameProgrammatic = false;
+    });
+}
+
+function syncDiaryFilenameIfAuto() {
+    if (!filenameInput || getActiveTemplate() !== 'diary' || diaryFilenameManual) return;
+    const model = diarySheet?.getModel?.() ?? emptyModel();
+    const fir = diaryFirNumber(model);
+    setFilenameInputProgrammatic(autoDiaryFilename(currentDoc.createdAt, fir));
+}
+
+function shouldAttachDiaryTransliteration(el) {
+    if (!(el instanceof HTMLElement)) return false;
+    const field = el.dataset.field || '';
+    if (field && DIARY_NON_TRANSLIT_HEADER_FIELDS.has(field)) return false;
+    return Boolean(
+        el.matches?.('input:not([type="date"]), textarea, [data-field].diary-dotted-flow')
+        || el.classList.contains('ql-editor'),
+    );
 }
 
 /**
@@ -238,6 +279,7 @@ async function flushSave() {
         return;
     }
     const type = getActiveTemplate();
+    if (type === 'diary') syncDiaryFilenameIfAuto();
     const filename = (filenameInput?.value || '').trim() || formatDocFilename(new Date(currentDoc.createdAt));
     if (filenameInput && !filenameInput.value.trim()) filenameInput.value = filename;
 
@@ -285,7 +327,14 @@ async function loadDocumentState(doc) {
         setTemplateSegmentUI('diary');
         setDiaryContent(doc.content);
         updatePageIndicator(1, diarySheet?.pageCount || 1);
+        const fir = diaryFirNumber(diarySheet?.getModel?.() ?? emptyModel());
+        diaryFilenameManual = !isAutoDiaryFilename(
+            doc.filename,
+            currentDoc.createdAt,
+            fir,
+        );
     } else {
+        diaryFilenameManual = false;
         document.querySelector('.editor-letter').style.display = '';
         document.querySelector('.editor-diary').style.display = 'none';
         setTemplateSegmentUI('letter');
@@ -334,6 +383,7 @@ async function startNewDocument(type = getActiveTemplate()) {
         document.querySelector('.editor-diary').style.display = '';
         setTemplateSegmentUI('diary');
         diarySheet?.clear();
+        diaryFilenameManual = false;
         updatePageIndicator(1, diarySheet?.pageCount || 1);
     }
     setSaveStatus('saved');
@@ -923,7 +973,22 @@ function initApp() {
     }
 
     // Render history in sidebar
+    function snapshotExpandedHistoryGroups() {
+        const expanded = new Set();
+        historyList?.querySelectorAll('.history-date-group').forEach((group) => {
+            const key = group.dataset.dateKey;
+            const container = group.querySelector('.history-items-container');
+            if (key && container && !container.classList.contains('collapsed')) {
+                expanded.add(key);
+            }
+        });
+        return expanded;
+    }
+
     function renderHistory(docs = []) {
+        const hadGroups = Boolean(historyList?.querySelector('.history-date-group'));
+        const expandedSnapshot = hadGroups ? snapshotExpandedHistoryGroups() : null;
+
         historyList.innerHTML = '';
 
         if (!docs.length) {
@@ -950,34 +1015,36 @@ function initApp() {
         sortedDateKeys.forEach((dateKey, groupIndex) => {
             const groupDiv = document.createElement('div');
             groupDiv.className = 'history-date-group';
+            groupDiv.dataset.dateKey = dateKey;
 
-            const isRecentGroup = groupIndex === 0;
+            const groupHasActiveDoc = groups[dateKey].some(
+                (d) => currentDoc.id != null && d.id === currentDoc.id,
+            );
+            const shouldExpand = expandedSnapshot !== null
+                ? (expandedSnapshot.has(dateKey) || groupHasActiveDoc)
+                : groupIndex === 0;
+
             const header = document.createElement('div');
             header.className = 'date-header collapsible-header';
             header.title = 'Expand or collapse this day';
-            header.innerHTML = `<span class="collapse-arrow">${isRecentGroup ? '&#9660;' : '&#9654;'}</span> ${dateKey}`;
+            header.innerHTML = `<span class="collapse-arrow">${shouldExpand ? '&#9660;' : '&#9654;'}</span> ${dateKey}`;
             groupDiv.appendChild(header);
 
             const itemsContainer = document.createElement('div');
             itemsContainer.className = 'history-items-container';
-            if (!isRecentGroup) itemsContainer.classList.add('collapsed');
+            if (!shouldExpand) itemsContainer.classList.add('collapsed');
 
+            const listType = getActiveTemplate();
             groups[dateKey].sort((a, b) => b.date - a.date).forEach(doc => {
-                const firstLine = previewText(doc);
+                const firstLine = listType === 'letter' ? previewText(doc) : '';
                 const created = new Date(doc.created_at || doc.date || Date.now());
                 const updated = doc.updated_at ? new Date(doc.updated_at) : created;
-                const sameDayAsGroup =
-                    updated.getDate() === created.getDate() &&
-                    updated.getMonth() === created.getMonth() &&
-                    updated.getFullYear() === created.getFullYear();
-                const updatedStr = sameDayAsGroup
-                    ? updated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                    : updated.toLocaleString([], {
-                        month: 'short',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                    });
+                const updatedStr = updated.toLocaleString([], {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                });
 
                 const status = backupStatus(doc);
                 const connected = isConnected();
@@ -998,12 +1065,15 @@ function initApp() {
                 if (currentDoc.id != null && doc.id === currentDoc.id) {
                     item.classList.add('is-active');
                 }
+                const previewHtml = firstLine
+                    ? `<span class="history-item-preview">${escapeHtml(firstLine)}</span>`
+                    : '';
                 item.innerHTML = `
                     ${leadingIcon}
                     <div class="history-item-details">
                         <span class="history-item-name">${escapeHtml(doc.filename)}</span>
                         <span class="history-item-time" title="Last updated">${updatedStr}</span>
-                        <span class="history-item-preview">${escapeHtml(firstLine)}</span>
+                        ${previewHtml}
                     </div>
                     <div class="history-item-actions">
                         <button class="delete-btn" type="button" title="Delete this document" aria-label="Delete this document"><i class="fas fa-trash"></i></button>
@@ -1084,12 +1154,12 @@ function initApp() {
     const diaryTemplate = document.getElementById('diaryPageTemplate');
     if (diaryPagesEl && diaryTemplate) {
         diarySheet = initDiarySheet(diaryPagesEl, diaryTemplate, {
-            onChange: scheduleSave,
+            onChange: () => {
+                syncDiaryFilenameIfAuto();
+                scheduleSave();
+            },
             onAttachField: (el) => {
-                if (
-                    el.matches?.('input:not([type="date"]), textarea, [data-field].diary-dotted-flow')
-                    || el.classList?.contains('ql-editor')
-                ) {
+                if (shouldAttachDiaryTransliteration(el)) {
                     attachTransliteration(el);
                 }
                 if (el.type === 'date') {
@@ -1233,19 +1303,33 @@ function initApp() {
     }
 
     filenameInput?.addEventListener('change', () => {
+        if (!filenameProgrammatic && getActiveTemplate() === 'diary') {
+            diaryFilenameManual = true;
+        }
         scheduleSave();
         updateDocumentTitle();
         syncFilenameWidth();
     });
     filenameInput?.addEventListener('blur', () => {
         if (!(filenameInput.value || '').trim()) {
-            filenameInput.value = formatDocFilename(new Date(currentDoc.createdAt));
+            if (getActiveTemplate() === 'diary') {
+                const model = diarySheet?.getModel?.() ?? emptyModel();
+                const fir = diaryFirNumber(model);
+                setFilenameInputProgrammatic(autoDiaryFilename(currentDoc.createdAt, fir));
+                diaryFilenameManual = false;
+            } else {
+                setFilenameInputProgrammatic(formatDocFilename(new Date(currentDoc.createdAt)));
+            }
         }
         scheduleSave();
         updateDocumentTitle();
         syncFilenameWidth();
     });
     filenameInput?.addEventListener('input', () => {
+        if (filenameProgrammatic) return;
+        if (getActiveTemplate() === 'diary') {
+            diaryFilenameManual = true;
+        }
         updateDocumentTitle();
         syncFilenameWidth();
     });

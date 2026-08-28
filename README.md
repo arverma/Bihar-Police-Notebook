@@ -33,6 +33,12 @@ The same website works on both. On a **phone**, some computer-only controls are 
 
 ## For developers
 
+```bash
+make install && make serve   # http://127.0.0.1:8080/
+make test                    # unit
+make test-e2e                # Playwright (make playwright once for Chromium)
+```
+
 Architecture diagrams, module map, and deploy notes: **[docs/](docs/README.md)**.
 
 ## License
