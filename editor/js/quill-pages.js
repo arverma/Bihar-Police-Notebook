@@ -66,8 +66,9 @@ export function sanitizeQuillHtml(html) {
     const children = [...node.childNodes];
     for (const child of children) {
       if (child.nodeType === Node.TEXT_NODE) {
-        // Quill getSemanticHTML() replaces every space with &nbsp;, which
-        // prevents soft wrapping under white-space:normal. Normalize to U+0020.
+        // Persist/print only: strip NBSP to U+0020 so stored HTML and print
+        // stay wrap-friendly. On restore, htmlForQuillPaste re-encodes spaces
+        // for Quill 2.0.3 clipboard ingest — do not skip this step.
         if (child.nodeValue && child.nodeValue.includes('\u00a0')) {
           child.nodeValue = child.nodeValue.replace(/\u00a0/g, ' ');
         }
@@ -114,6 +115,36 @@ export function sanitizeQuillHtml(html) {
         el.removeAttribute(attr.name);
       });
       walk(el);
+    }
+  };
+  walk(tpl.content);
+  return tpl.innerHTML;
+}
+
+/**
+ * Adapt sanitized HTML for Quill clipboard ingest only — never persist this output.
+ * Quill 2.0.3 matchText collapses/trims U+0020 but preserves U+00A0 through import,
+ * then converts NBSP back to ordinary spaces in the Delta. Re-check on Quill upgrade.
+ * @param {string} html sanitized HTML (from sanitizeQuillHtml)
+ * @returns {string}
+ */
+export function htmlForQuillPaste(html) {
+  const raw = String(html ?? '');
+  if (!raw.trim()) return '';
+  if (isPlainDocContent(raw)) {
+    return raw.replace(/ /g, '\u00a0');
+  }
+  const tpl = document.createElement('template');
+  tpl.innerHTML = raw;
+  const walk = (node) => {
+    for (const child of [...node.childNodes]) {
+      if (child.nodeType === Node.TEXT_NODE) {
+        if (child.nodeValue && child.nodeValue.includes(' ')) {
+          child.nodeValue = child.nodeValue.replace(/ /g, '\u00a0');
+        }
+      } else if (child.nodeType === Node.ELEMENT_NODE) {
+        walk(child);
+      }
     }
   };
   walk(tpl.content);
@@ -304,7 +335,7 @@ export function setQuillContent(quill, content) {
     } else {
       const clean = sanitizeQuillHtml(s);
       quill.setText('', 'silent');
-      quill.clipboard.dangerouslyPasteHTML(0, clean || '', 'silent');
+      quill.clipboard.dangerouslyPasteHTML(0, htmlForQuillPaste(clean) || '', 'silent');
     }
     // Drop trailing selection noise
     const len = quill.getLength();

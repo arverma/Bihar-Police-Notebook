@@ -23,9 +23,11 @@ Workflow: `.github/workflows/pages.yml` (triggers on changes under `editor/**`).
 ## Local preview
 
 ```bash
-cd editor && python3 -m http.server 8080
-# open http://127.0.0.1:8080/
+make serve
+# open http://127.0.0.1:8080/   (PORT=3000 to override)
 ```
+
+Equivalent: `cd editor && python3 -m http.server 8080`. See the Makefile for `install`, `test`, and `test-e2e`.
 
 No Node build or Python backend for the app itself.
 

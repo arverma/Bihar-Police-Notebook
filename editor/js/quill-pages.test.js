@@ -4,6 +4,7 @@
 import { expect, test } from 'vitest';
 import {
   sanitizeQuillHtml,
+  htmlForQuillPaste,
   contentToPrintHtml,
   quillPrintCssFragment,
 } from './quill-pages.js';
@@ -62,4 +63,25 @@ test('quillPrintCssFragment uses pre-wrap and tab-size like live Quill', () => {
   const css = quillPrintCssFragment();
   expect(css).toMatch(/white-space:\s*pre-wrap/);
   expect(css).toMatch(/tab-size:\s*4/);
+});
+
+test('htmlForQuillPaste encodes text-node spaces as nbsp', () => {
+  const out = htmlForQuillPaste('<p>   center  word</p>');
+  expect(out).toMatch(/&nbsp;|&#160;|\u00a0/);
+  expect(out).not.toMatch(/>\s{2,}/);
+  expect(out).toContain('center');
+});
+
+test('htmlForQuillPaste does not alter img src attributes', () => {
+  const html = '<p><img src="data:image/png;base64,abc" alt="a"></p>';
+  const out = htmlForQuillPaste(html);
+  expect(out).toMatch(/src="data:image\/png;base64,abc"/);
+});
+
+test('sanitize after htmlForQuillPaste keeps no nbsp and preserves spaces', () => {
+  const stored = sanitizeQuillHtml('<p>   सेंटर  word</p>');
+  const roundTrip = sanitizeQuillHtml(htmlForQuillPaste(stored));
+  expect(roundTrip).not.toMatch(/\u00a0/);
+  expect(roundTrip).not.toMatch(/&nbsp;/i);
+  expect(roundTrip).toContain('   सेंटर  word');
 });

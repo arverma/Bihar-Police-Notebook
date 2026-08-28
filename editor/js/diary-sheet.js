@@ -65,6 +65,11 @@ export const HEADER_FIELDS = [
   'sections', 'investigation_record',
 ];
 
+/** Header fields that must not use Hinglish transliteration (numbers, refs). */
+export const DIARY_NON_TRANSLIT_HEADER_FIELDS = new Set([
+  'fir_number', 'case_diary_no', 'rule_no', 'special_report_no', 'sections',
+]);
+
 export function emptyHeader() {
   const h = {};
   HEADER_FIELDS.forEach((k) => { h[k] = ''; });
@@ -76,6 +81,62 @@ export function emptyModel() {
   return {
     pages: [{ hasHeader: true, header: emptyHeader(), left: '', right: '' }],
   };
+}
+
+/**
+ * @param {string} createdAtIso
+ * @returns {string}
+ */
+export function formatDiaryDocFilename(createdAtIso) {
+  return new Date(createdAtIso).toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+/**
+ * First non-empty FIR number from page headers.
+ * @param {object} model
+ * @returns {string}
+ */
+export function diaryFirNumber(model) {
+  if (!model || typeof model !== 'object') return '';
+  const pages = Array.isArray(model.pages) ? model.pages : [];
+  for (const p of pages) {
+    const fir = String(p?.header?.fir_number ?? '').trim();
+    if (fir) return fir;
+  }
+  return '';
+}
+
+/**
+ * Auto diary title: FIR when present, else created date.
+ * @param {string} createdAtIso
+ * @param {string} [fir]
+ * @returns {string}
+ */
+export function autoDiaryFilename(createdAtIso, fir) {
+  const trimmed = String(fir ?? '').trim();
+  if (trimmed) return trimmed;
+  return formatDiaryDocFilename(createdAtIso);
+}
+
+/**
+ * Whether the filename is still auto-managed (date default or current FIR).
+ * @param {string} name
+ * @param {string} createdAtIso
+ * @param {string} [fir]
+ * @returns {boolean}
+ */
+export function isAutoDiaryFilename(name, createdAtIso, fir) {
+  const n = String(name ?? '').trim();
+  if (!n) return true;
+  const dateDefault = formatDiaryDocFilename(createdAtIso);
+  const firTrim = String(fir ?? '').trim();
+  if (n === dateDefault) return true;
+  if (firTrim && n === firTrim) return true;
+  return false;
 }
 
 /**
