@@ -22,6 +22,7 @@ Architecture and how the pieces fit together. For everyday use (opening the app,
 | Punctuation Panel | Draggable panel with common Hindi/English punctuation |
 | [Dictation](components/dictation.md) | In-app microphone (desktop/tablet) |
 | [Page preview](components/page-preview.md) | On-screen fit / pinch zoom |
+| [Diary pagination manual tests](manual-tests/diary-pagination.md) | Manual checklist to run locally after any pager change |
 | [Deploy](components/deploy.md) | GitHub Pages and local preview |
 
 ## Product name

@@ -3,6 +3,8 @@
  * Expects window.Quill from the CDN script in index.html.
  */
 
+import { splitRichToFitStatic } from './page-fit.js';
+
 const RICH_TAG_RE = /<\s*(p|div|br|strong|b|em|i|u|ul|ol|li|img|span)\b/i;
 const MAX_IMAGE_EDGE = 800;
 const JPEG_QUALITY = 0.7;
@@ -62,6 +64,7 @@ export function sanitizeQuillHtml(html) {
   const tpl = document.createElement('template');
   tpl.innerHTML = raw;
   const allowed = new Set(['P', 'BR', 'STRONG', 'B', 'EM', 'I', 'U', 'UL', 'OL', 'LI', 'IMG', 'SPAN', 'DIV']);
+  const emptyBlocks = new Set(['P', 'LI', 'DIV']);
   const walk = (node) => {
     const children = [...node.childNodes];
     for (const child of children) {
@@ -79,6 +82,11 @@ export function sanitizeQuillHtml(html) {
         continue;
       }
       const el = /** @type {HTMLElement} */ (child);
+      // Live DOM may include Quill caret chrome; never persist it.
+      if (el.classList?.contains('ql-cursor') || el.classList?.contains('ql-ui')) {
+        el.remove();
+        continue;
+      }
       if (!allowed.has(el.tagName)) {
         const parent = el.parentNode;
         while (el.firstChild) parent?.insertBefore(el.firstChild, el);
@@ -101,7 +109,7 @@ export function sanitizeQuillHtml(html) {
         if (name === 'class') {
           const kept = (attr.value || '')
             .split(/\s+/)
-            .filter((c) => /^ql-align-/.test(c) || c === 'ql-cursor');
+            .filter((c) => /^ql-align-/.test(c));
           if (kept.length) el.setAttribute('class', kept.join(' '));
           else el.removeAttribute('class');
           return;
@@ -118,6 +126,24 @@ export function sanitizeQuillHtml(html) {
     }
   };
   walk(tpl.content);
+
+  // Canonical empty blocks: <p></p> (from getSemanticHTML) has zero height
+  // outside live Quill. Match live DOM: <p><br></p>.
+  const fillEmptyBlocks = (node) => {
+    for (const child of [...node.childNodes]) {
+      if (child.nodeType !== Node.ELEMENT_NODE) continue;
+      const el = /** @type {HTMLElement} */ (child);
+      fillEmptyBlocks(el);
+      if (!emptyBlocks.has(el.tagName)) continue;
+      const hasContent = [...el.childNodes].some((n) => {
+        if (n.nodeType === Node.TEXT_NODE) return (n.nodeValue || '').length > 0;
+        return n.nodeType === Node.ELEMENT_NODE;
+      });
+      if (!hasContent) el.appendChild(document.createElement('br'));
+    }
+  };
+  fillEmptyBlocks(tpl.content);
+
   return tpl.innerHTML;
 }
 
@@ -220,19 +246,19 @@ export function initQuillToolbar(el) {
     const cmd = btn.dataset.ql || '';
     if (cmd.startsWith('align:')) {
       const v = cmd.slice(6);
-      const cur = activeQuill.getFormat().align;
-      activeQuill.format('align', cur === v || (v === 'left' && !cur) ? false : v === 'left' ? false : v);
+      const cur = activeFormat().align;
+      activeQuill.format('align', cur === v ? false : v);
       syncToolbarUi();
       return;
     }
     if (cmd === 'list') {
-      const cur = activeQuill.getFormat().list;
-      activeQuill.format('list', cur === 'bullet' ? false : 'bullet');
+      const cur = activeFormat().list;
+      activeQuill.format('list', cur === 'ordered' ? false : 'ordered');
       syncToolbarUi();
       return;
     }
     if (cmd === 'bold' || cmd === 'italic' || cmd === 'underline') {
-      const cur = Boolean(activeQuill.getFormat()[cmd]);
+      const cur = Boolean(activeFormat()[cmd]);
       activeQuill.format(cmd, !cur);
       syncToolbarUi();
     }
@@ -288,18 +314,35 @@ function updateToolbarViewportOffset() {
   toolbarEl.style.setProperty('--quill-tb-bottom', `calc(var(--overlay-bottom, 0px) + ${bottomPx}px)`);
 }
 
+/**
+ * Formats at the active selection. Quill's `getFormat()` defaults to
+ * `getSelection(true)`, which is null while an editor is focused but has no
+ * range yet (during caret restore), and then throws.
+ * @returns {Record<string, any>}
+ */
+function activeFormat() {
+  if (!activeQuill) return {};
+  const range = activeQuill.getSelection();
+  if (!range) return {};
+  try {
+    return activeQuill.getFormat(range) || {};
+  } catch (_) {
+    return {};
+  }
+}
+
 function syncToolbarUi() {
   if (!toolbarEl) return;
-  const fmt = activeQuill ? activeQuill.getFormat() : {};
+  const fmt = activeFormat();
   toolbarEl.querySelectorAll('[data-ql]').forEach((btn) => {
     if (!(btn instanceof HTMLElement)) return;
     const cmd = btn.dataset.ql || '';
     let on = false;
     if (cmd === 'bold' || cmd === 'italic' || cmd === 'underline') on = Boolean(fmt[cmd]);
-    else if (cmd === 'list') on = fmt.list === 'bullet';
+    else if (cmd === 'list') on = fmt.list === 'ordered';
     else if (cmd.startsWith('align:')) {
       const v = cmd.slice(6);
-      on = v === 'left' ? !fmt.align : fmt.align === v;
+      on = fmt.align === v;
     }
     btn.classList.toggle('is-active', on);
     btn.setAttribute('aria-pressed', on ? 'true' : 'false');
@@ -337,11 +380,58 @@ export function setQuillContent(quill, content) {
       quill.setText('', 'silent');
       quill.clipboard.dangerouslyPasteHTML(0, htmlForQuillPaste(clean) || '', 'silent');
     }
-    // Drop trailing selection noise
+    // Drop trailing selection noise, but only for the editor the user is in.
+    // Offscreen measurement mirrors and unfocused pages share this path, and
+    // setting a selection there moves the document range out of the focused
+    // editor, which leaves the caret invisible.
     const len = quill.getLength();
-    if (len > 0) quill.setSelection(Math.min(len - 1, len), 0, 'silent');
+    if (len > 0 && quill.hasFocus()) quill.setSelection(Math.min(len - 1, len), 0, 'silent');
+    // Fixed-height diary boxes must never scroll — clipping means we failed to spill.
+    quill.root.scrollTop = 0;
   };
   silent();
+}
+
+/**
+ * @param {object} quill
+ * @returns {string}
+ */
+/**
+ * Caret index after a Quill text-change, derived from the (stale) selection
+ * Quill still reports during the handler plus any inserts in the delta.
+ * Deletes leave the selection already at the post-delete index.
+ * @param {object} quill
+ * @param {{ ops?: object[] } | null | undefined} delta
+ * @returns {number}
+ */
+export function caretIndexAfterTextChange(quill, delta) {
+  const sel = quill.getSelection();
+  let index = sel?.index ?? Math.max(0, quill.getLength() - 1);
+  for (const op of delta?.ops || []) {
+    if (typeof op.insert === 'string') index += op.insert.length;
+    else if (op.insert != null) index += 1;
+  }
+  const max = Math.max(0, quill.getLength() - 1);
+  return Math.max(0, Math.min(index, max));
+}
+
+/**
+ * Sanitized HTML for whatever the editor currently holds, including runs of
+ * empty paragraphs. Prefer live `root.innerHTML` over `getSemanticHTML()`:
+ * Quill 2 semantic HTML emits bare `<p></p>` (Break blot length is 0), which
+ * collapses outside live Quill — static clones, fit probes, and print/PDF.
+ * Live DOM keeps `<p><br></p>`; sanitize canonicalizes that shape.
+ * @param {object} quill
+ * @returns {string}
+ */
+export function getQuillHtmlPreservingBlanks(quill) {
+  let html = '';
+  try {
+    html = quill.root?.innerHTML ?? '';
+  } catch (_) {
+    html = '';
+  }
+  return sanitizeQuillHtml(html);
 }
 
 /**
@@ -351,15 +441,7 @@ export function setQuillContent(quill, content) {
 export function getQuillHtml(quill) {
   const plain = (quill.getText() || '').replace(/\n$/, '');
   if (!plain.trim() && !quill.root.querySelector('img')) return '';
-  let html = '';
-  try {
-    html = typeof quill.getSemanticHTML === 'function'
-      ? quill.getSemanticHTML()
-      : quill.root.innerHTML;
-  } catch (_) {
-    html = quill.root.innerHTML;
-  }
-  const clean = sanitizeQuillHtml(html);
+  const clean = getQuillHtmlPreservingBlanks(quill);
   if (!stripHtmlToPlain(clean).trim() && !/<img\b/i.test(clean)) return '';
   return clean;
 }
@@ -427,133 +509,25 @@ async function pickAndInsertImage(quill) {
   }
 }
 
-/**
- * Offscreen Quill used for spill measurement.
- * @param {number} widthPx
- * @param {number} heightPx
- * @param {{ fontSize?: number, lineHeight?: number, padding?: string }} [style]
- */
-function createMirrorQuill(widthPx, heightPx, style = {}) {
-  const Quill = getQuillCtor();
-  const host = document.createElement('div');
-  host.setAttribute('aria-hidden', 'true');
-  host.style.cssText = [
-    'position:absolute',
-    'left:-99999px',
-    'top:0',
-    'visibility:hidden',
-    'pointer-events:none',
-    `width:${widthPx}px`,
-  ].join(';');
-  const mount = document.createElement('div');
-  host.appendChild(mount);
-  document.body.appendChild(host);
-  const quill = new Quill(mount, {
-    theme: 'snow',
-    modules: { toolbar: false },
-    readOnly: true,
-  });
-  const root = quill.root;
-  const pad = style.padding ?? '0';
-  root.style.cssText = [
-    `width:${widthPx}px`,
-    `height:${heightPx}px`,
-    `max-height:${heightPx}px`,
-    'overflow:hidden',
-    'box-sizing:border-box',
-    `padding:${pad}`,
-    `font-size:${style.fontSize ?? 16}px`,
-    `line-height:${style.lineHeight ?? 24}px`,
-    "font-family:'Noto Sans Devanagari', Arial, sans-serif",
-    'border:none',
-    'margin:0',
-  ].join(';');
-  const container = mount.querySelector('.ql-container');
-  if (container instanceof HTMLElement) {
-    container.style.border = 'none';
-    container.style.height = `${heightPx}px`;
-  }
-  const toolbar = mount.querySelector('.ql-toolbar');
-  toolbar?.remove();
-  return {
-    quill,
-    destroy() {
-      host.remove();
-    },
-  };
-}
-
 function editorFits(quill) {
   const root = quill.root;
+  if (root.scrollTop > 0) return false;
   return root.scrollHeight <= root.clientHeight + 1;
 }
 
 /**
  * Split rich/plain content to fit a fixed box. Returns HTML/plain keep+spill.
+ * Uses the static (non-Quill) probe from page-fit.js — no second Selection.
  * @param {string} content
  * @param {number} widthPx
  * @param {number} heightPx
- * @param {{ fontSize?: number, lineHeight?: number, padding?: string }} [style]
+ * @param {{ fontSize?: number, lineHeight?: number, padding?: string, styleSource?: HTMLElement | null }} [style]
  * @returns {{ keep: string, spill: string }}
  */
 export function splitRichToFit(content, widthPx, heightPx, style = {}) {
   const s = String(content ?? '');
   if (!s) return { keep: '', spill: '' };
-
-  const mirror = createMirrorQuill(widthPx, heightPx, style);
-  try {
-    setQuillContent(mirror.quill, s);
-    if (editorFits(mirror.quill)) {
-      return { keep: isPlainDocContent(s) ? s : getQuillHtml(mirror.quill) || s, spill: '' };
-    }
-
-    const fullDelta = mirror.quill.getContents();
-    const fullLen = Math.max(0, mirror.quill.getLength() - 1);
-    const fullText = mirror.quill.getText().slice(0, fullLen);
-
-    let lo = 0;
-    let hi = fullLen;
-    while (lo < hi) {
-      const mid = Math.ceil((lo + hi) / 2);
-      mirror.quill.setContents(fullDelta.slice(0, mid), 'silent');
-      if (editorFits(mirror.quill)) lo = mid;
-      else hi = mid - 1;
-    }
-
-    let cut = lo;
-    const lookNl = fullText.lastIndexOf('\n', cut);
-    if (lookNl >= Math.floor(cut * 0.5)) {
-      cut = lookNl + 1;
-    } else {
-      const lookSp = fullText.lastIndexOf(' ', cut);
-      if (lookSp > cut * 0.6) cut = lookSp + 1;
-    }
-
-    mirror.quill.setContents(fullDelta.slice(0, cut), 'silent');
-    while (cut > 0 && !editorFits(mirror.quill)) {
-      const prev = Math.max(
-        fullText.lastIndexOf('\n', cut - 2),
-        fullText.lastIndexOf(' ', cut - 2),
-      );
-      cut = prev > 0 ? prev + 1 : cut - 1;
-      mirror.quill.setContents(fullDelta.slice(0, cut), 'silent');
-    }
-
-    const keepHtml = getQuillHtml(mirror.quill);
-    mirror.quill.setContents(fullDelta.slice(cut), 'silent');
-    const spillHtml = getQuillHtml(mirror.quill);
-
-    // Prefer plain join when original was plain and no embeds
-    if (isPlainDocContent(s) && !/<img\b/i.test(keepHtml + spillHtml)) {
-      return {
-        keep: fullText.slice(0, cut),
-        spill: fullText.slice(cut),
-      };
-    }
-    return { keep: keepHtml, spill: spillHtml };
-  } finally {
-    mirror.destroy();
-  }
+  return splitRichToFitStatic(s, widthPx, heightPx, style);
 }
 
 /**
@@ -587,11 +561,69 @@ export function paginateRich(content, widthPx, heightPx, style = {}) {
  * @param {HTMLElement} hostEl
  * @param {{
  *   placeholder?: string,
- *   onChange?: (html: string) => void,
+ *   onChange?: (html: string, meta?: { delta?: object, oldDelta?: object, source?: string }) => void,
  *   onFocus?: () => void,
  *   className?: string,
+ *   fixJustifyCaret?: boolean,
  * }} [opts]
  */
+/**
+ * Map a client click through CSS `--page-scale` into a point suitable for
+ * caretRangeFromPoint. The diary wrapper uses transform:scale with origin
+ * top left; hit-testing often uses unscaled layout coordinates.
+ * @param {number} clientX
+ * @param {number} clientY
+ * @param {HTMLElement} editorRoot
+ * @returns {{ x: number, y: number }}
+ */
+function scaledClientToLayoutPoint(clientX, clientY, editorRoot) {
+  const raw = getComputedStyle(document.documentElement).getPropertyValue('--page-scale').trim();
+  const scale = parseFloat(raw);
+  if (!Number.isFinite(scale) || scale <= 0 || Math.abs(scale - 1) < 0.001) {
+    return { x: clientX, y: clientY };
+  }
+  const wrap = editorRoot.closest('.editor-wrapper') || editorRoot;
+  const visual = wrap.getBoundingClientRect();
+  // Visual offset → layout offset (origin top left on .editor-wrapper).
+  const layoutX = (clientX - visual.left) / scale;
+  const layoutY = (clientY - visual.top) / scale;
+  // caretRangeFromPoint expects client coords; project layout back as if the
+  // unscaled box shared the same top-left as the visual box.
+  return { x: visual.left + layoutX, y: visual.top + layoutY };
+}
+
+/**
+ * Quill index nearest a client click (accounts for --page-scale).
+ * @param {import('quill').default} quill
+ * @param {number} clientX
+ * @param {number} clientY
+ * @returns {number | null}
+ */
+export function quillIndexFromClientPoint(quill, clientX, clientY) {
+  if (!quill?.root) return null;
+  const { x, y } = scaledClientToLayoutPoint(clientX, clientY, quill.root);
+  let domRange = null;
+  if (typeof document.caretRangeFromPoint === 'function') {
+    domRange = document.caretRangeFromPoint(x, y);
+  } else if (typeof document.caretPositionFromPoint === 'function') {
+    const pos = document.caretPositionFromPoint(x, y);
+    if (pos?.offsetNode) {
+      domRange = document.createRange();
+      domRange.setStart(pos.offsetNode, pos.offset);
+      domRange.collapse(true);
+    }
+  }
+  if (!domRange || !quill.root.contains(domRange.startContainer)) return null;
+  try {
+    const blot = Quill.find(domRange.startContainer, true);
+    if (!blot) return null;
+    const max = Math.max(0, quill.getLength() - 1);
+    return Math.max(0, Math.min(quill.getIndex(blot) + (domRange.startOffset || 0), max));
+  } catch {
+    return null;
+  }
+}
+
 export function mountQuill(hostEl, opts = {}) {
   const Quill = getQuillCtor();
   hostEl.innerHTML = '';
@@ -602,6 +634,9 @@ export function mountQuill(hostEl, opts = {}) {
     placeholder: opts.placeholder || '',
     modules: {
       toolbar: false,
+      // Document-level undo lives on diary/letter sheets; Quill History dies
+      // with continuous-right remounts and records silent pager probes.
+      history: false,
       clipboard: {
         matchVisual: false,
       },
@@ -617,10 +652,26 @@ export function mountQuill(hostEl, opts = {}) {
   hostEl.classList.add('bp-ql-container', 'ql-container');
   quill.root.classList.add('bp-ql-editor', 'hinglish-input');
 
+  // Quill scrolls every ancestor overflow box (and the window) on selection
+  // changes via scrollRectIntoView. Diary/letter pages are taller than the
+  // viewport — that jumps the stage on caret restore. Caret stays put; the
+  // user scrolls explicitly.
+  quill.scrollSelectionIntoView = () => {};
+
   const api = {
     quill,
     host: hostEl,
-    getHtml: () => getQuillHtml(quill),
+    // Live model / reflow must keep blank paragraphs — collapsing them to ''
+    // makes spill/collapse think the page is empty. A Quill that only holds
+    // the default trailing newline (getLength() === 1) is truly empty.
+    getHtml: () => {
+      if (Math.max(0, quill.getLength() - 1) === 0 && !quill.root.querySelector('img')) {
+        return '';
+      }
+      return getQuillHtmlPreservingBlanks(quill);
+    },
+    /** Collapsed HTML for "has user content?" checks — not for reflow. */
+    getHtmlCollapsed: () => getQuillHtml(quill),
     getText: () => (quill.getText() || '').replace(/\n$/, ''),
     setContent: (content) => setQuillContent(quill, content),
     insertText(index, text) {
@@ -639,7 +690,14 @@ export function mountQuill(hostEl, opts = {}) {
 
   quill.on('text-change', (_delta, _old, source) => {
     if (source === 'silent') return;
-    opts.onChange?.(getQuillHtml(quill));
+    const html = Math.max(0, quill.getLength() - 1) === 0 && !quill.root.querySelector('img')
+      ? ''
+      : getQuillHtmlPreservingBlanks(quill);
+    opts.onChange?.(html, {
+      delta: _delta,
+      oldDelta: _old,
+      source,
+    });
   });
 
   quill.on('selection-change', (range) => {
@@ -667,6 +725,48 @@ export function mountQuill(hostEl, opts = {}) {
       if (activeQuill === quill) setActiveQuill(null);
     });
   });
+
+  if (opts.fixJustifyCaret) {
+    quill.root.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      const target = e.target;
+      if (!(target instanceof Element)) return;
+      const block = target.closest?.('p, li, div');
+      if (!block || !quill.root.contains(block)) return;
+      const justified = block.classList.contains('ql-align-justify')
+        || /text-align\s*:\s*justify/i.test(block.getAttribute('style') || '');
+      if (!justified) return;
+
+      // CSS transform:scale on #editorScale means caretRangeFromPoint can miss
+      // under scaled preview. Map the click into layout space of the wrapper.
+      const { x, y } = scaledClientToLayoutPoint(e.clientX, e.clientY, quill.root);
+
+      let domRange = null;
+      if (typeof document.caretRangeFromPoint === 'function') {
+        domRange = document.caretRangeFromPoint(x, y);
+      } else if (typeof document.caretPositionFromPoint === 'function') {
+        const pos = document.caretPositionFromPoint(x, y);
+        if (pos?.offsetNode) {
+          domRange = document.createRange();
+          domRange.setStart(pos.offsetNode, pos.offset);
+          domRange.collapse(true);
+        }
+      }
+      if (!domRange || !quill.root.contains(domRange.startContainer)) return;
+
+      try {
+        const blot = Quill.find(domRange.startContainer, true);
+        if (!blot) return;
+        let index = quill.getIndex(blot) + (domRange.startOffset || 0);
+        const max = Math.max(0, quill.getLength() - 1);
+        index = Math.max(0, Math.min(index, max));
+        e.preventDefault();
+        quill.setSelection(index, 0, 'user');
+      } catch (_) {
+        /* keep default Quill hit-testing */
+      }
+    });
+  }
 
   quillByHost.set(hostEl, api);
   fieldByEditor.set(quill.root, api);

@@ -632,13 +632,13 @@ function attachTransliteration(el) {
         }
 
         let suggestions = await fetchSuggestions(word);
+        suggestionsBox.style.display = 'none';
         if (suggestions && suggestions.length > 0 && suggestions[0] !== word) {
             const suggestion = suggestions[0];
             replaceEditableRange(el, start, end, suggestion + ' ');
         } else {
             replaceEditableRange(el, cursor, cursor, ' ');
         }
-        suggestionsBox.style.display = 'none';
         notifyLetterChanged(el);
     });
 
@@ -719,8 +719,9 @@ function showSuggestions(suggestions, wordStart, wordEnd, targetEl) {
         div.className = 'suggestion';
         div.textContent = suggestion;
         div.onclick = () => {
-            replaceEditableRange(targetEl, wordStart, wordEnd, suggestion);
+            // Hide first so diary reflow is not skipped by translitOwnsInput().
             suggestionsBox.style.display = 'none';
+            replaceEditableRange(targetEl, wordStart, wordEnd, suggestion);
             notifyLetterChanged(targetEl);
             targetEl.dispatchEvent(new Event('input', { bubbles: true }));
         };
@@ -1148,6 +1149,10 @@ function initApp() {
                 showNotification(`Continued on page ${toPage}`);
             },
         });
+        // Test/dev hooks — same pattern as window.__bpExportMode
+        if (typeof window !== 'undefined') {
+            window.__bpLetterSheet = letterSheet;
+        }
     }
 
     const diaryPagesEl = document.getElementById('diaryPages');
@@ -1176,6 +1181,9 @@ function initApp() {
                 showNotification(`Continued on page ${toPage}`);
             },
         });
+        if (typeof window !== 'undefined') {
+            window.__bpDiarySheet = diarySheet;
+        }
     }
 
     if (quillToolbarEl) initQuillToolbar(quillToolbarEl);
@@ -1475,7 +1483,63 @@ function initApp() {
             e.preventDefault();
             setSidebarOpen(!isToggled);
         }
-    });
+    }, false);
+
+    /**
+     * Document-level undo/redo — capture before Quill/textarea native handlers.
+     * @param {EventTarget | null} target
+     * @returns {boolean}
+     */
+    function isEditorUndoTarget(target) {
+        if (!(target instanceof Element)) return false;
+        if (target === filenameInput || filenameInput?.contains(target)) return false;
+        if (target.closest('.history-sidebar')) return false;
+        if (target.closest('.dictation-panel') || target.closest('#dictationBar')) return false;
+        if (target.closest('.punctuation-panel')) return false;
+        if (target.closest('#quillToolbar')) return true;
+        if (target.closest('.editor-diary') || target.closest('.editor-letter')) return true;
+        return false;
+    }
+
+    /**
+     * @returns {{ undo: () => boolean, redo: () => boolean } | null}
+     */
+    function activeSheetHistory() {
+        const type = getActiveTemplate();
+        if (type === 'diary' && diarySheet) return diarySheet;
+        if (type === 'letter' && letterSheet) return letterSheet;
+        return null;
+    }
+
+    document.addEventListener('keydown', (e) => {
+        const meta = e.metaKey || e.ctrlKey;
+        if (!meta) return;
+        if (!isEditorUndoTarget(e.target)) return;
+        const sheet = activeSheetHistory();
+        if (!sheet) return;
+
+        const key = e.key;
+        const isUndo = (key === 'z' || key === 'Z') && !e.shiftKey;
+        const isRedo = ((key === 'z' || key === 'Z') && e.shiftKey)
+            || (key === 'y' || key === 'Y');
+        if (!isUndo && !isRedo) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+        if (isUndo) sheet.undo();
+        else sheet.redo();
+    }, true);
+
+    document.addEventListener('beforeinput', (e) => {
+        if (e.inputType !== 'historyUndo' && e.inputType !== 'historyRedo') return;
+        if (!isEditorUndoTarget(e.target)) return;
+        const sheet = activeSheetHistory();
+        if (!sheet) return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.inputType === 'historyUndo') sheet.undo();
+        else sheet.redo();
+    }, true);
 
     // Track focus/selection for voice dictation insertion target
     document.addEventListener('focusin', (e) => {

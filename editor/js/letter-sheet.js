@@ -7,13 +7,13 @@
  */
 
 import {
-  contentToPrintHtml,
+  caretIndexAfterTextChange,
   mountQuill,
   paginateRich,
-  quillPrintCssFragment,
   splitRichToFit,
   stripHtmlToPlain,
 } from './quill-pages.js';
+import { createEditHistory } from './edit-history.js';
 
 const DPI = 96;
 const MM_PER_IN = 25.4;
@@ -46,58 +46,13 @@ const LETTER_STYLE = {
   padding: '0',
 };
 
-/**
- * @deprecated Prefer live-page clone via export/print-document.js (runDocumentExport).
- * Print stylesheet — one A4 page card per letter page.
- */
-export function letterPrintCss() {
-  return `
-    @page {
-      size: A4;
-      margin: ${MARGIN_MM}mm ${MARGIN_MM}mm ${BOTTOM_MARGIN_PRINT_MM.toFixed(2)}mm ${MARGIN_MM}mm;
-    }
-    html, body {
-      margin: 0;
-      padding: 0;
-      background: #fff;
-    }
-    .letter-print-page {
-      width: ${CONTENT_W_MM}mm;
-      height: ${CONTENT_H_PX}px;
-      box-sizing: border-box;
-      font-family: 'Noto Sans Devanagari', Arial, sans-serif;
-      font-size: ${FONT_PX}px;
-      line-height: ${LINE_HEIGHT_PX}px;
-      white-space: pre-wrap;
-      tab-size: 4;
-      -moz-tab-size: 4;
-      word-break: break-word;
-      page-break-after: always;
-      overflow: hidden;
-    }
-    /* ql-print white-space comes from quillPrintCssFragment (pre-wrap). */
-    .letter-print-page:last-child {
-      page-break-after: auto;
-    }
-    ${quillPrintCssFragment()}
-  `;
-}
-
-/**
- * @deprecated Prefer live-page clone via export/print-document.js (runDocumentExport).
- * @param {string[]} pages
- */
-export function letterPagesHtml(pages) {
-  const list = pages?.length ? pages : [''];
-  return list.map((text) => {
-    const body = contentToPrintHtml(text);
-    const isRich = /<\s*(p|div|strong|em|u|ul|li|img)\b/i.test(body);
-    return `<div class="letter-print-page${isRich ? ' ql-print' : ''}">${body}</div>`;
-  }).join('');
-}
-
-function splitTextToFit(text) {
-  return splitRichToFit(text, CONTENT_W_PX, CONTENT_H_PX, LETTER_STYLE);
+function splitTextToFit(text, liveRoot = null) {
+  const width = liveRoot?.clientWidth > 0 ? liveRoot.clientWidth : CONTENT_W_PX;
+  const height = liveRoot?.clientHeight > 0 ? liveRoot.clientHeight : CONTENT_H_PX;
+  return splitRichToFit(text, width, height, {
+    ...LETTER_STYLE,
+    styleSource: liveRoot instanceof HTMLElement ? liveRoot : null,
+  });
 }
 
 function paginateText(text) {
@@ -123,6 +78,7 @@ export function initLetterSheet(container, indicatorEl, hooks = {}) {
   let focusedPage = 0;
   /** @type {Map<number, object>} */
   const fields = new Map();
+  const history = createEditHistory();
 
   function notify() {
     hooks.onChange?.();
@@ -136,6 +92,81 @@ export function initLetterSheet(container, indicatorEl, hooks = {}) {
     hooks.onPageFocus?.(current, total);
   }
 
+  function readCaret() {
+    const field = fields.get(focusedPage) || fields.get(0);
+    if (!field) return { pageIndex: 0, index: 0 };
+    const sel = field.quill.getSelection();
+    return {
+      pageIndex: focusedPage,
+      index: sel?.index ?? Math.max(0, field.quill.getLength() - 1),
+    };
+  }
+
+  function cloneSnapshot() {
+    return {
+      pages: pages.slice(),
+      caret: readCaret(),
+    };
+  }
+
+  function settleHistory() {
+    if (history.applying || spilling) return;
+    history.settle(cloneSnapshot());
+  }
+
+  /**
+   * @param {{ force?: boolean }} [opts]
+   */
+  function markUserEdit(opts = {}) {
+    if (history.applying || spilling) return;
+    history.markUserEdit(opts);
+  }
+
+  /**
+   * @param {{ pages: string[], caret?: { pageIndex: number, index: number } }} snap
+   */
+  function applySnapshot(snap) {
+    history.applying = true;
+    pages = (snap.pages || ['']).slice();
+    if (!pages.length) pages = [''];
+    const caret = snap.caret || { pageIndex: 0, index: 0 };
+    focusedPage = Math.max(0, Math.min(caret.pageIndex, pages.length - 1));
+    render({ skipOpenRepair: true });
+    requestAnimationFrame(() => {
+      const field = fields.get(focusedPage) || fields.get(0);
+      if (field) {
+        try { field.quill.root.focus({ preventScroll: true }); } catch (_) { /* ignore */ }
+        const max = Math.max(0, field.quill.getLength() - 1);
+        field.quill.setSelection(Math.min(Math.max(0, caret.index), max), 0, 'api');
+      }
+      history.applying = false;
+      history.settle(cloneSnapshot());
+      notify();
+    });
+  }
+
+  function undo() {
+    if (!history.canUndo) return false;
+    history.settle(cloneSnapshot());
+    const snap = history.undoOnce();
+    if (!snap) return false;
+    applySnapshot(/** @type {{ pages: string[], caret?: { pageIndex: number, index: number } }} */ (snap));
+    return true;
+  }
+
+  function redo() {
+    if (!history.canRedo) return false;
+    history.settle(cloneSnapshot());
+    const snap = history.redoOnce();
+    if (!snap) return false;
+    applySnapshot(/** @type {{ pages: string[], caret?: { pageIndex: number, index: number } }} */ (snap));
+    return true;
+  }
+
+  function clearHistory() {
+    history.clear();
+  }
+
   function getText() {
     return pages.join('');
   }
@@ -145,15 +176,19 @@ export function initLetterSheet(container, indicatorEl, hooks = {}) {
   }
 
   function setText(text) {
+    clearHistory();
     pages = paginateText(String(text ?? ''));
     render();
     notifyFocus(0);
+    settleHistory();
   }
 
   function clear() {
+    clearHistory();
     pages = [''];
     render();
     notifyFocus(0);
+    settleHistory();
   }
 
   /**
@@ -161,7 +196,7 @@ export function initLetterSheet(container, indicatorEl, hooks = {}) {
    * @param {number} pageIndex
    */
   function spillFrom(pageIndex) {
-    if (spilling) return;
+    if (spilling || history.applying) return;
     spilling = true;
     const fromPage = pageIndex;
     let i = pageIndex;
@@ -170,7 +205,8 @@ export function initLetterSheet(container, indicatorEl, hooks = {}) {
 
     while (i < pages.length && iterations++ < 50) {
       const text = pages[i] || '';
-      const { keep, spill } = splitTextToFit(text);
+      const liveRoot = fields.get(i)?.quill?.root || null;
+      const { keep, spill } = splitTextToFit(text, liveRoot);
       if (!spill) break;
       didSpill = true;
       pages[i] = keep;
@@ -200,12 +236,14 @@ export function initLetterSheet(container, indicatorEl, hooks = {}) {
           field.host.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         }
         notifyFocus(toPage);
+        settleHistory();
       });
       notify();
       hooks.onSpill?.({ fromPage: fromPage + 1, toPage: toPage + 1 });
     }
 
     spilling = false;
+    if (!didSpill) settleHistory();
   }
 
   /**
@@ -216,15 +254,35 @@ export function initLetterSheet(container, indicatorEl, hooks = {}) {
   function wirePage(pageEl, pageIndex, field) {
     fields.set(pageIndex, field);
 
-    field.quill.on('text-change', (_d, _o, source) => {
-      if (source === 'silent' || spilling) return;
+    field.quill.on('text-change', (delta, _o, source) => {
+      if (source === 'silent' || spilling || history.applying) return;
+      if (field.quill.root.isComposing) return;
+      if (source === 'user') markUserEdit();
       pages[pageIndex] = field.getHtml();
+      // Advance caret from the delta so spill restores onto the right page.
+      void caretIndexAfterTextChange(field.quill, delta);
       if (!field.fitsInBox()) {
         spillFrom(pageIndex);
       } else {
+        settleHistory();
         notify();
       }
       notifyFocus(pageIndex);
+    });
+
+    field.quill.root.addEventListener('compositionstart', () => {
+      if (spilling || history.applying) return;
+      markUserEdit();
+    });
+
+    field.quill.root.addEventListener('compositionend', () => {
+      if (spilling || history.applying) return;
+      pages[pageIndex] = field.getHtml();
+      if (!field.fitsInBox()) spillFrom(pageIndex);
+      else {
+        settleHistory();
+        notify();
+      }
     });
 
     hooks.onAttachField?.(field.quill.root, field);
@@ -253,7 +311,10 @@ export function initLetterSheet(container, indicatorEl, hooks = {}) {
     return { pageEl, field };
   }
 
-  function render() {
+  /**
+   * @param {{ skipOpenRepair?: boolean }} [opts]
+   */
+  function render(opts = {}) {
     fields.forEach((f) => f.destroy());
     fields.clear();
     container.innerHTML = '';
@@ -263,11 +324,16 @@ export function initLetterSheet(container, indicatorEl, hooks = {}) {
       wirePage(pageEl, i, field);
     });
 
-    const last = pages[pages.length - 1] || '';
-    const lastField = fields.get(pages.length - 1);
-    if (lastField && last && !lastField.fitsInBox()) {
-      spillFrom(pages.length - 1);
-      return;
+    if (!opts.skipOpenRepair && !history.applying) {
+      // Repair clip on open/render: spill the first page that already overflows.
+      // Do not absorb or re-cut pages that fit.
+      for (let i = 0; i < pages.length; i++) {
+        const f = fields.get(i);
+        if (f && (pages[i] || '') && !f.fitsInBox()) {
+          spillFrom(i);
+          return;
+        }
+      }
     }
 
     notifyFocus(Math.min(focusedPage, pages.length - 1));
@@ -276,6 +342,7 @@ export function initLetterSheet(container, indicatorEl, hooks = {}) {
   function update() {
     pages = paginateText(getText());
     render();
+    settleHistory();
   }
 
   function focus() {
@@ -317,6 +384,7 @@ export function initLetterSheet(container, indicatorEl, hooks = {}) {
   }
 
   render();
+  settleHistory();
 
   return {
     update,
@@ -326,7 +394,12 @@ export function initLetterSheet(container, indicatorEl, hooks = {}) {
     clear,
     focus,
     getActiveField,
+    undo,
+    redo,
+    clearHistory,
     get pageCount() { return pages.length; },
     getPages: () => pages.slice(),
+    get canUndo() { return history.canUndo; },
+    get canRedo() { return history.canRedo; },
   };
 }

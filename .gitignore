@@ -29,7 +29,12 @@ yarn-error.log*
 /logs/
 *.log
 
-# Playwright Testing
+# Playwright Testing (local artifacts — never push)
 playwright-report/
 test-results/
+blob-report/
+playwright/.cache/
 
+# Accidental Cursor sandbox cache drop (directory literally named ")
+"/
+.playwright-browsers/

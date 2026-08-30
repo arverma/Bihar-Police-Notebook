@@ -6,12 +6,20 @@
  */
 
 import {
-  contentToPrintHtml,
+  caretIndexAfterTextChange,
   mountQuill,
-  quillPrintCssFragment,
+  quillIndexFromClientPoint,
+  sanitizeQuillHtml,
   splitRichToFit,
   stripHtmlToPlain,
 } from './quill-pages.js';
+import {
+  measureRichFits,
+  peelLastContentUnit,
+  takeFirstContentUnit,
+  takeFittingHtmlPrefix,
+} from './page-fit.js';
+import { createEditHistory } from './edit-history.js';
 
 const DPI = 96;
 const MM_PER_IN = 25.4;
@@ -474,90 +482,6 @@ export function measureTitlesRowHeightPx(investigationRecord = '') {
   return Math.max(TITLES_ROW_H_PX, Math.ceil(h));
 }
 
-/**
- * @deprecated Prefer live-page clone via export/print-document.js (runDocumentExport).
- * Kept for rollback / measurement helpers that reuse header CSS fragments.
- * Print stylesheet — screen and print share the same A4 geometry.
- */
-export function diaryPrintCss() {
-  return `
-    @page {
-      size: A4;
-      margin: ${MARGIN_MM}mm;
-    }
-    html, body {
-      margin: 0;
-      padding: 0;
-      background: #fff;
-    }
-    .diary-print-page {
-      width: ${CONTENT_W_MM}mm;
-      height: ${CONTENT_H_MM}mm;
-      box-sizing: border-box;
-      font-family: 'Noto Sans Devanagari', Arial, sans-serif;
-      font-size: ${FONT_PX}px;
-      line-height: ${LINE_HEIGHT_PX}px;
-      color: #000;
-      page-break-after: always;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-    }
-    .diary-print-page:last-child {
-      page-break-after: auto;
-    }
-    ${diaryHeaderPrintCssFragment()}
-    .diary-print-table {
-      flex: 0 0 auto;
-      width: 100%;
-      border-collapse: collapse;
-      table-layout: fixed;
-      border: 1.5px solid #000;
-      box-sizing: border-box;
-    }
-    .diary-print-table th,
-    .diary-print-table td {
-      border: 1px solid #000;
-      vertical-align: top;
-      padding: 0;
-      word-wrap: break-word;
-    }
-    .diary-print-table th.left-col,
-    .diary-print-table td.left-col {
-      width: ${LEFT_COL_PCT}%;
-    }
-    .diary-print-table th.right-col,
-    .diary-print-table td.right-col {
-      width: ${100 - LEFT_COL_PCT}%;
-    }
-    .diary-print-table th {
-      font-size: 12px;
-      font-weight: 700;
-      text-align: center;
-      line-height: 1.3;
-      min-height: ${TITLES_ROW_H_PX}px;
-      height: auto;
-      padding: 6px 8px;
-      box-sizing: border-box;
-    }
-    .diary-print-body {
-      white-space: pre-wrap;
-      tab-size: 4;
-      -moz-tab-size: 4;
-      overflow-wrap: break-word;
-      word-break: normal;
-      font-size: ${FONT_PX}px;
-      line-height: ${LINE_HEIGHT_PX}px;
-      margin: 0;
-      padding: 4px 6px;
-      box-sizing: border-box;
-      overflow: hidden;
-    }
-    /* ql-print white-space comes from quillPrintCssFragment (pre-wrap). */
-    ${quillPrintCssFragment()}
-  `;
-}
-
 function printHeaderHtml(header) {
   const dotted = (k, cls = '') => {
     let v = header[k];
@@ -600,53 +524,157 @@ function printHeaderHtml(header) {
 }
 
 /**
- * @deprecated Prefer live-page clone via export/print-document.js (runDocumentExport).
- * Build print HTML from the diary model (same geometry as screen).
+ * Plain-text length of a column slice (left = raw, right = stripped HTML).
+ * @param {string} text
+ * @param {'left'|'right'} col
+ * @returns {number}
  */
-export function diaryPagesHtml(model) {
-  const m = normalizeDiaryModel(model);
-  return m.pages.map((page) => {
-    const h = page.hasHeader;
-    const headerBlockH = h ? measureHeaderHeightPx(page.header) : HEADER_BLOCK_H_PX;
-    const titlesRowH = h ? measureTitlesRowHeightPx(page.header.investigation_record) : TITLES_ROW_H_PX;
-    const boxH = boxHeightPx(h, headerBlockH, titlesRowH)
-      + cellPadBottomPx(h, headerBlockH, titlesRowH);
-    const titles = h ? `
-      <tr>
-        <th class="left-col">किन तिथि को (समय सहित) कार्रवाई की गई, और किन-किन स्थानों को जाकर देखा गया</th>
-        <th class="right-col">
-          अन्वेषण का अभिलेख
-          ${page.header.investigation_record
-            ? `<div>(${escapeHtml(page.header.investigation_record)})</div>`
-            : ''}
-        </th>
-      </tr>
-    ` : '';
-    const headerBlock = h ? printHeaderHtml(page.header) : '';
-    return `
-      <div class="diary-print-page${h ? ' has-header' : ' no-header'}">
-        ${headerBlock}
-        <table class="diary-print-table">
-          ${titles}
-          <tr class="body-row">
-            <td class="left-col" style="height:${boxH}px;">
-              <div class="diary-print-body" style="height:${boxH}px;">${escapeHtml(page.left)}</div>
-            </td>
-            <td class="right-col" style="height:${boxH}px;">
-              <div class="diary-print-body ql-print" style="height:${boxH}px;">${contentToPrintHtml(page.right)}</div>
-            </td>
-          </tr>
-        </table>
-      </div>
-    `;
-  }).join('');
+export function columnTextLength(text, col) {
+  if (col === 'left') return String(text ?? '').length;
+  return stripHtmlToPlain(text ?? '').length;
+}
+
+/**
+ * Length of stored right-column content in Quill index space, where each block
+ * boundary counts as one newline. Plain-text length alone undercounts empty
+ * paragraphs, which shifts caret restore after reflow.
+ * @param {string} content
+ * @returns {number}
+ */
+export function quillTextLength(content) {
+  const s = String(content ?? '');
+  if (!s) return 0;
+  if (!/<\s*(p|div|br|li)\b/i.test(s)) return stripHtmlToPlain(s).length;
+
+  const holder = document.createElement('div');
+  holder.innerHTML = s;
+  const blocks = [...holder.children].filter(
+    (el) => /^(P|DIV|LI)$/.test(el.tagName),
+  );
+  if (!blocks.length) return stripHtmlToPlain(s).length;
+  return blocks
+    .map((el) => (el.textContent || '').replace(/\u00a0/g, ' '))
+    .join('\n')
+    .length;
+}
+
+/**
+ * Caret coordinate length of a column slice: characters for the left textarea,
+ * Quill indices for the right editor.
+ * @param {string} text
+ * @param {'left'|'right'} col
+ * @returns {number}
+ */
+export function caretColumnLength(text, col) {
+  if (col === 'left') return String(text ?? '').length;
+  return quillTextLength(text);
+}
+
+/**
+ * Right-column pages are joined as block sequences, so every page junction
+ * costs one newline in the joined caret space. Left-column text is joined raw.
+ * @param {'left'|'right'} col
+ * @returns {number}
+ */
+export function caretJunctionCost(col) {
+  return col === 'right' ? 1 : 0;
+}
+
+/**
+ * Offset of a page-local caret inside the column's joined caret space.
+ * @param {number[]} lengths caret length of each page's column
+ * @param {number} junction
+ * @param {number} pageIndex
+ * @param {number} localOffset
+ * @returns {number}
+ */
+export function caretToGlobal(lengths, junction, pageIndex, localOffset) {
+  let off = 0;
+  for (let i = 0; i < pageIndex && i < lengths.length; i++) {
+    off += lengths[i] + junction;
+  }
+  return off + Math.max(0, localOffset);
+}
+
+/**
+ * Inverse of {@link caretToGlobal}, clamped into the available pages.
+ * @param {number[]} lengths caret length of each page's column
+ * @param {number} junction
+ * @param {number} globalOffset
+ * @returns {{ pageIndex: number, localOffset: number }}
+ */
+export function caretFromGlobal(lengths, junction, globalOffset) {
+  if (!lengths.length) return { pageIndex: 0, localOffset: 0 };
+  let remaining = Math.max(0, globalOffset);
+  for (let i = 0; i < lengths.length; i++) {
+    const len = lengths[i];
+    if (remaining <= len || i === lengths.length - 1) {
+      return { pageIndex: i, localOffset: Math.min(remaining, len) };
+    }
+    remaining -= len + junction;
+  }
+  return { pageIndex: lengths.length - 1, localOffset: 0 };
+}
+
+/**
+ * Whether a page body is empty in both columns (headers ignored).
+ * Right column uses Quill index space: a lone empty `<p>` is Quill's default
+ * empty document; extra blank paragraphs occupy layout and must not collapse.
+ * @param {{ left?: string, right?: string }} page
+ * @returns {boolean}
+ */
+export function isPageBodyEmpty(page) {
+  if (!page) return true;
+  if (String(page.left || '').trim()) return false;
+  const right = String(page.right || '');
+  if (!right.trim()) return true;
+  if (/<img\b/i.test(right)) return false;
+  if (quillTextLength(right) > 0) return false;
+  const holder = document.createElement('div');
+  holder.innerHTML = right;
+  const blocks = [...holder.children].filter((el) => /^(P|DIV|LI)$/.test(el.tagName));
+  return blocks.length <= 1;
+}
+
+/**
+ * Drop trailing pages that have no header and empty bodies. Never drops page 0,
+ * and never drops a page at or before `keepIndex` (caret-owned blank spill page).
+ * @param {Array<{hasHeader?: boolean, left?: string, right?: string}>} pages
+ * @param {number} [keepIndex=0]
+ * @returns {typeof pages}
+ */
+export function collapseTrailingEmptyPages(pages, keepIndex = 0) {
+  if (!Array.isArray(pages) || pages.length <= 1) return pages;
+  const floor = Math.max(0, keepIndex | 0);
+  const next = pages.slice();
+  while (
+    next.length > 1
+    && next.length - 1 > floor
+    && !next[next.length - 1].hasHeader
+    && isPageBodyEmpty(next[next.length - 1])
+  ) {
+    next.pop();
+  }
+  return next;
+}
+
+/**
+ * Join two same-column slices for reflow (plain concat; matches spill today).
+ * @param {string} a
+ * @param {string} b
+ * @returns {string}
+ */
+export function joinColumnContent(a, b) {
+  return String(a ?? '') + String(b ?? '');
 }
 
 /**
  * Spill text that overflows a fixed-height textarea at the last whitespace
  * boundary that still fits.
+ * @param {HTMLTextAreaElement} textarea
+ * @returns {{ keep: string, spill: string }}
  */
-function splitOverflow(textarea) {
+export function splitOverflow(textarea) {
   const full = textarea.value;
   if (textarea.scrollHeight <= textarea.clientHeight + 1) {
     return { keep: full, spill: '' };
@@ -702,24 +730,33 @@ function columnWidthPx(col) {
  * @param {boolean} hasHeader
  * @param {number} [headerBlockH]
  * @param {number} [titlesRowH]
+ * @param {{ shrinkPx?: number, boxWidth?: number, boxHeight?: number, styleSource?: HTMLElement | null }} [opts]
+ *   `boxWidth`/`boxHeight` override the computed geometry with the live box, so
+ *   offscreen layout measures the same space the user sees. `styleSource` is
+ *   the live `.ql-editor` whose computed font/padding the mirror should clone.
+ *   `shrinkPx` shaves the usable height for callers that must not overfill it.
+ * @returns {{ keep: string, spill: string }}
  */
-function splitTextToFit(
+export function splitTextToFit(
   text,
   col,
   hasHeader,
   headerBlockH = HEADER_BLOCK_H_PX,
   titlesRowH = TITLES_ROW_H_PX,
+  opts = {},
 ) {
   if (!text) return { keep: '', spill: '' };
-  const boxH = boxHeightPx(hasHeader, headerBlockH, titlesRowH)
+  const computedH = boxHeightPx(hasHeader, headerBlockH, titlesRowH)
     + cellPadBottomPx(hasHeader, headerBlockH, titlesRowH);
-  const colW = columnWidthPx(col);
+  const boxH = Math.max(1, (opts.boxHeight || computedH) - Math.max(0, opts.shrinkPx || 0));
+  const colW = opts.boxWidth || columnWidthPx(col);
 
   if (col === 'right') {
     return splitRichToFit(text, colW, boxH, {
       fontSize: FONT_PX,
       lineHeight: LINE_HEIGHT_PX,
       padding: '4px 6px',
+      styleSource: opts.styleSource || null,
     });
   }
 
@@ -773,6 +810,17 @@ export function initDiarySheet(container, template, hooks) {
   let cachedTitlesRowH = TITLES_ROW_H_PX;
   /** @type {WeakMap<HTMLElement, object>} */
   const rightFields = new WeakMap();
+  /**
+   * Only this page index holds a live Quill; other right columns are static HTML.
+   * Persistence remains pages[].
+   * @type {number}
+   */
+  let activeRightPageIndex = 0;
+  /** Invalidates stale double-rAF overflow rechecks after undo/setModel. */
+  let reflowEpoch = 0;
+  const history = createEditHistory();
+  /** @type {'left'|'right'} */
+  let lastCaretCol = 'right';
 
   function notify() {
     hooks.onChange?.();
@@ -781,6 +829,283 @@ export function initDiarySheet(container, template, hooks) {
   function notifyFocus(index) {
     focusedPage = index;
     hooks.onPageFocus?.(index + 1, model.pages.length);
+  }
+
+  /**
+   * Deep clone of fitted pages[] + caret for session undo.
+   * @returns {{ pages: object[], caret: { col: 'left'|'right', global: number } }}
+   */
+  function cloneSnapshot() {
+    /** @type {{ col: 'left'|'right', global: number } | null} */
+    let caret = null;
+    for (const col of /** @type {const} */ (['right', 'left'])) {
+      const read = readCaretGlobal(col);
+      if (read) {
+        lastCaretCol = col;
+        caret = { col, global: read.global };
+        break;
+      }
+    }
+    if (!caret) {
+      caret = { col: lastCaretCol, global: 0 };
+    }
+    return {
+      pages: model.pages.map((p) => ({
+        ...p,
+        header: p.header ? { ...p.header } : null,
+      })),
+      caret,
+    };
+  }
+
+  function settleHistory() {
+    if (history.applying || spilling) return;
+    history.settle(cloneSnapshot());
+  }
+
+  /**
+   * @param {{ force?: boolean }} [opts]
+   */
+  function markUserEdit(opts = {}) {
+    if (history.applying || spilling) return;
+    history.markUserEdit(opts);
+  }
+
+  /**
+   * Restore a history snapshot without clearing the undo stack (unlike setModel).
+   * @param {{ pages: object[], caret?: { col: 'left'|'right', global: number } }} snap
+   */
+  function applySnapshot(snap) {
+    reflowEpoch += 1;
+    history.applying = true;
+    model = {
+      pages: (snap.pages || []).map((p) => ({
+        ...p,
+        header: p.header ? { ...p.header } : null,
+      })),
+    };
+    if (!model.pages.length) model = emptyModel();
+    const caret = snap.caret || { col: 'right', global: 0 };
+    lastCaretCol = caret.col === 'left' ? 'left' : 'right';
+    const modelLengths = model.pages.map((p) => caretColumnLength(p?.[lastCaretCol], lastCaretCol));
+    const { pageIndex } = caretFromGlobal(
+      modelLengths,
+      caretJunctionCost(lastCaretCol),
+      caret.global,
+    );
+    focusedPage = pageIndex;
+    if (lastCaretCol === 'right') activeRightPageIndex = pageIndex;
+    render({ skipRead: true });
+    requestAnimationFrame(() => {
+      restoreCaretGlobal(caret.col, caret.global);
+      history.applying = false;
+      history.settle(cloneSnapshot());
+      notify();
+    });
+  }
+
+  function undo() {
+    if (!history.canUndo) return false;
+    const current = cloneSnapshot();
+    history.settle(current);
+    const snap = history.undoOnce();
+    if (!snap) return false;
+    applySnapshot(/** @type {{ pages: object[], caret?: { col: 'left'|'right', global: number } }} */ (snap));
+    return true;
+  }
+
+  function redo() {
+    if (!history.canRedo) return false;
+    const current = cloneSnapshot();
+    history.settle(current);
+    const snap = history.redoOnce();
+    if (!snap) return false;
+    applySnapshot(/** @type {{ pages: object[], caret?: { col: 'left'|'right', global: number } }} */ (snap));
+    return true;
+  }
+
+  function clearHistory() {
+    history.clear();
+    reflowEpoch += 1;
+  }
+
+  /**
+   * Scroll container for the editor stage: mobile `#editorStage` when it
+   * overflows, otherwise `main.main-content` (desktop).
+   * @returns {HTMLElement | null}
+   */
+  function stageScrollEl() {
+    const stage = document.getElementById('editorStage');
+    if (stage instanceof HTMLElement
+      && stage.scrollHeight > stage.clientHeight + 1) {
+      return stage;
+    }
+    const main = document.querySelector('main.main-content');
+    return main instanceof HTMLElement ? main : (stage instanceof HTMLElement ? stage : null);
+  }
+
+  /** @returns {{ el: HTMLElement, top: number, left: number } | null} */
+  function snapshotStageScroll() {
+    const el = stageScrollEl();
+    if (!el) return null;
+    return { el, top: el.scrollTop, left: el.scrollLeft };
+  }
+
+  /** @param {{ el: HTMLElement, top: number, left: number } | null} snap */
+  function restoreStageScroll(snap) {
+    if (!snap?.el) return;
+    snap.el.scrollTop = snap.top;
+    snap.el.scrollLeft = snap.left;
+  }
+
+  /**
+   * @param {HTMLElement} host
+   * @param {HTMLElement} pageEl
+   * @param {string} html
+   */
+  function fillStaticRight(host, pageEl, html) {
+    const existing = rightFields.get(pageEl);
+    existing?.destroy?.();
+    rightFields.delete(pageEl);
+    host.innerHTML = '';
+    host.classList.add('bp-ql-container', 'ql-container', 'ql-snow');
+    const editor = document.createElement('div');
+    editor.className = 'ql-editor bp-ql-editor hinglish-input';
+    editor.setAttribute('contenteditable', 'false');
+    // Sanitize so old stored `<p></p>` gains `<br>` and keeps line boxes.
+    const raw = sanitizeQuillHtml(String(html || ''));
+    if (!raw.trim()) {
+      editor.innerHTML = '<p><br></p>';
+    } else if (/<\s*(p|div|br|strong|em|u|ul|li|img)\b/i.test(raw)) {
+      editor.innerHTML = raw;
+    } else {
+      editor.textContent = raw;
+    }
+    host.appendChild(editor);
+    host.dataset.staticRight = '1';
+    editor.scrollTop = 0;
+  }
+
+  /**
+   * Mount a live Quill on a page's right column (destroys any prior field).
+   * @param {HTMLElement} pageEl
+   * @param {number} pageIndex
+   * @returns {object | null}
+   */
+  function mountLiveRight(pageEl, pageIndex) {
+    const rightHost = pageEl.querySelector('[data-col="right"]');
+    if (!rightHost || rightHost instanceof HTMLTextAreaElement) return null;
+    const existing = rightFields.get(pageEl);
+    existing?.destroy?.();
+    delete rightHost.dataset.staticRight;
+    const placeholder = rightHost.getAttribute('data-placeholder') || 'यहाँ विवरण लिखें...';
+    /** @type {ReturnType<typeof mountQuill> | null} */
+    let field = null;
+    field = mountQuill(rightHost, {
+      placeholder,
+      fixJustifyCaret: true,
+      onFocus: () => {
+        notifyFocus(pageIndex);
+        activeRightPageIndex = pageIndex;
+      },
+      onChange: (html, meta) => {
+        if (spilling || !field || history.applying) return;
+        if (meta?.source === 'user') {
+          lastCaretCol = 'right';
+          markUserEdit();
+        }
+        model.pages[pageIndex].right = html;
+        reflowRightAfterEdit(pageIndex, field, meta);
+      },
+    });
+    field.setContent(model.pages[pageIndex].right || '');
+    rightFields.set(pageEl, field);
+    hooks.onAttachField?.(field.quill.root, field);
+
+    field.quill.root.addEventListener('compositionstart', () => {
+      if (spilling || history.applying) return;
+      lastCaretCol = 'right';
+      markUserEdit();
+    });
+
+    field.quill.root.addEventListener('compositionend', () => {
+      if (spilling || !field || history.applying) return;
+      model.pages[pageIndex].right = field.getHtml();
+      reflowRightAfterEdit(pageIndex, field, null);
+    });
+
+    field.quill.root.addEventListener('keydown', (e) => {
+      // Freeze stage scroll on keyboard caret moves — native contenteditable
+      // scrolls ancestors to reveal the caret; wheel/trackpad stay free.
+      // Also pin the fixed box: ArrowDown must not set scrollTop > 0.
+      if (
+        e.key === 'Enter'
+        || e.key === 'Backspace'
+        || e.key === 'Delete'
+        || e.key.startsWith('Arrow')
+      ) {
+        const snap = snapshotStageScroll();
+        requestAnimationFrame(() => {
+          restoreStageScroll(snap);
+          clampRightScrollAndReflow(field, pageIndex);
+        });
+      }
+      if (e.key !== 'Backspace' || e.metaKey || e.ctrlKey || e.altKey) return;
+      const range = field.quill.getSelection();
+      if (!range || range.index !== 0 || range.length !== 0) return;
+      handleBoundaryBackspace(pageIndex, 'right', e);
+    });
+
+    // Native caret reveal can set scrollTop even with overflow:hidden.
+    field.quill.root.addEventListener('scroll', () => {
+      if (field.quill.root.scrollTop === 0) return;
+      clampRightScrollAndReflow(field, pageIndex);
+    });
+    return field;
+  }
+
+  /**
+   * Continuous-right: ensure only pageIndex has a live Quill.
+   * When activating from a static-page click, pass clientX/Y so the caret lands
+   * on the same mousedown (DOM is replaced, so the browser cannot place it).
+   * @param {number} pageIndex
+   * @param {{ localOffset?: number, clientX?: number, clientY?: number }} [opts]
+   */
+  function activateRightPage(pageIndex, opts = {}) {
+    const pageEls = container.querySelectorAll('.diary-page');
+    pageEls.forEach((el, i) => {
+      const host = el.querySelector('[data-col="right"]');
+      if (!(host instanceof HTMLElement)) return;
+      if (i === pageIndex) return;
+      const rf = rightFields.get(el);
+      if (rf) {
+        model.pages[i].right = rf.getHtml();
+        rf.destroy();
+        rightFields.delete(el);
+      }
+      fillStaticRight(host, el, model.pages[i]?.right || '');
+    });
+    const target = pageEls[pageIndex];
+    if (!target) return;
+    let field = rightFields.get(target);
+    if (!field) field = mountLiveRight(target, pageIndex);
+    activeRightPageIndex = pageIndex;
+    notifyFocus(pageIndex);
+    if (!field) return;
+
+    let index = opts.localOffset;
+    if (index == null && opts.clientX != null && opts.clientY != null) {
+      index = quillIndexFromClientPoint(field.quill, opts.clientX, opts.clientY);
+    }
+    // Always focus on activate so switching pages is one click, not two.
+    try { field.quill.root.focus({ preventScroll: true }); } catch (_) { /* ignore */ }
+    const max = Math.max(0, field.quill.getLength() - 1);
+    if (index == null) {
+      const sel = field.quill.getSelection();
+      if (sel) return;
+      index = 0;
+    }
+    field.quill.setSelection(Math.min(Math.max(0, index), max), 0, 'api');
   }
 
   function refreshHeaderBlockH(pageIndex = 0) {
@@ -854,7 +1179,10 @@ export function initDiarySheet(container, template, hooks) {
       if (left) model.pages[i].left = left.value;
       const rf = rightHost ? rightFields.get(pageEl) : null;
       if (rf) model.pages[i].right = rf.getHtml();
-      else if (rightHost?.value != null) model.pages[i].right = rightHost.value;
+      else if (rightHost?.dataset?.staticRight === '1') {
+        const ed = rightHost.querySelector('.ql-editor');
+        model.pages[i].right = ed ? ed.innerHTML : (model.pages[i].right || '');
+      } else if (rightHost?.value != null) model.pages[i].right = rightHost.value;
     });
   }
 
@@ -882,17 +1210,192 @@ export function initDiarySheet(container, template, hooks) {
   }
 
   /**
+   * Caret-space length of one page's column, measured from the live field when
+   * it is mounted so it matches the editor's own offsets exactly.
+   * @param {number} pageIndex
+   * @param {'left'|'right'} col
+   * @returns {number}
+   */
+  function caretPageLength(pageIndex, col) {
+    const pageEl = container.querySelectorAll('.diary-page')[pageIndex];
+    if (pageEl) {
+      if (col === 'left') {
+        const ta = pageEl.querySelector('[data-col="left"]');
+        if (ta instanceof HTMLTextAreaElement) return ta.value.length;
+      } else {
+        const rf = rightFields.get(pageEl);
+        if (rf) return Math.max(0, rf.quill.getLength() - 1);
+      }
+    }
+    return caretColumnLength(model.pages[pageIndex]?.[col], col);
+  }
+
+  /**
+   * @param {'left'|'right'} col
+   * @returns {number[]}
+   */
+  function caretPageLengths(col) {
+    return model.pages.map((_, i) => caretPageLength(i, col));
+  }
+
+  /**
+   * @param {'left'|'right'} col
+   * @param {number} pageIndex
+   * @returns {number}
+   */
+  function globalOffsetBeforePage(col, pageIndex) {
+    return caretToGlobal(caretPageLengths(col), caretJunctionCost(col), pageIndex, 0);
+  }
+
+  /**
+   * @param {'left'|'right'} col
+   * @returns {{ pageIndex: number, localOffset: number, global: number } | null}
+   */
+  function readCaretGlobal(col) {
+    const pageEls = container.querySelectorAll('.diary-page');
+    for (let i = 0; i < pageEls.length; i++) {
+      if (col === 'left') {
+        const ta = pageEls[i].querySelector('[data-col="left"]');
+        if (ta instanceof HTMLTextAreaElement && document.activeElement === ta) {
+          return {
+            pageIndex: i,
+            localOffset: ta.selectionStart ?? ta.value.length,
+            global: globalOffsetBeforePage(col, i) + (ta.selectionStart ?? ta.value.length),
+          };
+        }
+      } else {
+        const rf = rightFields.get(pageEls[i]);
+        if (rf && (document.activeElement === rf.quill.root || rf.quill.hasFocus?.())) {
+          const range = rf.quill.getSelection();
+          const local = range ? range.index : Math.max(0, rf.quill.getLength() - 1);
+          return {
+            pageIndex: i,
+            localOffset: local,
+            global: globalOffsetBeforePage(col, i) + local,
+          };
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Restore caret after reflow. Do not scroll the stage — caret placement must
+   * not jump the page; the user scrolls explicitly.
+   * @param {'left'|'right'} col
+   * @param {number} globalOffset
+   */
+  function restoreCaretGlobal(col, globalOffset) {
+    const pageEls = container.querySelectorAll('.diary-page');
+    if (!pageEls.length) return;
+    const { pageIndex, localOffset: local } = caretFromGlobal(
+      caretPageLengths(col),
+      caretJunctionCost(col),
+      globalOffset,
+    );
+    const pageEl = pageEls[pageIndex];
+    if (!pageEl) return;
+    notifyFocus(pageIndex);
+    if (col === 'left') {
+      const ta = pageEl.querySelector('[data-col="left"]');
+      if (ta instanceof HTMLTextAreaElement) {
+        ta.focus({ preventScroll: true });
+        const pos = Math.min(local, ta.value.length);
+        try { ta.setSelectionRange(pos, pos); } catch (_) { /* ignore */ }
+      }
+    } else {
+      activateRightPage(pageIndex, { localOffset: local });
+    }
+  }
+
+  function collapseTrailing(keepIndex = 0) {
+    const before = model.pages.length;
+    model.pages = collapseTrailingEmptyPages(model.pages, keepIndex);
+    return model.pages.length !== before;
+  }
+
+  /**
+   * Push model column text into live fields. Full render only if page count changed.
+   * @param {'left'|'right'} col
+   * @param {number} prevPageCount
+   * @param {number | null} globalOffset
+   */
+  function applyColumnAfterReflow(col, prevPageCount, globalOffset) {
+    const scrollSnap = snapshotStageScroll();
+    let keepIndex = 0;
+    if (globalOffset != null) {
+      // Use model lengths, not live Quill — after spill the DOM still holds the
+      // pre-cut text, so live lengths would map the caret onto page 0 and
+      // collapse would drop the caret-owned blank page.
+      const modelLengths = model.pages.map((p) => caretColumnLength(p?.[col], col));
+      const { pageIndex } = caretFromGlobal(
+        modelLengths,
+        caretJunctionCost(col),
+        globalOffset,
+      );
+      keepIndex = pageIndex;
+    }
+    const collapsed = collapseTrailing(keepIndex);
+    const needFull = collapsed || model.pages.length !== prevPageCount
+      || container.querySelectorAll('.diary-page').length !== model.pages.length;
+
+    if (needFull) {
+      render({ skipRead: true });
+      restoreStageScroll(scrollSnap);
+      requestAnimationFrame(() => {
+        if (globalOffset != null) restoreCaretGlobal(col, globalOffset);
+        else notifyFocus(Math.min(focusedPage, model.pages.length - 1));
+        restoreStageScroll(scrollSnap);
+      });
+      return;
+    }
+
+    const pageEls = container.querySelectorAll('.diary-page');
+    pageEls.forEach((pageEl, i) => {
+      const page = model.pages[i];
+      if (!page) return;
+      if (col === 'left') {
+        const ta = pageEl.querySelector('[data-col="left"]');
+        if (ta instanceof HTMLTextAreaElement && ta.value !== (page.left || '')) {
+          ta.value = page.left || '';
+        }
+      } else {
+        const rf = rightFields.get(pageEl);
+        const host = pageEl.querySelector('[data-col="right"]');
+        if (rf) {
+          const next = page.right || '';
+          if (rf.getHtml() !== next) {
+            rf.setContent(next);
+          }
+        } else if (host instanceof HTMLElement && host.dataset.staticRight === '1') {
+          fillStaticRight(host, pageEl, page.right || '');
+        }
+      }
+    });
+
+    restoreStageScroll(scrollSnap);
+    requestAnimationFrame(() => {
+      if (globalOffset != null) restoreCaretGlobal(col, globalOffset);
+      restoreStageScroll(scrollSnap);
+    });
+  }
+
+  /**
    * Cascade overflowing text from pageIndex's column onto following pages.
    * @param {number} pageIndex
    * @param {'left'|'right'|string} col
+   * @param {{ globalOffset?: number | null }} [opts]
    */
-  function spillColumn(pageIndex, col) {
+  function spillColumn(pageIndex, col, opts = {}) {
     if (spilling) return false;
     if (col !== 'left' && col !== 'right') return false;
     if (!model.pages[pageIndex]) return false;
 
     spilling = true;
     const fromPage = pageIndex;
+    const prevPageCount = model.pages.length;
+    const caret = opts.globalOffset != null ? { global: opts.globalOffset } : readCaretGlobal(col);
+    const globalOffset = caret?.global ?? null;
     let i = pageIndex;
     let didSpill = false;
     let iterations = 0;
@@ -902,57 +1405,79 @@ export function initDiarySheet(container, template, hooks) {
     while (i < model.pages.length && iterations++ < 50) {
       const text = model.pages[i][col] || '';
       const pageHasHeader = model.pages[i].hasHeader;
-      const { keep, spill } = splitTextToFit(
-        text,
-        col,
-        pageHasHeader,
-        pageHasHeader ? headerH : HEADER_BLOCK_H_PX,
-        pageHasHeader ? titlesH : TITLES_ROW_H_PX,
-      );
-      if (!spill) break;
+      let keep;
+      let spill;
+      const pageElLive = container.querySelectorAll('.diary-page')[i];
+      if (col === 'left' && pageElLive) {
+        const ta = pageElLive.querySelector('[data-col="left"]');
+        if (ta instanceof HTMLTextAreaElement) {
+          const prevVal = ta.value;
+          ta.value = text;
+          ({ keep, spill } = splitOverflow(ta));
+          ta.value = prevVal;
+        } else {
+          ({ keep, spill } = splitTextToFit(
+            text,
+            col,
+            pageHasHeader,
+            pageHasHeader ? headerH : HEADER_BLOCK_H_PX,
+            pageHasHeader ? titlesH : TITLES_ROW_H_PX,
+          ));
+        }
+      } else {
+        ({ keep, spill } = splitTextToFit(
+          text,
+          col,
+          pageHasHeader,
+          pageHasHeader ? headerH : HEADER_BLOCK_H_PX,
+          pageHasHeader ? titlesH : TITLES_ROW_H_PX,
+          liveBoxFor(i, col) || {},
+        ));
+      }
+
+      // Live peel: static/probe cut can leave one line too many in the real box.
+      ({ keep, spill } = peelUntilLiveFits(i, col, keep, spill));
+
+      if (!spill) {
+        // Still overflowing with empty spill — peel at least one unit forward.
+        if (contentOverflowsPage(i, col, keep || text)) {
+          const peeled = peelLastContentUnit(keep || text);
+          if (peeled.peeled) {
+            keep = peeled.keep;
+            spill = peeled.peeled;
+          } else {
+            break;
+          }
+        } else {
+          break;
+        }
+      }
       didSpill = true;
       model.pages[i][col] = keep;
       if (i + 1 >= model.pages.length) {
         model.pages.push({ hasHeader: false, left: '', right: '' });
       }
-      model.pages[i + 1][col] = spill + (model.pages[i + 1][col] || '');
+      model.pages[i + 1][col] = joinColumnContent(spill, model.pages[i + 1][col] || '');
       i += 1;
     }
 
-    const toPage = i;
     if (didSpill) {
-      render({ skipRead: true });
-      requestAnimationFrame(() => {
-        const pages = container.querySelectorAll('.diary-page');
-        const pageEl = pages[toPage];
-        if (!pageEl) {
-          notifyFocus(toPage);
-          return;
-        }
-        if (col === 'right') {
-          const rf = rightFields.get(pageEl);
-          if (rf) {
-            rf.quill.focus();
-            const len = Math.max(0, rf.quill.getLength() - 1);
-            rf.quill.setSelection(len, 0, 'user');
-            pageEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-          }
-        } else {
-          const ta = pageEl.querySelector(`[data-col="${col}"]`);
-          if (ta) {
-            ta.focus();
-            const len = ta.value.length;
-            try { ta.setSelectionRange(len, len); } catch (_) { /* ignore */ }
-            ta.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-          }
-        }
-        notifyFocus(toPage);
-      });
+      applyColumnAfterReflow(col, prevPageCount, globalOffset);
       notify();
       hooks.onSpill?.({
         fromPage: fromPage + 1,
-        toPage: toPage + 1,
+        toPage: i + 1,
         col,
+      });
+      requestAnimationFrame(() => {
+        if (spilling) return;
+        const pageEls = container.querySelectorAll('.diary-page');
+        for (let pi = 0; pi < pageEls.length; pi++) {
+          if (columnOverflows(pageEls[pi], col)) {
+            spillColumn(pi, col, { globalOffset });
+            return;
+          }
+        }
       });
     }
 
@@ -960,25 +1485,537 @@ export function initDiarySheet(container, template, hooks) {
     return didSpill;
   }
 
+  /**
+   * @param {number} pageIndex
+   * @param {'left'|'right'} col
+   * @param {string} content
+   * @returns {boolean}
+   */
+  function contentOverflowsPage(pageIndex, col, content) {
+    const pageEl = container.querySelectorAll('.diary-page')[pageIndex];
+    if (col === 'left') {
+      const ta = pageEl?.querySelector?.('[data-col="left"]');
+      if (!(ta instanceof HTMLTextAreaElement) || !ta.clientHeight) {
+        const box = liveBoxFor(pageIndex, col);
+        if (!box) return false;
+        const probe = document.createElement('textarea');
+        probe.setAttribute('aria-hidden', 'true');
+        probe.style.cssText = [
+          'position:absolute',
+          'left:-99999px',
+          'top:0',
+          'visibility:hidden',
+          `width:${box.boxWidth}px`,
+          `height:${box.boxHeight}px`,
+          'box-sizing:border-box',
+          `font-size:${FONT_PX}px`,
+          `line-height:${LINE_HEIGHT_PX}px`,
+          'padding:4px 6px',
+          'border:none',
+          'margin:0',
+          'white-space:pre-wrap',
+          'overflow:hidden',
+        ].join(';');
+        probe.value = content;
+        document.body.appendChild(probe);
+        const bad = probe.scrollHeight > probe.clientHeight + 1;
+        probe.remove();
+        return bad;
+      }
+      const probe = document.createElement('textarea');
+      probe.setAttribute('aria-hidden', 'true');
+      const cs = getComputedStyle(ta);
+      probe.style.cssText = [
+        'position:absolute',
+        'left:-99999px',
+        'top:0',
+        'visibility:hidden',
+        `width:${ta.clientWidth}px`,
+        `height:${ta.clientHeight}px`,
+        'box-sizing:border-box',
+        `font:${cs.font}`,
+        `font-size:${cs.fontSize}`,
+        `line-height:${cs.lineHeight}`,
+        `padding:${cs.padding}`,
+        `letter-spacing:${cs.letterSpacing}`,
+        `white-space:${cs.whiteSpace}`,
+        'border:none',
+        'margin:0',
+        'overflow:hidden',
+      ].join(';');
+      probe.value = content;
+      document.body.appendChild(probe);
+      const bad = probe.scrollHeight > probe.clientHeight + 1;
+      probe.remove();
+      return bad;
+    }
+    if (!pageEl) {
+      const box = liveBoxFor(pageIndex, col);
+      if (!box) return false;
+      return !measureRichFits(content, box.boxWidth, box.boxHeight, {
+        styleSource: box.styleSource || null,
+      });
+    }
+    const rf = rightFields.get(pageEl);
+    if (rf) {
+      const prev = rf.getHtml();
+      rf.setContent(content);
+      rf.quill.root.scrollTop = 0;
+      const bad = !rf.fitsInBox();
+      rf.setContent(prev);
+      return bad;
+    }
+    const editor = pageEl.querySelector('[data-col="right"] .ql-editor');
+    const box = liveBoxFor(pageIndex, col);
+    if (box) {
+      return !measureRichFits(content, box.boxWidth, box.boxHeight, {
+        styleSource: box.styleSource || editor || null,
+      });
+    }
+    return false;
+  }
+
+  /**
+   * After a probe cut, peel trailing units until the live box accepts `keep`.
+   * @param {number} pageIndex
+   * @param {'left'|'right'} col
+   * @param {string} keep
+   * @param {string} spill
+   * @returns {{ keep: string, spill: string }}
+   */
+  function peelUntilLiveFits(pageIndex, col, keep, spill) {
+    let k = String(keep ?? '');
+    let s = String(spill ?? '');
+    let guard = 0;
+    while (guard++ < 80 && k && contentOverflowsPage(pageIndex, col, k)) {
+      const { keep: nextKeep, peeled } = peelLastContentUnit(k);
+      if (!peeled) break;
+      k = nextKeep;
+      s = joinColumnContent(peeled, s);
+    }
+    return { keep: k, spill: s };
+  }
+
+  /**
+   * Dimensions of a live column box, so the offscreen split fits against the
+   * same space the page actually gives. The computed geometry can be a few px
+   * off from CSS, which is enough to leave a line clipped with no page break.
+   * @param {number} pageIndex
+   * @param {'left'|'right'} col
+   * @returns {{ boxWidth: number, boxHeight: number, styleSource?: HTMLElement } | null}
+   */
+  function liveBoxFor(pageIndex, col) {
+    const pageEl = container.querySelectorAll('.diary-page')[pageIndex];
+    if (!pageEl) return null;
+    const el = col === 'left'
+      ? pageEl.querySelector('[data-col="left"]')
+      : (rightFields.get(pageEl)?.quill?.root
+        || pageEl.querySelector('[data-col="right"] .ql-editor'));
+    if (!(el instanceof HTMLElement) || !el.clientHeight || !el.clientWidth) return null;
+    return {
+      boxWidth: el.clientWidth,
+      boxHeight: el.clientHeight,
+      styleSource: col === 'right' ? el : undefined,
+    };
+  }
+
+  /**
+   * Whether a live column box is taller than the space it has.
+   * @param {Element} pageEl
+   * @param {'left'|'right'} col
+   * @returns {boolean}
+   */
+  function columnOverflows(pageEl, col) {
+    if (col === 'left') {
+      const ta = pageEl.querySelector('[data-col="left"]');
+      return ta instanceof HTMLTextAreaElement
+        && (ta.scrollHeight > ta.clientHeight + 1 || ta.scrollTop > 0);
+    }
+    const rf = rightFields.get(pageEl);
+    if (rf) {
+      if (rf.quill.root.scrollTop > 0) return true;
+      return !rf.fitsInBox();
+    }
+    const editor = pageEl.querySelector('[data-col="right"] .ql-editor');
+    if (!(editor instanceof HTMLElement)) return false;
+    if (editor.scrollTop > 0) return true;
+    return editor.scrollHeight > editor.clientHeight + 1;
+  }
+
+  /**
+   * After Quill DOM mutations, scrollHeight can lag one or two frames. Recheck
+   * every page so Enter-after-absorb cannot leave a clipped box with no spill.
+   * @param {'left'|'right'} col
+   * @param {number | null} globalOffset
+   */
+  function scheduleOverflowRecheck(col, globalOffset) {
+    const epoch = reflowEpoch;
+    const run = () => {
+      if (epoch !== reflowEpoch) return;
+      if (spilling || history.applying) return;
+      const pageEls = container.querySelectorAll('.diary-page');
+      for (let i = 0; i < pageEls.length; i++) {
+        if (columnOverflows(pageEls[i], col)) {
+          spillColumn(i, col, { globalOffset });
+          settleHistory();
+          return;
+        }
+      }
+      settleHistory();
+    };
+    // Two frames: Quill often commits the Enter line box only after paint.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(run);
+    });
+  }
+
+  /**
+   * Pull one content unit at a time from laterIndex into laterIndex-1 while it fits.
+   * Right column may pull a fitting text prefix of an overflowing paragraph.
+   * @param {number} laterIndex
+   * @param {'left'|'right'} col
+   * @returns {boolean}
+   */
+  function absorbIntoPrev(laterIndex, col) {
+    if (laterIndex <= 0 || !model.pages[laterIndex] || !model.pages[laterIndex - 1]) {
+      return false;
+    }
+    let moved = false;
+    let guard = 0;
+    while (guard++ < 200) {
+      const later = model.pages[laterIndex][col] || '';
+      if (!later) break;
+      const prev = model.pages[laterIndex - 1][col] || '';
+      const { unit: whole, rest: afterWhole } = takeFirstContentUnit(later);
+      if (!whole) break;
+      const combinedWhole = joinColumnContent(prev, whole);
+      if (!contentOverflowsPage(laterIndex - 1, col, combinedWhole)) {
+        model.pages[laterIndex - 1][col] = combinedWhole;
+        model.pages[laterIndex][col] = afterWhole;
+        moved = true;
+        continue;
+      }
+      // Whole unit does not fit. Left stays line-based; right may take a prefix
+      // (merged into the last paragraph when that fills leftover line width).
+      if (col !== 'right') break;
+      const box = liveBoxFor(laterIndex - 1, col);
+      if (!box) break;
+      const { nextPrev, rest } = takeFittingHtmlPrefix(
+        prev,
+        later,
+        box.boxWidth,
+        box.boxHeight,
+        { styleSource: box.styleSource || null },
+      );
+      if (nextPrev === prev) break;
+      if (contentOverflowsPage(laterIndex - 1, col, nextPrev)) break;
+      model.pages[laterIndex - 1][col] = nextPrev;
+      model.pages[laterIndex][col] = rest;
+      moved = true;
+    }
+    return moved;
+  }
+
+  /**
+   * Pull content into slack around pageIndex (prev<-this and this<-next).
+   * @param {number} pageIndex
+   * @param {'left'|'right'} col
+   * @param {{ globalOffset?: number | null }} [opts]
+   */
+  function absorbAround(pageIndex, col, opts = {}) {
+    if (spilling) return false;
+    if (col !== 'left' && col !== 'right') return false;
+
+    spilling = true;
+    const prevPageCount = model.pages.length;
+    const caret = opts.globalOffset != null ? { global: opts.globalOffset } : readCaretGlobal(col);
+    const globalOffset = caret?.global ?? null;
+    let didAbsorb = false;
+
+    if (pageIndex > 0) {
+      didAbsorb = absorbIntoPrev(pageIndex, col) || didAbsorb;
+    }
+    if (pageIndex + 1 < model.pages.length) {
+      didAbsorb = absorbIntoPrev(pageIndex + 1, col) || didAbsorb;
+    }
+    // Cascade: earlier pages may have gained slack after pulls.
+    for (let i = 1; i < model.pages.length; i++) {
+      didAbsorb = absorbIntoPrev(i, col) || didAbsorb;
+    }
+
+    if (didAbsorb) {
+      applyColumnAfterReflow(col, prevPageCount, globalOffset);
+      notify();
+      // Absorb can overshoot live height vs probe; spill any clip after paint.
+      scheduleOverflowRecheck(col, globalOffset);
+    }
+
+    spilling = false;
+    return didAbsorb;
+  }
+
+  /**
+   * @param {number} pageIndex
+   * @param {'left'|'right'} col
+   * @param {{ globalOffset?: number | null }} [opts]
+   */
+  function reflowColumn(pageIndex, col, opts = {}) {
+    if (spilling || history.applying) return;
+    const globalOffset = opts.globalOffset != null
+      ? opts.globalOffset
+      : (readCaretGlobal(col)?.global ?? null);
+    const pageEl = container.querySelectorAll('.diary-page')[pageIndex];
+    // Flush layout so scrollHeight reflects the edit that just mutated Quill.
+    if (pageEl instanceof HTMLElement) void pageEl.offsetHeight;
+    const overflowing = Boolean(pageEl) && columnOverflows(pageEl, col);
+
+    if (overflowing) {
+      spillColumn(pageIndex, col, { globalOffset });
+    } else {
+      absorbAround(pageIndex, col, { globalOffset });
+    }
+    // Always recheck next frames — Enter after absorb/spill can report a
+    // still-fitting height synchronously and only overflow after paint.
+    scheduleOverflowRecheck(col, globalOffset);
+    settleHistory();
+  }
+
+  /**
+   * True while Hinglish suggestions own the current word — reflow would fight
+   * the pending replace.
+   * @returns {boolean}
+   */
+  function translitOwnsInput() {
+    const box = document.getElementById('suggestions');
+    if (!(box instanceof HTMLElement)) return false;
+    if (box.style.display === 'none' || box.hidden) return false;
+    return box.childElementCount > 0;
+  }
+
+  /**
+   * Large clipboard/paste inserts must always reflow even if the suggestions
+   * box is open — otherwise the page stays overfull and ArrowDown scrolls
+   * the fixed `.ql-editor` (scrollTop > 0 → clipped from the top).
+   * @param {{ ops?: object[] } | null | undefined} delta
+   * @returns {boolean}
+   */
+  function isLargeUserInsert(delta) {
+    let n = 0;
+    for (const op of delta?.ops || []) {
+      if (typeof op.insert === 'string') n += op.insert.length;
+      else if (op.insert != null) n += 1;
+    }
+    return n >= 40;
+  }
+
+  /**
+   * Diary boxes must never scroll — overflow means spill failed.
+   * @param {object} field
+   * @param {number} pageIndex
+   */
+  function clampRightScrollAndReflow(field, pageIndex) {
+    if (!field?.quill?.root || spilling || history.applying) return;
+    const root = field.quill.root;
+    if (root.scrollTop !== 0) root.scrollTop = 0;
+    if (!field.fitsInBox() || root.scrollTop > 0) {
+      root.scrollTop = 0;
+      model.pages[pageIndex].right = field.getHtml();
+      const local = field.quill.getSelection()?.index
+        ?? Math.max(0, field.quill.getLength() - 1);
+      const globalOffset = globalOffsetBeforePage('right', pageIndex) + local;
+      reflowColumn(pageIndex, 'right', { globalOffset });
+    }
+  }
+
+  /**
+   * @param {number} pageIndex
+   * @param {object} field
+   * @param {object} [meta]
+   */
+  function reflowRightAfterEdit(pageIndex, field, meta) {
+    if (spilling || history.applying) return;
+    const largePaste = isLargeUserInsert(meta?.delta);
+    if (field.quill.root.isComposing || (!largePaste && translitOwnsInput())) return;
+    const local = caretIndexAfterTextChange(field.quill, meta?.delta);
+    const globalOffset = globalOffsetBeforePage('right', pageIndex) + local;
+    reflowColumn(pageIndex, 'right', { globalOffset });
+    // Paste/layout can leave scrollTop mid-frame; pin it after paint.
+    requestAnimationFrame(() => {
+      if (field?.quill?.root) field.quill.root.scrollTop = 0;
+    });
+    if (!spilling) notify();
+  }
+
   function checkOverflow(pageEl, pageIndex) {
-    if (spilling) return;
-    const overflowingCols = [];
+    if (spilling || history.applying) return;
     const left = pageEl.querySelector('[data-col="left"]');
     if (left instanceof HTMLTextAreaElement) {
       left.classList.remove('diary-box-overflow');
       left.closest('.diary-cell')?.classList.remove('diary-box-overflow');
-      if (left.scrollHeight > left.clientHeight + 1) overflowingCols.push('left');
+      if (left.scrollHeight > left.clientHeight + 1) {
+        spillColumn(pageIndex, 'left');
+      }
     }
     const rf = rightFields.get(pageEl);
     if (rf) {
       rf.quill.root.classList.remove('diary-box-overflow');
       pageEl.querySelector('[data-col="right"]')?.closest('.diary-cell')
         ?.classList.remove('diary-box-overflow');
-      if (!rf.fitsInBox()) overflowingCols.push('right');
+      if (!rf.fitsInBox()) {
+        spillColumn(pageIndex, 'right');
+      }
+    } else if (columnOverflows(pageEl, 'right')) {
+      spillColumn(pageIndex, 'right');
     }
-    overflowingCols.forEach((col) => {
-      spillColumn(pageIndex, col);
-    });
+  }
+
+  /**
+   * Plain text at the start of a page column (for caret snap after absorb).
+   * @param {number} pageIndex
+   * @param {'left'|'right'} col
+   * @param {number} [n]
+   * @returns {string}
+   */
+  function peekColumnAhead(pageIndex, col, n = 32) {
+    const pageEl = container.querySelectorAll('.diary-page')[pageIndex];
+    if (col === 'left') {
+      const ta = pageEl?.querySelector('[data-col="left"]');
+      const v = ta instanceof HTMLTextAreaElement
+        ? ta.value
+        : String(model.pages[pageIndex]?.left || '');
+      return v.slice(0, n);
+    }
+    const rf = pageEl ? rightFields.get(pageEl) : null;
+    if (rf) return rf.quill.getText().slice(0, n);
+    const plain = stripHtmlToPlain(model.pages[pageIndex]?.right || '');
+    return plain.slice(0, n);
+  }
+
+  /**
+   * Place caret before `ahead` on destPage, searching from minLocal so earlier
+   * duplicate phrases on the page are skipped (common with Hindi filler).
+   * @param {'left'|'right'} col
+   * @param {number} destPageIndex
+   * @param {number} minLocal
+   * @param {string} ahead
+   * @returns {boolean}
+   */
+  function restoreCaretAtAhead(col, destPageIndex, minLocal, ahead) {
+    if (!ahead) return false;
+    const pageEl = container.querySelectorAll('.diary-page')[destPageIndex];
+    if (!pageEl) return false;
+    if (col === 'left') {
+      const ta = pageEl.querySelector('[data-col="left"]');
+      if (!(ta instanceof HTMLTextAreaElement)) return false;
+      const from = Math.max(0, Math.min(minLocal, ta.value.length));
+      let at = ta.value.indexOf(ahead, from);
+      if (at < 0) at = ta.value.indexOf(ahead);
+      if (at < 0) return false;
+      notifyFocus(destPageIndex);
+      ta.focus({ preventScroll: true });
+      try { ta.setSelectionRange(at, at); } catch (_) { /* ignore */ }
+      return true;
+    }
+    activateRightPage(destPageIndex);
+    const rf = rightFields.get(pageEl);
+    if (!rf) return false;
+    const text = rf.quill.getText();
+    const from = Math.max(0, Math.min(minLocal, text.length));
+    let at = text.indexOf(ahead, from);
+    if (at < 0) at = text.indexOf(ahead);
+    if (at < 0) return false;
+    const max = Math.max(0, rf.quill.getLength() - 1);
+    try { rf.quill.root.focus({ preventScroll: true }); } catch (_) { /* ignore */ }
+    rf.quill.setSelection(Math.min(at, max), 0, 'api');
+    return true;
+  }
+
+  /**
+   * Backspace at start of page N: absorb into prev when slack exists; otherwise
+   * delete last char of previous page, then absorb.
+   * @param {number} pageIndex
+   * @param {'left'|'right'} col
+   * @param {KeyboardEvent} e
+   * @returns {boolean}
+   */
+  function handleBoundaryBackspace(pageIndex, col, e) {
+    if (pageIndex <= 0 || spilling || history.applying) return false;
+    const prev = model.pages[pageIndex - 1];
+    if (!prev) return false;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    lastCaretCol = col;
+    markUserEdit({ force: true });
+
+    const junction = caretJunctionCost(col);
+    const globalAtJunction = globalOffsetBeforePage(col, pageIndex);
+    const prevLen = caretPageLength(pageIndex - 1, col);
+    if (prevLen === 0) {
+      restoreCaretGlobal(col, Math.max(0, globalAtJunction - 1));
+      return true;
+    }
+
+    // Enter-spill blank page: drop it and land at end of prev (do not eat prev's last char).
+    const curPage = model.pages[pageIndex];
+    const curLen = caretPageLength(pageIndex, col);
+    if (curLen === 0 || isPageBodyEmpty(curPage)) {
+      const prevPageCount = model.pages.length;
+      model.pages.splice(pageIndex, 1);
+      const caretAtPrevEnd = Math.max(0, globalAtJunction - junction);
+      applyColumnAfterReflow(col, prevPageCount, caretAtPrevEnd);
+      notify();
+      return true;
+    }
+
+    // Text that followed the caret — after absorb it must still sit under the caret
+    // (merge into last paragraph has no inter-page junction, so globalAtJunction
+    // alone is one index too far and lands inside a Devanagari cluster).
+    const ahead = peekColumnAhead(pageIndex, col);
+    const absorbCaretGlobal = Math.max(0, globalAtJunction - junction);
+
+    // Absorb-first: pull into slack without deleting.
+    const absorbedFirst = absorbAround(pageIndex, col, { globalOffset: absorbCaretGlobal });
+    if (absorbedFirst) {
+      // Snap to the pulled text at/after the old end of prev (skip duplicates).
+      requestAnimationFrame(() => {
+        if (!restoreCaretAtAhead(col, pageIndex - 1, prevLen, ahead)) {
+          restoreCaretGlobal(col, absorbCaretGlobal);
+        }
+      });
+      return true;
+    }
+
+    const globalAfter = globalAtJunction - 1;
+    spilling = true;
+    const prevPageCount = model.pages.length;
+
+    if (col === 'left') {
+      prev.left = String(prev.left || '').slice(0, -1);
+    } else {
+      // Prev page may be static HTML under continuous-right — activate it so
+      // we delete the last Quill character, not a plain-text round-trip.
+      const pageEls = container.querySelectorAll('.diary-page');
+      activateRightPage(pageIndex - 1);
+      const rf = rightFields.get(pageEls[pageIndex - 1]);
+      if (rf) {
+        const len = Math.max(0, rf.quill.getLength() - 1);
+        if (len > 0) rf.quill.deleteText(len - 1, 1, 'silent');
+        prev.right = rf.getHtml();
+      } else {
+        const plain = stripHtmlToPlain(prev.right || '');
+        prev.right = plain.slice(0, -1);
+      }
+    }
+    spilling = false;
+
+    const absorbed = absorbAround(pageIndex, col, { globalOffset: globalAfter });
+    if (!absorbed) {
+      applyColumnAfterReflow(col, prevPageCount, globalAfter);
+      notify();
+    }
+    return true;
   }
 
   function wirePage(pageEl, pageIndex) {
@@ -992,40 +2029,44 @@ export function initDiarySheet(container, template, hooks) {
 
     const rightHost = pageEl.querySelector('[data-col="right"]');
     if (rightHost && !(rightHost instanceof HTMLTextAreaElement)) {
-      const existing = rightFields.get(pageEl);
-      existing?.destroy?.();
-      const placeholder = rightHost.getAttribute('data-placeholder') || 'यहाँ विवरण लिखें...';
-      const field = mountQuill(rightHost, {
-        placeholder,
-        onFocus: () => notifyFocus(pageIndex),
-        onChange: (html) => {
-          if (spilling) return;
-          model.pages[pageIndex].right = html;
-          checkOverflow(pageEl, pageIndex);
-          if (!spilling) notify();
-        },
+      if (pageIndex === activeRightPageIndex || pageIndex === focusedPage) {
+        activeRightPageIndex = pageIndex;
+        mountLiveRight(pageEl, pageIndex);
+      } else {
+        fillStaticRight(rightHost, pageEl, model.pages[pageIndex].right || '');
+      }
+      rightHost.addEventListener('mousedown', (e) => {
+        if (rightHost.dataset.staticRight !== '1') return;
+        if (e.button !== 0) return;
+        // Static DOM is replaced on activate — preventDefault so focus/caret
+        // are applied on the new Quill in this same gesture (one click).
+        e.preventDefault();
+        activateRightPage(pageIndex, { clientX: e.clientX, clientY: e.clientY });
       });
-      field.setContent(model.pages[pageIndex].right || '');
-      rightFields.set(pageEl, field);
-      hooks.onAttachField?.(field.quill.root, field);
     }
 
     pageEl.querySelectorAll('input[data-field], textarea[data-field]').forEach((el) => {
       el.addEventListener('input', () => {
+        markUserEdit();
         syncHeaderInputs(el, pageIndex);
         notify();
+        settleHistory();
       });
       el.addEventListener('change', () => {
+        markUserEdit({ force: true });
         syncHeaderInputs(el, pageIndex);
         notify();
+        settleHistory();
       });
     });
 
     pageEl.querySelectorAll('[data-field].diary-dotted-flow').forEach((el) => {
       el.addEventListener('input', () => {
+        markUserEdit();
         syncHeaderInputs(el, pageIndex);
         onHeaderGeometryChange(pageEl, pageIndex);
         notify();
+        settleHistory();
       });
       el.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
@@ -1039,6 +2080,7 @@ export function initDiarySheet(container, template, hooks) {
       });
       el.addEventListener('paste', (e) => {
         e.preventDefault();
+        markUserEdit({ force: true });
         const text = (e.clipboardData || window.clipboardData)?.getData('text/plain') || '';
         const clean = text.replace(/\r?\n+/g, ' ');
         if (document.queryCommandSupported?.('insertText')) {
@@ -1057,18 +2099,30 @@ export function initDiarySheet(container, template, hooks) {
         syncHeaderInputs(el, pageIndex);
         onHeaderGeometryChange(pageEl, pageIndex);
         notify();
+        settleHistory();
       });
     });
 
     pageEl.querySelectorAll('textarea[data-col]').forEach((ta) => {
+      const col = /** @type {'left'|'right'} */ (ta.dataset.col);
       const runOverflow = () => {
-        model.pages[pageIndex][ta.dataset.col] = ta.value;
-        checkOverflow(pageEl, pageIndex);
+        lastCaretCol = col;
+        model.pages[pageIndex][col] = ta.value;
+        reflowColumn(pageIndex, col);
         if (!spilling) notify();
       };
-      ta.addEventListener('input', runOverflow);
+      ta.addEventListener('input', () => {
+        markUserEdit();
+        runOverflow();
+      });
       ta.addEventListener('paste', () => {
+        markUserEdit({ force: true });
         requestAnimationFrame(runOverflow);
+      });
+      ta.addEventListener('keydown', (e) => {
+        if (e.key !== 'Backspace' || e.metaKey || e.ctrlKey || e.altKey) return;
+        if (ta.selectionStart !== 0 || ta.selectionEnd !== 0) return;
+        handleBoundaryBackspace(pageIndex, col, e);
       });
       ta.addEventListener('focus', () => notifyFocus(pageIndex));
       ta.addEventListener('click', () => notifyFocus(pageIndex));
@@ -1077,12 +2131,14 @@ export function initDiarySheet(container, template, hooks) {
     const toggle = pageEl.querySelector('.diary-header-toggle');
     if (toggle) {
       toggle.addEventListener('click', () => {
+        markUserEdit({ force: true });
         const nextState = !model.pages[pageIndex].hasHeader;
         model.pages[pageIndex].hasHeader = nextState;
         if (nextState && !model.pages[pageIndex].header) {
           model.pages[pageIndex].header = getPrefilledHeader(pageIndex);
         }
         render({ skipRead: true });
+        settleHistory();
         notify();
       });
     }
@@ -1091,9 +2147,11 @@ export function initDiarySheet(container, template, hooks) {
     if (delBtn) {
       delBtn.addEventListener('click', () => {
         if (model.pages.length <= 1) return;
-        if (!confirm('Delete this page permanently? This cannot be undone.')) return;
+        if (!confirm('Delete this page? You can undo with Ctrl+Z.')) return;
+        markUserEdit({ force: true });
         model.pages.splice(pageIndex, 1);
         render({ skipRead: true });
+        settleHistory();
         notify();
       });
     }
@@ -1173,7 +2231,9 @@ export function initDiarySheet(container, template, hooks) {
     addBtn.setAttribute('aria-label', 'Add a new diary page');
     addBtn.innerHTML = '<i class="fas fa-plus"></i> Add page';
     addBtn.addEventListener('click', () => {
+      markUserEdit({ force: true });
       addPage(false);
+      settleHistory();
       notify();
     });
     container.appendChild(addBtn);
@@ -1213,9 +2273,12 @@ export function initDiarySheet(container, template, hooks) {
   }
 
   function setModel(next) {
+    clearHistory();
     model = normalizeDiaryModel(next);
     focusedPage = 0;
+    activeRightPageIndex = 0;
     render({ skipRead: true });
+    settleHistory();
   }
 
   function getModel() {
@@ -1230,6 +2293,18 @@ export function initDiarySheet(container, template, hooks) {
   }
 
   render();
+  settleHistory();
 
-  return { setModel, getModel, clear, render, get pageCount() { return model.pages.length; } };
+  return {
+    setModel,
+    getModel,
+    clear,
+    render,
+    undo,
+    redo,
+    clearHistory,
+    get pageCount() { return model.pages.length; },
+    get canUndo() { return history.canUndo; },
+    get canRedo() { return history.canRedo; },
+  };
 }

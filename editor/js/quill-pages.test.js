@@ -7,6 +7,10 @@ import {
   htmlForQuillPaste,
   contentToPrintHtml,
   quillPrintCssFragment,
+  getQuillHtml,
+  getQuillHtmlPreservingBlanks,
+  stripHtmlToPlain,
+  caretIndexAfterTextChange,
 } from './quill-pages.js';
 
 test('sanitizeQuillHtml converts U+00A0 and &nbsp; to normal spaces in rich HTML', () => {
@@ -84,4 +88,63 @@ test('sanitize after htmlForQuillPaste keeps no nbsp and preserves spaces', () =
   expect(roundTrip).not.toMatch(/\u00a0/);
   expect(roundTrip).not.toMatch(/&nbsp;/i);
   expect(roundTrip).toContain('   सेंटर  word');
+});
+
+test('sanitizeQuillHtml keeps runs of empty paragraphs for reflow', () => {
+  const blanks = '<p></p>'.repeat(6);
+  const out = sanitizeQuillHtml(blanks);
+  expect(out).toContain('<p>');
+  expect((out.match(/<p>/gi) || []).length).toBe(6);
+  // Canonical empty blocks must carry <br> so static/print clones keep height.
+  expect((out.match(/<br\s*\/?\s*>/gi) || []).length).toBe(6);
+  expect(stripHtmlToPlain(out).trim()).toBe('');
+});
+
+test('sanitizeQuillHtml inserts br into empty P and strips ql-cursor', () => {
+  const out = sanitizeQuillHtml('<p></p><p>x</p><p><span class="ql-cursor"></span></p>');
+  expect(out).toMatch(/<p><br\s*\/?\s*><\/p>/i);
+  expect(out).toContain('<p>x</p>');
+  expect(out).not.toMatch(/ql-cursor/);
+  expect((out.match(/<br\s*\/?\s*>/gi) || []).length).toBeGreaterThanOrEqual(2);
+});
+
+test('getQuillHtml collapses blank-only editors; preserving path does not', () => {
+  const host = document.createElement('div');
+  document.body.appendChild(host);
+  // Minimal Quill stand-in: getText empty, semantic HTML is blank paragraphs.
+  const blanks = '<p><br></p><p><br></p><p><br></p>';
+  const quill = {
+    getText: () => '\n\n\n',
+    root: { innerHTML: blanks, querySelector: () => null },
+    getSemanticHTML: () => blanks,
+  };
+  expect(getQuillHtml(quill)).toBe('');
+  const kept = getQuillHtmlPreservingBlanks(quill);
+  expect(kept).toMatch(/<p>/i);
+  expect((kept.match(/<p>/gi) || []).length).toBeGreaterThanOrEqual(3);
+  document.body.removeChild(host);
+});
+
+test('getQuillHtmlPreservingBlanks uses live innerHTML, not getSemanticHTML', () => {
+  const live = '<p><br></p><p><br></p>';
+  const quill = {
+    getText: () => '\n\n',
+    root: { innerHTML: live, querySelector: () => null },
+    // Semantic HTML drops <br> (Break blot length 0) — must not win.
+    getSemanticHTML: () => '<p></p><p></p>',
+  };
+  const kept = getQuillHtmlPreservingBlanks(quill);
+  expect(kept).toMatch(/<br/i);
+  expect((kept.match(/<br\s*\/?\s*>/gi) || []).length).toBe(2);
+  expect(kept).not.toBe('<p></p><p></p>');
+});
+
+test('caretIndexAfterTextChange advances past inserts using the stale selection', () => {
+  const quill = {
+    getSelection: () => ({ index: 5, length: 0 }),
+    getLength: () => 12,
+  };
+  expect(caretIndexAfterTextChange(quill, { ops: [{ retain: 5 }, { insert: '\n' }] })).toBe(6);
+  expect(caretIndexAfterTextChange(quill, { ops: [{ retain: 5 }, { insert: 'ab' }] })).toBe(7);
+  expect(caretIndexAfterTextChange(quill, { ops: [{ retain: 5 }, { delete: 1 }] })).toBe(5);
 });
