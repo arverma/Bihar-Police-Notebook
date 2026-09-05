@@ -1003,6 +1003,15 @@ export function initDiarySheet(container, template, hooks) {
     requestAnimationFrame(() => {
       restore();
       history.applying = false;
+      // A snapshot records content, not a layout. The one being restored may
+      // have been captured against a different box — a diary stored on another
+      // screen, or a state from before an open-repair — so it can arrive not
+      // fitting its pages. render() does schedule an overflow check, but that
+      // runs while `history.applying` is still true and bails, leaving the page
+      // clipped with no way back. Re-fit once the flag is down.
+      container.querySelectorAll('.diary-page').forEach((pageEl, i) => {
+        checkOverflow(pageEl, i);
+      });
       history.settle(cloneSnapshot());
       notify();
     });
