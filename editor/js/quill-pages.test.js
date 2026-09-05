@@ -139,7 +139,7 @@ test('getQuillHtmlPreservingBlanks uses live innerHTML, not getSemanticHTML', ()
   expect(kept).not.toBe('<p></p><p></p>');
 });
 
-test('caretIndexAfterTextChange advances past inserts using the stale selection', () => {
+test('caretIndexAfterTextChange lands at the end of the change', () => {
   const quill = {
     getSelection: () => ({ index: 5, length: 0 }),
     getLength: () => 12,
@@ -147,4 +147,48 @@ test('caretIndexAfterTextChange advances past inserts using the stale selection'
   expect(caretIndexAfterTextChange(quill, { ops: [{ retain: 5 }, { insert: '\n' }] })).toBe(6);
   expect(caretIndexAfterTextChange(quill, { ops: [{ retain: 5 }, { insert: 'ab' }] })).toBe(7);
   expect(caretIndexAfterTextChange(quill, { ops: [{ retain: 5 }, { delete: 1 }] })).toBe(5);
+});
+
+test('caretIndexAfterTextChange ignores the selection Quill reports', () => {
+  // Regression: this used to start from quill.getSelection() and then add the
+  // inserted length again. Quill has already moved the selection past a user
+  // insert, so every keystroke placed the caret one character too far right,
+  // and each reflow used that offset. Typing "X" at index 0 reported 2.
+  const afterTypingX = {
+    getSelection: () => ({ index: 1, length: 0 }), // already past the insert
+    getLength: () => 89,
+  };
+  expect(caretIndexAfterTextChange(afterTypingX, { ops: [{ insert: 'X' }] })).toBe(1);
+
+  // A stale selection must not drag the answer either — the delta decides.
+  const staleSelection = {
+    getSelection: () => ({ index: 40, length: 0 }),
+    getLength: () => 89,
+  };
+  expect(caretIndexAfterTextChange(staleSelection, { ops: [{ retain: 3 }, { insert: 'ab' }] })).toBe(5);
+});
+
+test('caretIndexAfterTextChange handles replace, embeds and formatting', () => {
+  const quill = { getSelection: () => ({ index: 7, length: 0 }), getLength: () => 40 };
+
+  // Replace: retain, delete, insert — caret sits after the inserted text.
+  expect(caretIndexAfterTextChange(quill, {
+    ops: [{ retain: 5 }, { delete: 3 }, { insert: 'ab' }],
+  })).toBe(7);
+
+  // Embeds count as one character.
+  expect(caretIndexAfterTextChange(quill, {
+    ops: [{ retain: 2 }, { insert: { image: 'x' } }],
+  })).toBe(3);
+
+  // Formatting-only: nothing moved, so the caret stays where it is.
+  expect(caretIndexAfterTextChange(quill, {
+    ops: [{ retain: 2 }, { retain: 3, attributes: { bold: true } }],
+  })).toBe(7);
+
+  // Never past the end of the document.
+  expect(caretIndexAfterTextChange(
+    { getSelection: () => null, getLength: () => 4 },
+    { ops: [{ retain: 99 }, { insert: 'zz' }] },
+  )).toBe(3);
 });

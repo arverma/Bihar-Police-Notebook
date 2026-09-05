@@ -397,22 +397,46 @@ export function setQuillContent(quill, content) {
  * @returns {string}
  */
 /**
- * Caret index after a Quill text-change, derived from the (stale) selection
- * Quill still reports during the handler plus any inserts in the delta.
- * Deletes leave the selection already at the post-delete index.
+ * Caret index after a Quill text-change, derived from the delta itself.
+ *
+ * Not from the selection: by the time this runs Quill has already moved the
+ * selection past a user insert, so adding the inserted length on top of it put
+ * the caret one keystroke to the right of the text on every edit — and that
+ * offset is what every reflow then used to place the caret. Reading it from
+ * the delta is also source-independent, which the selection is not: `user`,
+ * `api` and paste all update the selection at different moments.
+ *
+ * A delta is in document order, so walking retains gives the position of the
+ * change and the last insert/delete gives where the caret ends up. A delta
+ * that only changes formatting moves nothing, and leaves the caret alone.
  * @param {object} quill
  * @param {{ ops?: object[] } | null | undefined} delta
  * @returns {number}
  */
 export function caretIndexAfterTextChange(quill, delta) {
-  const sel = quill.getSelection();
-  let index = sel?.index ?? Math.max(0, quill.getLength() - 1);
+  let pos = 0;
+  /** End of the last op that actually changed text, or null if none did. */
+  let changeEnd = null;
   for (const op of delta?.ops || []) {
-    if (typeof op.insert === 'string') index += op.insert.length;
-    else if (op.insert != null) index += 1;
+    if (typeof op.retain === 'number') {
+      pos += op.retain;
+    } else if (typeof op.insert === 'string') {
+      pos += op.insert.length;
+      changeEnd = pos;
+    } else if (op.insert != null) {
+      pos += 1;
+      changeEnd = pos;
+    } else if (typeof op.delete === 'number') {
+      // Deleted text is gone; the caret stays where it began.
+      changeEnd = pos;
+    }
   }
   const max = Math.max(0, quill.getLength() - 1);
-  return Math.max(0, Math.min(index, max));
+  if (changeEnd == null) {
+    const sel = quill.getSelection();
+    return Math.max(0, Math.min(sel?.index ?? max, max));
+  }
+  return Math.max(0, Math.min(changeEnd, max));
 }
 
 /**
