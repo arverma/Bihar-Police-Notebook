@@ -41,8 +41,14 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       # playwright.config.js starts its own python3 http.server on :8080.
-      - name: E2E tests (Playwright)
+      - name: E2E tests (Playwright — desktop, mobile, tablet)
         run: npm run test:e2e
+
+      # Baselines are Linux PNGs and this runner is Linux, so they are compared
+      # natively here. Locally, regenerate with `npm run test:visual:update`,
+      # which runs this same image in Docker.
+      - name: Visual regression
+        run: npm run test:visual
 
       - name: Upload Playwright report
         if: ${{ !cancelled() }}

@@ -1,14 +1,16 @@
 {
   "name": "bp-writingtool",
   "version": "1.0.0",
-  "description": "[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![Hindi](https://img.shields.io/badge/ह-Hindi%20Documentation-orange.svg)](README.hi.md)",
+  "description": "[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![Hindi](https://img.shields.io/badge/\u0939-Hindi%20Documentation-orange.svg)](README.hi.md)",
   "main": "index.js",
   "directories": {
     "doc": "docs"
   },
   "scripts": {
     "test": "vitest run editor/",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test --project=chromium --project=mobile --project=tablet",
+    "test:visual": "playwright test --project=visual",
+    "test:visual:update": "bash scripts/visual-baselines.sh"
   },
   "repository": {
     "type": "git",
