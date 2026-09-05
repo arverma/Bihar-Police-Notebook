@@ -104,6 +104,13 @@ async function shotDocument(page, name) {
   });
 }
 
+// Comparing Linux baselines against a Mac's text rasterisation produces a wall
+// of meaningless diffs, so skip rather than cry wolf. CI is Linux and runs them.
+test.skip(
+  process.platform !== 'linux',
+  'Linux-only baselines — regenerate/compare with `npm run test:visual:update`',
+);
+
 test.describe('Appearance', () => {
   test('diary, empty', async ({ page }) => {
     await ready(page);
