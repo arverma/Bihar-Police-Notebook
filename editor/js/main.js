@@ -128,7 +128,9 @@ let isDictatedInput = false;
 
 /**
  * Last focused editable inside the letter/diary editors (for dictation target).
- * @type {{ el: HTMLInputElement|HTMLTextAreaElement, start: number, end: number } | null}
+ * `el` is any editable field type: a Quill root, a contenteditable header field,
+ * or an input/textarea.
+ * @type {{ el: HTMLElement, start: number, end: number, field?: object } | null}
  */
 let dictationTarget = null;
 
@@ -577,6 +579,32 @@ function setEditableCaret(el, offset) {
     range.collapse(true);
     sel?.removeAllRanges();
     sel?.addRange(range);
+}
+
+/**
+ * Selection range in plain-text offsets for any editable field type
+ * (Quill root, contenteditable, input/textarea). Companion to
+ * getEditableCaret, which returns the collapsed caret only.
+ * @param {HTMLElement} el
+ * @returns {{ start: number, end: number }}
+ */
+function getEditableSelection(el) {
+    const field = isQuillEditor(el) ? getFieldForEditor(el) : null;
+    if (field) {
+        const sel = field.quill.getSelection(true);
+        const start = sel?.index ?? Math.max(0, field.quill.getLength() - 1);
+        return { start, end: start + (sel?.length ?? 0) };
+    }
+    if (el.isContentEditable || el.getAttribute?.('contenteditable') === 'true') {
+        const start = getEditableCaret(el);
+        const sel = window.getSelection();
+        const len = sel && sel.rangeCount > 0 && el.contains(sel.anchorNode)
+            ? sel.getRangeAt(0).toString().length
+            : 0;
+        return { start, end: start + len };
+    }
+    const len = getEditableText(el).length;
+    return { start: el.selectionStart ?? len, end: el.selectionEnd ?? len };
 }
 
 function attachTransliteration(el) {
@@ -1563,6 +1591,11 @@ function initApp() {
             return;
         }
 
+        if (isDictatableContentEditable(el)) {
+            dictationTarget = { el, ...getEditableSelection(el) };
+            return;
+        }
+
         if (!(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)) return;
         if (el.type === 'date') return;
         dictationTarget = {
@@ -1583,6 +1616,13 @@ function initApp() {
             dictationTarget.field = field;
             return;
         }
+        if (isDictatableContentEditable(el) && dictationTarget?.el === el) {
+            const sel = getEditableSelection(el);
+            dictationTarget.start = sel.start;
+            dictationTarget.end = sel.end;
+            return;
+        }
+
         if (!(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)) return;
         if (!dictationTarget || dictationTarget.el !== el) return;
         dictationTarget.start = el.selectionStart ?? el.value.length;
@@ -1594,6 +1634,14 @@ function initApp() {
         insertText: insertDictatedText,
         notify: showNotification,
     });
+
+    // Test/dev hooks — same pattern as window.__bpExportMode
+    if (typeof window !== 'undefined') {
+        window.__bpDictation = {
+            getTarget: getDictationTarget,
+            insertText: insertDictatedText,
+        };
+    }
 
     window.__uxInitComplete = true;
 }
@@ -1616,6 +1664,20 @@ function showNotification(message) {
         messageDiv.classList.add('fade-out');
         setTimeout(() => document.body.removeChild(messageDiv), 500);
     }, 2000);
+}
+
+/**
+ * Plain contenteditable fields (diary header धारा / घटना की तिथि और स्थान).
+ * Quill roots are contenteditable too, but they route through their own field.
+ * @param {Element|null} el
+ */
+function isDictatableContentEditable(el) {
+    return Boolean(
+        el instanceof HTMLElement
+        && el.isContentEditable
+        && !isQuillEditor(el)
+        && (el.closest('.editor-letter') || el.closest('.editor-diary')),
+    );
 }
 
 /**
@@ -1653,6 +1715,11 @@ function getDictationTarget() {
             start: active.selectionStart ?? active.value.length,
             end: active.selectionEnd ?? active.value.length,
         };
+        return dictationTarget;
+    }
+
+    if (isDictatableContentEditable(active)) {
+        dictationTarget = { el: active, ...getEditableSelection(active) };
         return dictationTarget;
     }
 
@@ -1697,6 +1764,19 @@ function insertDictatedText(text) {
             field.quill.setSelection(caret, 0, 'user');
             field.quill.focus();
             dictationTarget = { el: field.quill.root, field, start: caret, end: caret };
+            return;
+        }
+
+        if (isDictatableContentEditable(el)) {
+            const value = getEditableText(el);
+            const start = Math.min(target.start ?? value.length, value.length);
+            const end = Math.min(Math.max(target.end ?? start, start), value.length);
+            el.focus();
+            // Shared helper: replaces the range, moves the caret and fires `input`,
+            // so the header persists + reflows exactly as it does for typing.
+            replaceEditableRange(el, start, end, text);
+            const caret = start + text.length;
+            dictationTarget = { el, start: caret, end: caret };
             return;
         }
 
@@ -1760,12 +1840,14 @@ document.addEventListener('mousedown', (e) => {
     
     if (inHeaderOrSidebar && !isTextInput) {
         const active = document.activeElement;
-        const isEditorFocused = active && (
-            active.classList.contains('ql-editor') || 
-            (active.tagName === 'INPUT' && active.closest('.app-body')) || 
-            (active.tagName === 'TEXTAREA' && active.closest('.app-body'))
+        // Any editable field type, including the diary's contenteditable
+        // header fields (धारा / घटना की तिथि और स्थान).
+        const isEditorFocused = Boolean(
+            active
+            && isEditableTextField(active)
+            && (isQuillEditor(active) || active.closest('.app-body')),
         );
-        
+
         if (isEditorFocused) {
             console.log("BP-WritingTool: Retaining focus on mousedown");
             e.preventDefault();
