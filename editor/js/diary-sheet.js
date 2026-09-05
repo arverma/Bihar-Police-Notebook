@@ -860,6 +860,73 @@ export function initDiarySheet(container, template, hooks) {
     return readCaretGlobal(col)?.global ?? fallback;
   }
 
+  /**
+   * Where the caret is, whichever column holds it.
+   * @returns {{ col: 'left'|'right', global: number } | null}
+   */
+  function readCaretAnyColumn() {
+    for (const col of /** @type {const} */ (['right', 'left'])) {
+      const read = readCaretGlobal(col);
+      if (read) return { col, global: read.global };
+    }
+    return null;
+  }
+
+  /**
+   * Carry the caret to the neighbouring page when an arrow key has run it into
+   * a page edge.
+   *
+   * Every page is its own editor, so ArrowUp on the first line of page 2 —
+   * or ArrowDown on the last line of page 1 — simply does nothing, and the
+   * diary reads as a stack of separate boxes instead of one document.
+   *
+   * Detection is "the caret did not move", checked after the browser has had
+   * its turn, rather than measuring line geometry: that way wrapped lines,
+   * blank lines and Devanagari clusters need no special casing, and a press
+   * that *could* move within the page is never stolen.
+   * @param {number} pageIndex
+   * @param {'left'|'right'} col
+   * @param {string} key
+   */
+  function crossPageOnArrow(pageIndex, col, key) {
+    const before = readCaretGlobal(col);
+    if (!before) return;
+    const forward = key === 'ArrowDown' || key === 'ArrowRight';
+    const target = pageIndex + (forward ? 1 : -1);
+    if (target < 0 || target >= model.pages.length) return;
+
+    requestAnimationFrame(() => {
+      if (spilling || history.applying) return;
+      const after = readCaretGlobal(col);
+      // Moved, or focus left the column entirely — leave it alone.
+      if (!after || after.global !== before.global) return;
+      if (target >= model.pages.length) return;
+
+      // An arrow press is the user placing the caret, so it outranks any
+      // restore the pager queued earlier.
+      noteUserCaret();
+      const startOfTarget = globalOffsetBeforePage(col, target);
+      restoreCaretGlobal(
+        col,
+        forward ? startOfTarget : startOfTarget + caretPageLength(target, col),
+      );
+    });
+  }
+
+  /**
+   * Delete at the end of page N is Backspace at the start of page N+1: the same
+   * junction, the same merge, the same caret landing. Reuse that path rather
+   * than growing a second implementation of it.
+   * @param {number} pageIndex
+   * @param {'left'|'right'} col
+   * @param {KeyboardEvent} e
+   * @returns {boolean}
+   */
+  function handleBoundaryDelete(pageIndex, col, e) {
+    if (pageIndex + 1 >= model.pages.length) return false;
+    return handleBoundaryBackspace(pageIndex + 1, col, e);
+  }
+
   function notifyFocus(index) {
     focusedPage = index;
     hooks.onPageFocus?.(index + 1, model.pages.length);
@@ -1091,9 +1158,27 @@ export function initDiarySheet(container, template, hooks) {
           clampRightScrollAndReflow(field, pageIndex);
         });
       }
-      if (e.key !== 'Backspace' || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      // Plain arrows walk the caret between pages; a shifted arrow is a
+      // selection gesture and must not teleport it.
+      if (e.key.startsWith('Arrow') && !e.shiftKey) {
+        crossPageOnArrow(pageIndex, 'right', e.key);
+        return;
+      }
+
       const range = field.quill.getSelection();
-      if (!range || range.index !== 0 || range.length !== 0) return;
+      if (!range || range.length !== 0) return;
+
+      if (e.key === 'Delete') {
+        // Quill's length counts the trailing newline, so end-of-text is len-1.
+        if (range.index >= Math.max(0, field.quill.getLength() - 1)) {
+          handleBoundaryDelete(pageIndex, 'right', e);
+        }
+        return;
+      }
+
+      if (e.key !== 'Backspace' || range.index !== 0) return;
       handleBoundaryBackspace(pageIndex, 'right', e);
     });
 
@@ -1292,28 +1377,48 @@ export function initDiarySheet(container, template, hooks) {
    * @param {'left'|'right'} col
    * @returns {{ pageIndex: number, localOffset: number, global: number } | null}
    */
+  /**
+   * Last caret position actually observed, per column.
+   *
+   * Quill reports no selection at moments when it is nonetheless focused —
+   * during a mousedown on other chrome, between a remount and its first
+   * selection sync. Treating that as "end of document" is what silently
+   * teleports the user to the bottom of the page, so the last real reading
+   * stands in instead.
+   * @type {{ col: 'left'|'right', read: { pageIndex: number, localOffset: number, global: number } } | null}
+   */
+  let lastKnownCaret = null;
+
   function readCaretGlobal(col) {
     const pageEls = container.querySelectorAll('.diary-page');
     for (let i = 0; i < pageEls.length; i++) {
       if (col === 'left') {
         const ta = pageEls[i].querySelector('[data-col="left"]');
         if (ta instanceof HTMLTextAreaElement && document.activeElement === ta) {
-          return {
+          const local = ta.selectionStart ?? ta.value.length;
+          const read = {
             pageIndex: i,
-            localOffset: ta.selectionStart ?? ta.value.length,
-            global: globalOffsetBeforePage(col, i) + (ta.selectionStart ?? ta.value.length),
+            localOffset: local,
+            global: globalOffsetBeforePage(col, i) + local,
           };
+          lastKnownCaret = { col, read };
+          return read;
         }
       } else {
         const rf = rightFields.get(pageEls[i]);
         if (rf && (document.activeElement === rf.quill.root || rf.quill.hasFocus?.())) {
           const range = rf.quill.getSelection();
-          const local = range ? range.index : Math.max(0, rf.quill.getLength() - 1);
-          return {
+          if (!range) {
+            // Unknown, not "the end" — see lastKnownCaret.
+            return lastKnownCaret?.col === col ? lastKnownCaret.read : null;
+          }
+          const read = {
             pageIndex: i,
-            localOffset: local,
-            global: globalOffsetBeforePage(col, i) + local,
+            localOffset: range.index,
+            global: globalOffsetBeforePage(col, i) + range.index,
           };
+          lastKnownCaret = { col, read };
+          return read;
         }
       }
     }
@@ -2186,8 +2291,19 @@ export function initDiarySheet(container, template, hooks) {
         requestAnimationFrame(runOverflow);
       });
       ta.addEventListener('keydown', (e) => {
-        if (e.key !== 'Backspace' || e.metaKey || e.ctrlKey || e.altKey) return;
-        if (ta.selectionStart !== 0 || ta.selectionEnd !== 0) return;
+        if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+        if (e.key.startsWith('Arrow') && !e.shiftKey) {
+          crossPageOnArrow(pageIndex, col, e.key);
+          return;
+        }
+        if (ta.selectionStart !== ta.selectionEnd) return;
+
+        if (e.key === 'Delete' && ta.selectionStart === ta.value.length) {
+          handleBoundaryDelete(pageIndex, col, e);
+          return;
+        }
+        if (e.key !== 'Backspace' || ta.selectionStart !== 0) return;
         handleBoundaryBackspace(pageIndex, col, e);
       });
       // `noteUserCaret` no-ops while we are restoring, so our own ta.focus()
@@ -2204,14 +2320,37 @@ export function initDiarySheet(container, template, hooks) {
 
     const toggle = pageEl.querySelector('.diary-header-toggle');
     if (toggle) {
+      /**
+       * Captured on mousedown, not click: pressing the button blurs the editor
+       * first, and by click time there is no caret left to read.
+       * @type {{ col: 'left'|'right', global: number } | null}
+       */
+      let caretBeforeToggle = null;
+      toggle.addEventListener('mousedown', () => {
+        caretBeforeToggle = readCaretAnyColumn();
+      });
+
       toggle.addEventListener('click', () => {
         markUserEdit({ force: true });
+        const keep = caretBeforeToggle;
+        caretBeforeToggle = null;
         const nextState = !model.pages[pageIndex].hasHeader;
         model.pages[pageIndex].hasHeader = nextState;
         if (nextState && !model.pages[pageIndex].header) {
           model.pages[pageIndex].header = getPrefilledHeader(pageIndex);
         }
         render({ skipRead: true });
+        // A header is roughly a fifth of the page, so this reflows everything
+        // below it. Put the caret back on the text it was in rather than
+        // dropping the user wherever the re-render happens to land.
+        //
+        // Synchronously, not on a later frame: render() has already rebuilt
+        // the pages, and the reflow that follows reads the *live* caret to
+        // carry it along. Restoring a frame later would let that reflow run
+        // against a caret it never had, and land the user on another page.
+        if (keep) {
+          restoreCaretGlobal(keep.col, keep.global);
+        }
         settleHistory();
         notify();
       });
