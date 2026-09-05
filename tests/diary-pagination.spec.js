@@ -1176,4 +1176,59 @@ test.describe('Diary pagination reflow', () => {
     expect(left).toBe('seed');
     expect(await clippedDiaryBoxes(page)).toEqual([]);
   });
+
+  test('clicking into another page while the pager is still settling keeps the caret', async ({ page }) => {
+    // Reflow restores the caret on a later frame, so there is a window — one
+    // animation frame wide when idle, far wider under load — in which a restore
+    // is queued against a caret target captured before the edit. Clicking into
+    // another page inside that window must win: the officer's click is the
+    // newer intent, and the queued restore is stale.
+    //
+    // The click is issued in the same task as the edit so the test lands inside
+    // that window every run instead of racing it. Both steps go through the
+    // same code paths a real click does (mousedown on the page's right column).
+    const placed = await page.evaluate((text) => {
+      const first = window.__q(0);
+      first.focus();
+      first.setText(text);
+      // Spill has run; its caret restore is queued for the next frame.
+      if (document.querySelectorAll('.diary-page').length < 2) return 'no-second-page';
+      const second = window.__q(1);
+      if (!second) return 'no-page-2-quill';
+      second.focus();
+      second.setSelection(0, 0);
+      return second.hasFocus() ? 'ok' : 'not-focused';
+    }, `${'यह एक लंबा वाक्य है जो पृष्ठ को भर देता है। '.repeat(6)}\n`.repeat(30));
+    expect(placed).toBe('ok');
+
+    // Watch ~2s of frames: a late restore shows up as focus or caret leaving
+    // where the click put it. Sampling every frame catches a steal that a
+    // later reflow would otherwise paper over before a poll could see it.
+    const strayFrames = await page.evaluate(() => new Promise((resolve) => {
+      const stray = [];
+      let frames = 0;
+      const tick = () => {
+        frames += 1;
+        const n = document.querySelectorAll('.diary-page').length;
+        let focused = null;
+        let caret = null;
+        for (let i = 0; i < n; i++) {
+          const q = window.__liveQ(i);
+          if (q?.hasFocus()) {
+            focused = i;
+            caret = q.getSelection()?.index ?? null;
+            break;
+          }
+        }
+        if (focused !== 1 || caret !== 0) stray.push({ frames, focused, caret });
+        if (frames < 120) requestAnimationFrame(tick);
+        else resolve(stray);
+      };
+      requestAnimationFrame(tick);
+    }));
+    expect(strayFrames).toEqual([]);
+
+    // The click must not have cost the document its pagination invariant.
+    expect(await clippedDiaryBoxes(page)).toEqual([]);
+  });
 });

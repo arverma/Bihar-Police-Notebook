@@ -14,6 +14,7 @@ import {
   stripHtmlToPlain,
 } from './quill-pages.js';
 import { createEditHistory } from './edit-history.js';
+import { createCaretOwnership } from './caret-ownership.js';
 
 const DPI = 96;
 const MM_PER_IN = 25.4;
@@ -79,6 +80,9 @@ export function initLetterSheet(container, indicatorEl, hooks = {}) {
   /** @type {Map<number, object>} */
   const fields = new Map();
   const history = createEditHistory();
+  // Spill and undo place the caret on the next frame; a click landing in that
+  // window must win over the queued placement. Same rule as the diary sheet.
+  const caretOwner = createCaretOwnership();
 
   function notify() {
     hooks.onChange?.();
@@ -132,13 +136,17 @@ export function initLetterSheet(container, indicatorEl, hooks = {}) {
     const caret = snap.caret || { pageIndex: 0, index: 0 };
     focusedPage = Math.max(0, Math.min(caret.pageIndex, pages.length - 1));
     render({ skipOpenRepair: true });
-    requestAnimationFrame(() => {
+    // Only the caret placement is droppable — the history bookkeeping below
+    // must run whether or not the user has clicked elsewhere since.
+    const restore = caretOwner.owned(() => {
       const field = fields.get(focusedPage) || fields.get(0);
-      if (field) {
-        try { field.quill.root.focus({ preventScroll: true }); } catch (_) { /* ignore */ }
-        const max = Math.max(0, field.quill.getLength() - 1);
-        field.quill.setSelection(Math.min(Math.max(0, caret.index), max), 0, 'api');
-      }
+      if (!field) return;
+      try { field.quill.root.focus({ preventScroll: true }); } catch (_) { /* ignore */ }
+      const max = Math.max(0, field.quill.getLength() - 1);
+      field.quill.setSelection(Math.min(Math.max(0, caret.index), max), 0, 'api');
+    });
+    requestAnimationFrame(() => {
+      restore();
       history.applying = false;
       history.settle(cloneSnapshot());
       notify();
@@ -228,7 +236,9 @@ export function initLetterSheet(container, indicatorEl, hooks = {}) {
     const toPage = i;
     if (didSpill) {
       render();
-      requestAnimationFrame(() => {
+      // Following the spilled text onto the new page is right while the user is
+      // typing, but not once they have clicked somewhere else in the meantime.
+      const followSpill = caretOwner.owned(() => {
         const field = fields.get(toPage);
         if (field) {
           field.quill.focus();
@@ -236,6 +246,9 @@ export function initLetterSheet(container, indicatorEl, hooks = {}) {
           field.host.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         }
         notifyFocus(toPage);
+      });
+      requestAnimationFrame(() => {
+        followSpill();
         settleHistory();
       });
       notify();
@@ -253,6 +266,8 @@ export function initLetterSheet(container, indicatorEl, hooks = {}) {
    */
   function wirePage(pageEl, pageIndex, field) {
     fields.set(pageIndex, field);
+    // Fields are rebuilt on every render, so re-arm the user-caret signal here.
+    caretOwner.watchUserCaret(field.quill.root);
 
     field.quill.on('text-change', (delta, _o, source) => {
       if (source === 'silent' || spilling || history.applying) return;

@@ -20,6 +20,7 @@ import {
   takeFittingHtmlPrefix,
 } from './page-fit.js';
 import { createEditHistory } from './edit-history.js';
+import { createCaretOwnership } from './caret-ownership.js';
 
 const DPI = 96;
 const MM_PER_IN = 25.4;
@@ -818,12 +819,45 @@ export function initDiarySheet(container, template, hooks) {
   let activeRightPageIndex = 0;
   /** Invalidates stale double-rAF overflow rechecks after undo/setModel. */
   let reflowEpoch = 0;
+  /**
+   * Reflow restores the caret one or two frames late, so a restore scheduled by
+   * one reflow can land after the user has clicked into a different page. This
+   * keeps the newest caret intent winning.
+   */
+  const caretOwner = createCaretOwnership();
+  const { noteUserCaret, asRestore: asCaretRestore } = caretOwner;
   const history = createEditHistory();
   /** @type {'left'|'right'} */
   let lastCaretCol = 'right';
 
   function notify() {
     hooks.onChange?.();
+  }
+
+  /**
+   * Deferred caret restore that is dropped if the user takes the caret first,
+   * or if undo/setModel has replaced the document underneath it.
+   * @param {() => void} fn
+   * @returns {() => void}
+   */
+  function ownedCaretRestore(fn) {
+    const epoch = reflowEpoch;
+    return caretOwner.owned(() => {
+      if (epoch !== reflowEpoch) return;
+      fn();
+    });
+  }
+
+  /**
+   * Caret target for a reflow that runs a frame or more after it was queued.
+   * The live caret wins: replaying the offset captured before the first spill
+   * would walk the caret back through every follow-up reflow.
+   * @param {'left'|'right'} col
+   * @param {number | null} fallback
+   * @returns {number | null}
+   */
+  function freshCaretGlobal(col, fallback) {
+    return readCaretGlobal(col)?.global ?? fallback;
   }
 
   function notifyFocus(index) {
@@ -896,8 +930,11 @@ export function initDiarySheet(container, template, hooks) {
     focusedPage = pageIndex;
     if (lastCaretCol === 'right') activeRightPageIndex = pageIndex;
     render({ skipRead: true });
+    // Only the caret placement is droppable — the history bookkeeping below
+    // must run whether or not the user has clicked elsewhere since.
+    const restore = ownedCaretRestore(() => restoreCaretGlobal(caret.col, caret.global));
     requestAnimationFrame(() => {
-      restoreCaretGlobal(caret.col, caret.global);
+      restore();
       history.applying = false;
       history.settle(cloneSnapshot());
       notify();
@@ -1021,6 +1058,10 @@ export function initDiarySheet(container, template, hooks) {
     field.setContent(model.pages[pageIndex].right || '');
     rightFields.set(pageEl, field);
     hooks.onAttachField?.(field.quill.root, field);
+
+    // A pointer press inside the live editor is the user claiming the caret —
+    // a reflow restore still in flight must not drag it away.
+    caretOwner.watchUserCaret(field.quill.root);
 
     field.quill.root.addEventListener('compositionstart', () => {
       if (spilling || history.applying) return;
@@ -1295,17 +1336,19 @@ export function initDiarySheet(container, template, hooks) {
     );
     const pageEl = pageEls[pageIndex];
     if (!pageEl) return;
-    notifyFocus(pageIndex);
-    if (col === 'left') {
-      const ta = pageEl.querySelector('[data-col="left"]');
-      if (ta instanceof HTMLTextAreaElement) {
-        ta.focus({ preventScroll: true });
-        const pos = Math.min(local, ta.value.length);
-        try { ta.setSelectionRange(pos, pos); } catch (_) { /* ignore */ }
+    asCaretRestore(() => {
+      notifyFocus(pageIndex);
+      if (col === 'left') {
+        const ta = pageEl.querySelector('[data-col="left"]');
+        if (ta instanceof HTMLTextAreaElement) {
+          ta.focus({ preventScroll: true });
+          const pos = Math.min(local, ta.value.length);
+          try { ta.setSelectionRange(pos, pos); } catch (_) { /* ignore */ }
+        }
+      } else {
+        activateRightPage(pageIndex, { localOffset: local });
       }
-    } else {
-      activateRightPage(pageIndex, { localOffset: local });
-    }
+    });
   }
 
   function collapseTrailing(keepIndex = 0) {
@@ -1342,9 +1385,12 @@ export function initDiarySheet(container, template, hooks) {
     if (needFull) {
       render({ skipRead: true });
       restoreStageScroll(scrollSnap);
-      requestAnimationFrame(() => {
+      const restore = ownedCaretRestore(() => {
         if (globalOffset != null) restoreCaretGlobal(col, globalOffset);
         else notifyFocus(Math.min(focusedPage, model.pages.length - 1));
+      });
+      requestAnimationFrame(() => {
+        restore();
         restoreStageScroll(scrollSnap);
       });
       return;
@@ -1374,8 +1420,11 @@ export function initDiarySheet(container, template, hooks) {
     });
 
     restoreStageScroll(scrollSnap);
-    requestAnimationFrame(() => {
+    const restore = ownedCaretRestore(() => {
       if (globalOffset != null) restoreCaretGlobal(col, globalOffset);
+    });
+    requestAnimationFrame(() => {
+      restore();
       restoreStageScroll(scrollSnap);
     });
   }
@@ -1474,7 +1523,9 @@ export function initDiarySheet(container, template, hooks) {
         const pageEls = container.querySelectorAll('.diary-page');
         for (let pi = 0; pi < pageEls.length; pi++) {
           if (columnOverflows(pageEls[pi], col)) {
-            spillColumn(pi, col, { globalOffset });
+            // A frame has passed and this page's caret was already restored;
+            // reuse where it actually is, not the offset from before the spill.
+            spillColumn(pi, col, { globalOffset: freshCaretGlobal(col, globalOffset) });
             return;
           }
         }
@@ -1656,7 +1707,10 @@ export function initDiarySheet(container, template, hooks) {
       const pageEls = container.querySelectorAll('.diary-page');
       for (let i = 0; i < pageEls.length; i++) {
         if (columnOverflows(pageEls[i], col)) {
-          spillColumn(i, col, { globalOffset });
+          // Two frames late: the caret has been restored (and possibly refined
+          // by an absorb snap) since `globalOffset` was captured. Replaying the
+          // captured value here would undo that refinement.
+          spillColumn(i, col, { globalOffset: freshCaretGlobal(col, globalOffset) });
           settleHistory();
           return;
         }
@@ -1901,6 +1955,17 @@ export function initDiarySheet(container, template, hooks) {
    * @returns {boolean}
    */
   function restoreCaretAtAhead(col, destPageIndex, minLocal, ahead) {
+    return asCaretRestore(() => restoreCaretAtAheadInner(col, destPageIndex, minLocal, ahead));
+  }
+
+  /**
+   * @param {'left'|'right'} col
+   * @param {number} destPageIndex
+   * @param {number} minLocal
+   * @param {string} ahead
+   * @returns {boolean}
+   */
+  function restoreCaretAtAheadInner(col, destPageIndex, minLocal, ahead) {
     if (!ahead) return false;
     const pageEl = container.querySelectorAll('.diary-page')[destPageIndex];
     if (!pageEl) return false;
@@ -1979,11 +2044,11 @@ export function initDiarySheet(container, template, hooks) {
     const absorbedFirst = absorbAround(pageIndex, col, { globalOffset: absorbCaretGlobal });
     if (absorbedFirst) {
       // Snap to the pulled text at/after the old end of prev (skip duplicates).
-      requestAnimationFrame(() => {
+      requestAnimationFrame(ownedCaretRestore(() => {
         if (!restoreCaretAtAhead(col, pageIndex - 1, prevLen, ahead)) {
           restoreCaretGlobal(col, absorbCaretGlobal);
         }
-      });
+      }));
       return true;
     }
 
@@ -2041,6 +2106,7 @@ export function initDiarySheet(container, template, hooks) {
         // Static DOM is replaced on activate — preventDefault so focus/caret
         // are applied on the new Quill in this same gesture (one click).
         e.preventDefault();
+        noteUserCaret();
         activateRightPage(pageIndex, { clientX: e.clientX, clientY: e.clientY });
       });
     }
@@ -2124,8 +2190,16 @@ export function initDiarySheet(container, template, hooks) {
         if (ta.selectionStart !== 0 || ta.selectionEnd !== 0) return;
         handleBoundaryBackspace(pageIndex, col, e);
       });
-      ta.addEventListener('focus', () => notifyFocus(pageIndex));
-      ta.addEventListener('click', () => notifyFocus(pageIndex));
+      // `noteUserCaret` no-ops while we are restoring, so our own ta.focus()
+      // does not read as the user taking the caret.
+      ta.addEventListener('focus', () => {
+        noteUserCaret();
+        notifyFocus(pageIndex);
+      });
+      ta.addEventListener('click', () => {
+        noteUserCaret();
+        notifyFocus(pageIndex);
+      });
     });
 
     const toggle = pageEl.querySelector('.diary-header-toggle');
