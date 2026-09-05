@@ -1,12 +1,21 @@
 name: Deploy editor to GitHub Pages
 
 on:
+  # Deploy only on version tags (v1.0, v1.1, v1.4.2, …).
+  # Merging to main runs tests only — no deploy — so main is always a safe
+  # integration branch and production changes are always an intentional act.
   push:
-    branches: [main, master]
-    paths:
-      - 'editor/**'
-      - '.github/workflows/pages.yml'
+    tags:
+      - 'v*'
+
+  # Manual rollback: Actions → Run workflow → type the tag to restore (e.g. v1.4).
+  # Leave blank to deploy HEAD (useful for re-running a failed deploy without re-tagging).
   workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Tag or SHA to deploy (e.g. v1.4) — leave blank for HEAD'
+        default: ''
+        required: false
 
 permissions:
   contents: read
@@ -31,6 +40,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # For workflow_dispatch rollbacks this resolves the requested tag/SHA;
+          # for tag pushes github.ref is already the tag ref.
+          ref: ${{ inputs.ref || github.ref }}
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
