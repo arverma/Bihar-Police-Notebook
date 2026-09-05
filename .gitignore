@@ -14,6 +14,10 @@ dist/
 build/
 *.zip
 
+# Claude Code local state — agent worktrees are checkouts of this same repo
+# and must never be committed into it.
+.claude/worktrees/
+
 # Node.js
 node_modules/
 npm-debug.log*
