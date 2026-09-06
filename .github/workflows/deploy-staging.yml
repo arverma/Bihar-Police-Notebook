@@ -13,6 +13,7 @@ on:
 
 permissions:
   contents: read
+  deployments: write
 
 concurrency:
   # One staging deploy per branch at a time; newer push cancels older.
@@ -41,3 +42,5 @@ jobs:
           # Cloudflare also generates a unique preview URL per branch push, visible
           # in the Actions summary, useful for reviewing multiple branches at once.
           command: pages deploy editor --project-name=bpdiary --branch=staging
+          # Allows Cloudflare to post deployment status back to the GitHub PR.
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}

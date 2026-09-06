@@ -19,6 +19,7 @@ on:
 
 permissions:
   contents: read
+  deployments: write
 
 concurrency:
   group: pages-production
@@ -48,3 +49,5 @@ jobs:
           # --branch=main tells Cloudflare this is the production deployment,
           # which maps to the custom domain bpdiary.arverma.dev.
           command: pages deploy editor --project-name=bpdiary --branch=main
+          # Allows Cloudflare to post deployment status back to the GitHub commit.
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
