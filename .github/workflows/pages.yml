@@ -1,4 +1,4 @@
-name: Deploy editor to GitHub Pages
+name: Deploy to Cloudflare Pages (production)
 
 on:
   # Deploy only on version tags (v1.0, v1.1, v1.4.2, …).
@@ -19,11 +19,9 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: pages
+  group: pages-production
   cancel-in-progress: true
 
 jobs:
@@ -33,9 +31,6 @@ jobs:
 
   deploy:
     needs: test
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -45,14 +40,11 @@ jobs:
           # for tag pushes github.ref is already the tag ref.
           ref: ${{ inputs.ref || github.ref }}
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+      - name: Deploy to Cloudflare Pages (production)
+        uses: cloudflare/wrangler-action@v3
         with:
-          path: editor
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # --branch=main tells Cloudflare this is the production deployment,
+          # which maps to the custom domain bpdiary.arverma.dev.
+          command: pages deploy editor --project-name=bpdiary --branch=main
