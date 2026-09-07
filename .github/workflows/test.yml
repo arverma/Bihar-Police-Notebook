@@ -2,9 +2,16 @@ name: Tests
 
 on:
   pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
   push:
     branches: [main, master]
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
   # Called by pages.yml so a deploy can never run ahead of a green suite.
+  # workflow_call has no paths-ignore support — the caller controls filtering.
   workflow_call:
 
 permissions:
