@@ -1,0 +1,49 @@
+name: Deploy to Cloudflare Pages (staging)
+
+on:
+  # Deploy every push to a non-main feature branch so the staging environment
+  # always reflects the latest work-in-progress.
+  push:
+    branches-ignore:
+      - main
+      - master
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+
+  # Also triggerable manually for any branch.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  deployments: write
+
+concurrency:
+  # One staging deploy per branch at a time; newer push cancels older.
+  group: pages-staging-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Run the full suite before staging gets the build too — catches breakage
+  # early before a PR is even opened.
+  test:
+    uses: ./.github/workflows/test.yml
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy to Cloudflare Pages (staging)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # --branch=staging maps to the custom domain bpdiary-test.arverma.dev.
+          # Cloudflare also generates a unique preview URL per branch push, visible
+          # in the Actions summary, useful for reviewing multiple branches at once.
+          command: pages deploy editor --project-name=bpdiary --branch=staging
+          # Allows Cloudflare to post deployment status back to the GitHub PR.
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}

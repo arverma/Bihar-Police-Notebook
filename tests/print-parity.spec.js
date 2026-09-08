@@ -280,9 +280,20 @@ test.describe('Print parity (live clone)', () => {
         document.execCommand('insertText', false, t);
       }, text);
       if (align) {
+        // Left/right align buttons were removed from chrome; set via Quill API.
+        // Center/justify still have toolbar buttons.
         const btn = page.locator(`#quillToolbar [data-ql="align:${align}"]`);
-        await expect(btn).toBeVisible();
-        await btn.click();
+        if (await btn.count()) {
+          await expect(btn).toBeVisible();
+          await btn.click();
+        } else {
+          await page.evaluate((a) => {
+            const host = document.querySelector('.editor-diary .diary-page [data-col="right"]');
+            const q = window.Quill?.find?.(host);
+            if (!q) throw new Error('quill missing');
+            q.format('align', a);
+          }, align);
+        }
       }
     }
 
@@ -377,6 +388,104 @@ test.describe('Print parity (live clone)', () => {
     }));
     expect(meta.title).toBe('Print Document');
     expect(meta.hasDiary).toBe(true);
+  });
+
+
+  test('blank lines on last diary page match print clone after page switch', async ({ page }) => {
+    await page.evaluate(() => {
+      const toggle = document.getElementById('translitToggle');
+      if (toggle instanceof HTMLInputElement && toggle.checked) {
+        toggle.checked = false;
+        toggle.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    });
+
+    // Install helper used by diary pagination tests.
+    await page.evaluate(() => {
+      window.__q = (i) => {
+        const host = document.querySelectorAll('.diary-page')[i]
+          ?.querySelector('[data-col="right"]');
+        if (!(host instanceof HTMLElement)) return null;
+        let quill = window.Quill ? window.Quill.find(host) : null;
+        if (!quill) {
+          host.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+          quill = window.Quill.find(host);
+        }
+        return quill;
+      };
+    });
+
+    await page.evaluate((t) => {
+      const q = window.__q(0);
+      q.focus();
+      q.setText(t, 'user');
+    }, `${'यह एक लंबा वाक्य है जो पृष्ठ को भर देता है। '.repeat(6)}\n`.repeat(12));
+
+    await page.waitForFunction(
+      () => document.querySelectorAll('.editor-diary .diary-page').length >= 2,
+      null,
+      { timeout: 15000 },
+    );
+
+    const blankCount = 4;
+    await page.evaluate((n) => {
+      const last = document.querySelectorAll('.diary-page').length - 1;
+      const q = window.__q(last);
+      q.focus();
+      const end = Math.max(0, q.getLength() - 1);
+      q.setSelection(end, 0, 'api');
+      q.insertText(end, '\n'.repeat(n), 'user');
+    }, blankCount);
+    await page.waitForTimeout(400);
+
+    // Leave the last page so it is static (same path as print clone source).
+    await page.evaluate(() => {
+      const host = document.querySelectorAll('.diary-page')[0]
+        ?.querySelector('[data-col="right"]');
+      host.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    });
+    await page.waitForTimeout(300);
+
+    const screen = await page.evaluate(() => {
+      const pages = [...document.querySelectorAll('.editor-diary .diary-page')];
+      const last = pages[pages.length - 1];
+      const editor = last.querySelector('[data-col="right"] .ql-editor');
+      const emptyPs = [...editor.querySelectorAll('p')].filter((p) => {
+        const t = (p.textContent || '').replace(/\u00a0/g, ' ').trim();
+        return !t && !p.querySelector('img');
+      });
+      return {
+        emptyCount: emptyPs.length,
+        brCount: editor.querySelectorAll('br').length,
+        scrollHeight: editor.scrollHeight,
+        html: editor.innerHTML,
+      };
+    });
+    expect(screen.emptyCount).toBeGreaterThanOrEqual(blankCount);
+
+    await mountPrintDocumentInIframe(page, 'diary');
+    const printed = await page.frameLocator('#print-parity-iframe')
+      .locator('.diary-page')
+      .last()
+      .locator('.ql-editor, .print-static-quill')
+      .first()
+      .evaluate((editor) => {
+        const emptyPs = [...editor.querySelectorAll('p')].filter((p) => {
+          const t = (p.textContent || '').replace(/\u00a0/g, ' ').trim();
+          return !t && !p.querySelector('img');
+        });
+        return {
+          emptyCount: emptyPs.length,
+          brCount: editor.querySelectorAll('br').length,
+          scrollHeight: editor.scrollHeight,
+          html: editor.innerHTML,
+        };
+      });
+
+    expect(printed.emptyCount).toBeGreaterThanOrEqual(blankCount);
+    expect(printed.brCount).toBeGreaterThanOrEqual(blankCount);
+    // WYSIWYG: print must not collapse blank-line height vs screen after switch.
+    expect(printed.scrollHeight).toBeGreaterThanOrEqual(screen.scrollHeight - 8);
   });
 
   test('forced raster-pdf path builds A4 blob without calling print', async ({ page }) => {

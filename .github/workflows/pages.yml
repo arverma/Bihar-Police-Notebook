@@ -1,40 +1,53 @@
-name: Deploy editor to GitHub Pages
+name: Deploy to Cloudflare Pages (production)
 
 on:
+  # Deploy only on version tags (v1.0, v1.1, v1.4.2, …).
+  # Merging to main runs tests only — no deploy — so main is always a safe
+  # integration branch and production changes are always an intentional act.
   push:
-    branches: [main, master]
-    paths:
-      - 'editor/**'
-      - '.github/workflows/pages.yml'
+    tags:
+      - 'v*'
+
+  # Manual rollback: Actions → Run workflow → type the tag to restore (e.g. v1.4).
+  # Leave blank to deploy HEAD (useful for re-running a failed deploy without re-tagging).
   workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Tag or SHA to deploy (e.g. v1.4) — leave blank for HEAD'
+        default: ''
+        required: false
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
+  deployments: write
 
 concurrency:
-  group: pages
+  group: pages-production
   cancel-in-progress: true
 
 jobs:
+  # Gate: production never gets a build that has not passed the suite.
+  test:
+    uses: ./.github/workflows/test.yml
+
   deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
         with:
-          path: editor
+          # For workflow_dispatch rollbacks this resolves the requested tag/SHA;
+          # for tag pushes github.ref is already the tag ref.
+          ref: ${{ inputs.ref || github.ref }}
 
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Deploy to Cloudflare Pages (production)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # --branch=main tells Cloudflare this is the production deployment,
+          # which maps to the custom domain bpdiary.arverma.dev.
+          command: pages deploy editor --project-name=bpdiary --branch=main
+          # Allows Cloudflare to post deployment status back to the GitHub commit.
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}

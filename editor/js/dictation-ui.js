@@ -27,7 +27,7 @@ const DEFAULT_BOTTOM = 72;
 
 /**
  * @typedef {object} DictationUiHooks
- * @property {() => { el: HTMLInputElement|HTMLTextAreaElement, start: number, end: number } | null} getTarget
+ * @property {() => { el: HTMLElement, start: number, end: number, field?: object } | null} getTarget
  * @property {(text: string) => void} insertText
  * @property {(msg: string) => void} [notify]
  */

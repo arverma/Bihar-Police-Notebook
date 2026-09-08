@@ -1,0 +1,14 @@
+---
+description: Diary/letter pager — load skill; never migrate pages[] or break print clone
+globs: editor/js/diary-sheet.js,editor/js/quill-pages.js,editor/js/page-fit.js,editor/js/letter-sheet.js,tests/diary-pagination.spec.js,tests/pagination-helpers.js,docs/manual-tests/diary-pagination.md,docs/components/templates.md
+alwaysApply: false
+---
+
+# Diary / letter pager
+
+When working in these files (or on clipping, caret, Enter/Backspace at page edges, justify-under-scale, spill/absorb):
+
+1. Read and follow `.cursor/skills/diary-letter-pager/SKILL.md` (and `reference.md` when linked).
+2. **Never** change the persisted diary shape away from `pages[]` / add a parallel stream field / invent a print layout besides live-clone.
+3. Left column stays a **textarea**. Fit = static cut + **live peel**; absorb = **one line/block** into slack — not greedy full-column re-cut.
+4. Gate with `npm test` and `npx playwright test tests/diary-pagination.spec.js tests/print-parity.spec.js`.

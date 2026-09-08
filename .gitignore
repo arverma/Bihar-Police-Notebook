@@ -14,6 +14,10 @@ dist/
 build/
 *.zip
 
+# Claude Code local state — agent worktrees are checkouts of this same repo
+# and must never be committed into it.
+.claude/worktrees/
+
 # Node.js
 node_modules/
 npm-debug.log*
@@ -29,7 +33,12 @@ yarn-error.log*
 /logs/
 *.log
 
-# Playwright Testing
+# Playwright Testing (local artifacts — never push)
 playwright-report/
 test-results/
+blob-report/
+playwright/.cache/
 
+# Accidental Cursor sandbox cache drop (directory literally named ")
+"/
+.playwright-browsers/
