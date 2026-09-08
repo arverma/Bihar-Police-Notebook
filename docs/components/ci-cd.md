@@ -8,7 +8,7 @@ All automation lives in `.github/workflows/`. There are three workflow files.
 
 | Workflow file | Triggers | What it does |
 |---|---|---|
-| [`test.yml`](../../.github/workflows/test.yml) | PR open/update, push to `main` | Runs the full test suite |
+| [`test.yml`](../../.github/workflows/test.yml) | PR open/update | Runs the full test suite |
 | [`deploy-staging.yml`](../../.github/workflows/deploy-staging.yml) | Push to any non-`main` branch | Tests → deploys to Cloudflare Pages (staging) |
 | [`pages.yml`](../../.github/workflows/pages.yml) | Push of a `v*` tag, manual `workflow_dispatch` | Tests → deploys to Cloudflare Pages (production) |
 
@@ -20,7 +20,6 @@ All automation lives in `.github/workflows/`. There are three workflow files.
 
 Runs on:
 - Every PR (any branch → any branch), unless only docs changed
-- Every push to `main` / `master`, unless only docs changed
 - Called internally by `deploy-staging.yml` and `pages.yml` via `workflow_call`
 
 Steps:
