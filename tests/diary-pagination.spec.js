@@ -732,6 +732,215 @@ test.describe('Diary pagination reflow', () => {
     await expect.poll(async () => clippedDiaryBoxes(page), { timeout: 10000 }).toEqual([]);
   });
 
+  test('justified spill stays one paragraph; Backspace absorbs into page 1', async ({ page }) => {
+    // Live peel sheds words when align is set; without prependPeeledBlock those
+    // become one <p> per word on page 2. Use numbered filler + one justified
+    // overflow block so absorb slack can drop early <p>s without emptying the
+    // last line (fitMergeIntoLastBlock needs a full last line).
+    await fillSinglePage(page, { freeLines: 3 });
+    await expect.poll(async () => page.locator('.diary-page').count()).toBe(1);
+
+    const long = `${'यह एक बहुत लंबा पैराग्राफ है जो कई पंक्तियों में लपेटा जाएगा। '.repeat(40)}`.trim();
+    const capacityHtml = await page.evaluate(
+      () => window.__bpDiarySheet.getModel().pages[0].right,
+    );
+    await page.evaluate(({ cap, para }) => {
+      window.__bpDiarySheet.setModel({
+        pages: [{
+          hasHeader: true,
+          header: {
+            fir_number: '', thana: '', district: '', case_diary_no: '',
+            rule_no: '', against_1: '', against_2: '', special_report_no: '',
+            fir_date: '', event_date_place: '', sections: '', investigation_record: '',
+          },
+          left: '',
+          right: `${cap}<p class="ql-align-justify">${para}</p>`,
+        }],
+      });
+    }, { cap: capacityHtml, para: long });
+
+    await expect.poll(async () => page.locator('.diary-page').count(), { timeout: 15000 })
+      .toBeGreaterThan(1);
+    await expect.poll(async () => clippedDiaryBoxes(page), { timeout: 10000 }).toEqual([]);
+
+    const page2Shape = await page.evaluate(() => {
+      const html = window.__bpDiarySheet.getModel().pages[1]?.right || '';
+      const holder = document.createElement('div');
+      holder.innerHTML = html;
+      const content = [...holder.children].filter((el) => /\S/.test(el.textContent || ''));
+      const wordCounts = content.map((el) => (el.textContent || '')
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean).length);
+      const oneWordBlocks = wordCounts.filter((n) => n === 1).length;
+      const justified = content.find((el) => (el.getAttribute('class') || '')
+        .includes('ql-align-justify'));
+      return {
+        contentBlocks: content.length,
+        firstClass: content[0]?.getAttribute('class') || '',
+        justifiedWords: justified
+          ? (justified.textContent || '').trim().split(/\s+/).filter(Boolean).length
+          : 0,
+        oneWordBlocks,
+      };
+    });
+    expect(page2Shape.contentBlocks).toBeGreaterThan(0);
+    expect(page2Shape.justifiedWords).toBeGreaterThan(1);
+    expect(page2Shape.oneWordBlocks).toBeLessThan(5);
+    expect(page2Shape.oneWordBlocks / Math.max(1, page2Shape.contentBlocks)).toBeLessThan(0.5);
+
+    // Drop early filler blocks so page 1 has slack; justified cut stays full-line.
+    await page.evaluate(() => {
+      const m = window.__bpDiarySheet.getModel();
+      const html = m.pages[0].right || '';
+      const parts = html.split(/(?=<p\b)/i).filter(Boolean);
+      if (parts.length > 10) {
+        m.pages[0].right = parts.slice(8).join('');
+        window.__bpDiarySheet.setModel(m);
+      }
+    });
+    await page.waitForTimeout(400);
+
+    const beforeBs = await page.evaluate(() => {
+      const m = window.__bpDiarySheet.getModel();
+      const plain = (html) => String(html || '').replace(/<[^>]+>/g, '');
+      return {
+        p0plain: plain(m.pages[0].right),
+        p1plain: plain(m.pages[1]?.right || ''),
+        p1: m.pages[1]?.right || '',
+        pageCount: m.pages.length,
+      };
+    });
+    expect(beforeBs.pageCount).toBeGreaterThan(1);
+    expect(beforeBs.p1plain.trim().length).toBeGreaterThan(0);
+
+    await page.evaluate(() => {
+      const q = window.__q(1);
+      q.focus();
+      q.setSelection(0, 0, 'api');
+    });
+    await page.locator('.diary-page').nth(1).locator('.ql-editor').press('Backspace');
+    await page.waitForTimeout(800);
+
+    const afterBs = await page.evaluate(() => {
+      const m = window.__bpDiarySheet.getModel();
+      const plain = (html) => String(html || '').replace(/<[^>]+>/g, '');
+      return {
+        p0plain: plain(m.pages[0].right),
+        p1plain: plain(m.pages[1]?.right || ''),
+        p1: m.pages[1]?.right || '',
+        pageCount: m.pages.length,
+      };
+    });
+    const eatenOnly = afterBs.p1 === beforeBs.p1
+      && afterBs.p0plain === beforeBs.p0plain.slice(0, -1);
+    expect(eatenOnly).toBe(false);
+    expect(
+      afterBs.p1plain.length < beforeBs.p1plain.length
+      || afterBs.pageCount < 2
+      || afterBs.p0plain.length > beforeBs.p0plain.length,
+    ).toBe(true);
+    await expect.poll(async () => clippedDiaryBoxes(page), { timeout: 10000 }).toEqual([]);
+  });
+
+  test('Enter on aligned page 1 does not leave blank gaps between page 2 content lines', async ({ page }) => {
+    // Repro: fill with a justified paragraph, press Enter near the bottom so
+    // blanks + continuation spill. Page 2 must not look sparse (blank <p>
+    // between every content line / one-word peels stacked above blanks).
+    await fillSinglePage(page, { freeLines: 2 });
+    await expect.poll(async () => page.locator('.diary-page').count()).toBe(1);
+
+    const long = `${'यह एक बहुत लंबा पैराग्राफ है जो कई पंक्तियों में लपेटा जाएगा। '.repeat(35)}`.trim();
+    const capacityHtml = await page.evaluate(
+      () => window.__bpDiarySheet.getModel().pages[0].right,
+    );
+    await page.evaluate(({ cap, para }) => {
+      window.__bpDiarySheet.setModel({
+        pages: [{
+          hasHeader: true,
+          header: {
+            fir_number: '', thana: '', district: '', case_diary_no: '',
+            rule_no: '', against_1: '', against_2: '', special_report_no: '',
+            fir_date: '', event_date_place: '', sections: '', investigation_record: '',
+          },
+          left: '',
+          // Right-align matches the toolbar case in the gap screenshot.
+          right: `${cap}<p class="ql-align-right">${para}</p>`,
+        }],
+      });
+    }, { cap: capacityHtml, para: long });
+
+    await expect.poll(async () => page.locator('.diary-page').count(), { timeout: 15000 })
+      .toBeGreaterThan(1);
+    await expect.poll(async () => clippedDiaryBoxes(page), { timeout: 10000 }).toEqual([]);
+
+    // Caret in the aligned paragraph on page 1 (near its start on this page),
+    // then Enter several times to push blanks and text onto page 2.
+    await page.evaluate(() => {
+      const q = window.__q(0);
+      q.focus();
+      const text = q.getText();
+      const marker = 'यह एक बहुत लंबा';
+      const at = text.lastIndexOf(marker);
+      q.setSelection(at >= 0 ? at : Math.max(0, q.getLength() - 80), 0, 'api');
+    });
+    for (let i = 0; i < 3; i++) {
+      await page.locator('.diary-page').nth(0).locator('.ql-editor').press('Enter');
+      await page.waitForTimeout(300);
+    }
+    await expect.poll(async () => clippedDiaryBoxes(page), { timeout: 10000 }).toEqual([]);
+
+    const shape = await page.evaluate(() => {
+      const html = window.__bpDiarySheet.getModel().pages[1]?.right || '';
+      const holder = document.createElement('div');
+      holder.innerHTML = html;
+      const blocks = [...holder.children].map((el) => ({
+        blank: !/\S/.test(el.textContent || ''),
+        align: (el.getAttribute('class') || '').match(/ql-align-\w+/)?.[0] || '',
+        words: (el.textContent || '').trim().split(/\s+/).filter(Boolean).length,
+        text: (el.textContent || '').slice(0, 40),
+      }));
+      let i = 0;
+      while (i < blocks.length && blocks[i].blank) i += 1;
+      const leadingBlanks = i;
+      // Count blank runs only when another content block follows (trailing
+      // Quill `<p><br></p>` after the last line is not a gap between lines).
+      let blanksBetweenContent = 0;
+      let contentBlocks = 0;
+      let oneWordContent = 0;
+      let sawContent = false;
+      let blankSinceContent = false;
+      for (; i < blocks.length; i++) {
+        if (blocks[i].blank) {
+          if (sawContent) blankSinceContent = true;
+        } else {
+          if (blankSinceContent) blanksBetweenContent += 1;
+          blankSinceContent = false;
+          sawContent = true;
+          contentBlocks += 1;
+          if (blocks[i].words === 1) oneWordContent += 1;
+        }
+      }
+      return {
+        leadingBlanks,
+        blanksBetweenContent,
+        contentBlocks,
+        oneWordContent,
+        totalBlocks: blocks.length,
+        head: blocks.slice(0, 12),
+        htmlHead: html.slice(0, 400),
+      };
+    });
+
+    // Intentional Enter blanks may lead page 2; they must not interleave the
+    // spilled aligned continuation into a sparse column.
+    expect(shape.contentBlocks).toBeGreaterThan(0);
+    expect(shape.blanksBetweenContent).toBe(0);
+    expect(shape.oneWordContent).toBeLessThan(5);
+    // Continuation should stay in few blocks (ideally one), not one line per <p>.
+    expect(shape.contentBlocks).toBeLessThanOrEqual(3);
+  });
+
   test('showing header on a full page spills instead of clipping', async ({ page }) => {
     await page.evaluate((t) => {
       window.__bpDiarySheet.setModel({

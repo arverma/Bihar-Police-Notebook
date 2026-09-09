@@ -303,6 +303,147 @@ export function takeFirstContentUnit(content) {
 }
 
 /**
+ * Align signature for a block: ql-align-* class and/or text-align style.
+ * Used so live peel can merge a peeled word into the spill continuation
+ * without welding unrelated paragraphs that only share the same tag.
+ * @param {Element} el
+ * @returns {string}
+ */
+function blockAlignKey(el) {
+  if (!el) return '';
+  const cls = (el.getAttribute('class') || '')
+    .split(/\s+/)
+    .filter((c) => /^ql-align-/.test(c))
+    .sort()
+    .join(' ');
+  const st = el.getAttribute('style') || '';
+  const align = /text-align\s*:\s*([^;]+)/i.exec(st);
+  const styleAlign = align ? align[1].trim().toLowerCase() : '';
+  return `${cls}|${styleAlign}`;
+}
+
+/**
+ * True when a splittable block has no visible text (Enter blank / `<p><br></p>`).
+ * @param {Element} el
+ * @returns {boolean}
+ */
+function isBlankSplittableBlock(el) {
+  if (!isSplittableBlock(el)) return false;
+  return !/\S/.test(el.textContent || '');
+}
+
+/**
+ * Prepend a peeled content unit onto spill HTML for live peel.
+ * When peel sheds a trailing word as its own `<p class="ql-align-*">`, concat
+ * would leave one-word lines on the next page. If the peeled block matches the
+ * spill's first text-bearing splittable block (tag + align), merge into that
+ * block — skipping leading Enter blanks so peels do not stack in front of them.
+ * Otherwise plain concat (separate paragraphs, lists, align mismatch).
+ * @param {string} peeledHtml
+ * @param {string} spillHtml
+ * @returns {string}
+ */
+export function prependPeeledBlock(peeledHtml, spillHtml) {
+  const peeled = String(peeledHtml ?? '');
+  const spill = String(spillHtml ?? '');
+  if (!peeled) return spill;
+  if (!spill) return peeled;
+  if (isPlainDocContent(peeled) || isPlainDocContent(spill)) {
+    return peeled + spill;
+  }
+
+  const peeledBlocks = htmlBlocks(peeled);
+  if (peeledBlocks.length !== 1 || !isSplittableBlock(peeledBlocks[0])) {
+    return peeled + spill;
+  }
+  const head = peeledBlocks[0];
+  const headText = head.textContent || '';
+  // Empty / blank peeled blocks are whole units — never merge into spill.
+  if (!/\S/.test(headText)) return peeled + spill;
+
+  const spillBlocks = htmlBlocks(spill);
+  if (!spillBlocks.length) return peeled + spill;
+
+  let i = 0;
+  while (i < spillBlocks.length && isBlankSplittableBlock(spillBlocks[i])) i += 1;
+  if (i >= spillBlocks.length) return peeled + spill;
+
+  const target = spillBlocks[i];
+  if (!isSplittableBlock(target)) return peeled + spill;
+  if (target.tagName !== head.tagName) return peeled + spill;
+  if (blockAlignKey(target) !== blockAlignKey(head)) return peeled + spill;
+  if (!/\S/.test(target.textContent || '')) return peeled + spill;
+
+  const merged = blockHtmlWithText(target, headText + (target.textContent || ''));
+  return serializeBlocks(spillBlocks.slice(0, i))
+    + merged
+    + serializeBlocks(spillBlocks.slice(i + 1));
+}
+
+/**
+ * Join right-column spill HTML onto the following page's existing right HTML.
+ * Reunites same-align pager-cut paragraph halves at the seam. Strips at most
+ * one trailing empty block on spill before merge; two or more trailing blanks
+ * mean intentional Enters — concat only. Left column must not use this.
+ * @param {string} spillHtml
+ * @param {string} nextHtml
+ * @returns {string}
+ */
+export function joinRightSpillOntoNext(spillHtml, nextHtml) {
+  const spill = String(spillHtml ?? '');
+  const next = String(nextHtml ?? '');
+  if (!spill) return next;
+  if (!next) return spill;
+  if (isPlainDocContent(spill) || isPlainDocContent(next)) {
+    return spill + next;
+  }
+
+  const spillBlocks = htmlBlocks(spill);
+  const nextBlocks = htmlBlocks(next);
+  if (!spillBlocks.length || !nextBlocks.length) return spill + next;
+
+  let lastTextIdx = -1;
+  for (let i = spillBlocks.length - 1; i >= 0; i--) {
+    if (isSplittableBlock(spillBlocks[i]) && !isBlankSplittableBlock(spillBlocks[i])) {
+      lastTextIdx = i;
+      break;
+    }
+  }
+  let firstTextIdx = -1;
+  for (let i = 0; i < nextBlocks.length; i++) {
+    if (isSplittableBlock(nextBlocks[i]) && !isBlankSplittableBlock(nextBlocks[i])) {
+      firstTextIdx = i;
+      break;
+    }
+  }
+  if (lastTextIdx < 0 || firstTextIdx < 0) return spill + next;
+
+  const last = spillBlocks[lastTextIdx];
+  const first = nextBlocks[firstTextIdx];
+  if (last.tagName !== first.tagName) return spill + next;
+  const alignKey = blockAlignKey(last);
+  // Unaligned <p>29</p>+<p>30</p> share an empty align key — must not weld.
+  // Only reunite explicitly aligned pager-cut halves (center/justify/right/left).
+  if (!alignKey || alignKey === '|') return spill + next;
+  if (alignKey !== blockAlignKey(first)) return spill + next;
+
+  let trailingBlanks = 0;
+  for (let i = lastTextIdx + 1; i < spillBlocks.length; i++) {
+    if (isBlankSplittableBlock(spillBlocks[i])) trailingBlanks += 1;
+    else return spill + next; // non-blank after last text — not a clean seam
+  }
+  if (trailingBlanks > 1) return spill + next;
+
+  const merged = blockHtmlWithText(
+    last,
+    (last.textContent || '') + (first.textContent || ''),
+  );
+  return serializeBlocks(spillBlocks.slice(0, lastTextIdx))
+    + merged
+    + serializeBlocks(nextBlocks.slice(firstTextIdx + 1));
+}
+
+/**
  * Peel last top-level HTML block, or a trailing word from the last splittable
  * paragraph (so live peel can shed one line at a time).
  * @param {string} content

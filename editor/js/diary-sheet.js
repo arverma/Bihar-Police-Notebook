@@ -14,8 +14,10 @@ import {
   stripHtmlToPlain,
 } from './quill-pages.js';
 import {
+  joinRightSpillOntoNext,
   measureRichFits,
   peelLastContentUnit,
+  prependPeeledBlock,
   takeFirstContentUnit,
   takeFittingHtmlPrefix,
 } from './page-fit.js';
@@ -1607,7 +1609,10 @@ export function initDiarySheet(container, template, hooks) {
           const peeled = peelLastContentUnit(keep || text);
           if (peeled.peeled) {
             keep = peeled.keep;
-            spill = peeled.peeled;
+            // Same merge as peelUntilLiveFits — avoid one-word <p> blocks.
+            spill = col === 'right'
+              ? prependPeeledBlock(peeled.peeled, '')
+              : peeled.peeled;
           } else {
             break;
           }
@@ -1620,7 +1625,10 @@ export function initDiarySheet(container, template, hooks) {
       if (i + 1 >= model.pages.length) {
         model.pages.push({ hasHeader: false, left: '', right: '' });
       }
-      model.pages[i + 1][col] = joinColumnContent(spill, model.pages[i + 1][col] || '');
+      const existing = model.pages[i + 1][col] || '';
+      model.pages[i + 1][col] = col === 'right'
+        ? joinRightSpillOntoNext(spill, existing)
+        : joinColumnContent(spill, existing);
       i += 1;
     }
 
@@ -1756,7 +1764,9 @@ export function initDiarySheet(container, template, hooks) {
       const { keep: nextKeep, peeled } = peelLastContentUnit(k);
       if (!peeled) break;
       k = nextKeep;
-      s = joinColumnContent(peeled, s);
+      // Right column: merge peeled word into spill's first matching paragraph
+      // so aligned peels do not become one <p> per word. Left stays plain join.
+      s = col === 'right' ? prependPeeledBlock(peeled, s) : joinColumnContent(peeled, s);
     }
     return { keep: k, spill: s };
   }
