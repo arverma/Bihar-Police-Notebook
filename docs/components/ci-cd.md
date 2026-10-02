@@ -9,7 +9,7 @@ All automation lives in `.github/workflows/`. There are three workflow files.
 | Workflow file | Triggers | What it does |
 |---|---|---|
 | [`test.yml`](../../.github/workflows/test.yml) | PR open/update | Runs the full test suite |
-| [`deploy-staging.yml`](../../.github/workflows/deploy-staging.yml) | Push to any non-`main` branch | Tests → deploys to Cloudflare Pages (staging) |
+| [`deploy-staging.yml`](../../.github/workflows/deploy-staging.yml) | Push to any non-`main` branch | Tests (skipped when the branch has an open PR, which runs them) → deploys to Cloudflare Pages (staging) |
 | [`pages.yml`](../../.github/workflows/pages.yml) | Push of a `v*` tag, manual `workflow_dispatch` | Tests → deploys to Cloudflare Pages (production) |
 
 **No workflow fires on documentation-only changes.** Any push where every changed file matches `docs/**` or `**.md` is skipped automatically via `paths-ignore`.
@@ -45,10 +45,11 @@ Runs on every push to a feature branch (anything that is not `main` or `master`)
 
 Also triggerable manually via `workflow_dispatch` for any branch.
 
-Jobs (sequential, `deploy` needs `test`):
+Jobs (sequential):
 
-1. **`test`** — calls `test.yml` via `workflow_call`; staging never gets a build that hasn't passed the suite
-2. **`deploy`** — `cloudflare/wrangler-action@v3` runs:
+1. **`open-pr`** — checks whether the branch has an open pull request
+2. **`test`** — calls `test.yml` via `workflow_call`, only when there is no open PR (the PR's own `test.yml` run covers it otherwise, so the suite does not run twice per push). With a PR open, staging can deploy before the PR's tests finish.
+3. **`deploy`** — runs after `test` passes, or right away when `test` was skipped; — `cloudflare/wrangler-action@v3` runs:
    ```
    pages deploy editor --project-name=bpdiary --branch=staging
    ```
@@ -111,7 +112,7 @@ paths-ignore:
   - '**.md'     # any Markdown file anywhere in the repo
 ```
 
-This applies to `test.yml` (PR trigger) and `deploy-staging.yml` (push trigger). It does **not** and cannot apply to `workflow_call` — when staging or production deploys call `test.yml` internally, the full suite always runs regardless of what files changed.
+This applies to `test.yml` (PR trigger) and `deploy-staging.yml` (push trigger). It does **not** and cannot apply to `workflow_call` — when staging (without an open PR) or production deploys call `test.yml` internally, the full suite always runs regardless of what files changed.
 
 ---
 

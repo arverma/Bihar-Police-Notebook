@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { setDoc, clippedBoxes } from '../pagination-helpers.js';
+import { setDoc, clippedBoxes, switchTemplate } from '../pagination-helpers.js';
 
 /**
  * Pixel baselines for the states users actually look at.
@@ -142,7 +142,7 @@ test.describe('Appearance', () => {
 
   test('letter template', async ({ page }) => {
     await ready(page);
-    await page.locator('[data-template="letter"]').click();
+    await switchTemplate(page, 'letter');
     await expect(page.locator('.letter-page').first()).toBeVisible();
     await settle(page);
     await freezeFrame(page);
