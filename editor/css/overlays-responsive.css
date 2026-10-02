@@ -47,6 +47,18 @@
         height: 14px;
         margin: 0 2px;
     }
+
+    /* The toolbar sits at the top on phones: open the table actions below it. */
+    .format-toolbar-table {
+        bottom: auto;
+        top: calc(100% + 6px);
+        padding: 3px 6px;
+    }
+
+    .format-toolbar button svg {
+        width: 14px;
+        height: 14px;
+    }
 }
 
 @media (max-width: 640px) {

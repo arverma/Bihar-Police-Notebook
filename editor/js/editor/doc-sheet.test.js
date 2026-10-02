@@ -45,3 +45,21 @@ test('round-trips its content', () => {
     s.setContent(serializeDoc(json));
     expect(JSON.parse(s.getContent()).doc).toMatchObject(json);
 });
+
+test('a document holding only an image or an empty table counts as content (it is saved)', () => {
+    const s = letterSheet();
+    expect(s.hasMeaningfulContent()).toBe(false);
+    const withImage = emptyLetterJSON();
+    withImage.content[0].content[0].content = [{ type: 'image', attrs: { src: 'data:image/png;base64,iVBORw0KGgo=' } }];
+    s.setContent(serializeDoc(withImage));
+    expect(s.getPlainText()).toBe('');
+    expect(s.hasMeaningfulContent()).toBe(true);
+
+    const withTable = emptyLetterJSON();
+    withTable.content[0].content[0].content = [{
+        type: 'table',
+        content: [{ type: 'tableRow', content: [{ type: 'tableCell', content: [{ type: 'paragraph' }] }] }],
+    }];
+    s.setContent(serializeDoc(withTable));
+    expect(s.hasMeaningfulContent()).toBe(true);
+});

@@ -1299,6 +1299,12 @@ function initApp() {
         }
     }
 
+    // Editor modules report user-facing problems (e.g. an unreadable image) as events.
+    document.addEventListener('bp:notify', (e) => {
+        const message = /** @type {CustomEvent} */ (e).detail?.message;
+        if (message) showNotification(message);
+    });
+
     if (formatToolbarEl) {
         formatToolbar = initFormatToolbar(formatToolbarEl, () => activeSheet()?.editor ?? null);
         const syncToolbar = () => formatToolbar?.sync();

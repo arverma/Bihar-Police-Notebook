@@ -9,7 +9,9 @@
  * (./pager/) keeps each column flowing across pages by moving blocks between
  * same-column cells.
  *
- * `cont` on a paragraph or list marks the tail of a block the pager cut at a
+ * Writing boxes also hold images (./images.js) and tables (./tables.js).
+ *
+ * `cont` on a paragraph, list or table marks the tail of a block the pager cut at a
  * page edge: "this continues the last block of the previous page's cell in
  * this column". Absorbing re-joins it — and only it. Blocks without `cont`
  * are separate paragraphs and are never joined, so moving the page boundary
@@ -28,15 +30,17 @@ import {
     Italic,
     Underline,
     HardBreak,
-    Image,
     BulletList,
     OrderedList,
     ListItem,
     ListKeymap,
     TextAlign,
     UndoRedo,
+    Gapcursor,
 } from './tiptap.js';
 import { HEADER_FIELDS, emptyHeader } from './diary-geometry.js';
+import { FlowImage } from './images.js';
+import { FlowTable, FlowTableRow, FlowTableCell, FlowTableHeader } from './tables.js';
 
 /** `cont` attribute shared by paragraphs and lists. */
 const contAttribute = {
@@ -67,12 +71,10 @@ const FlowBulletList = BulletList.extend({
     },
 });
 
-/** Block image; the pager never cuts it, CSS caps it at one box height. */
-const BlockImage = Image.configure({ inline: false, allowBase64: true });
-
 export const FlowCell = Node.create({
     name: 'flowCell',
-    content: '(paragraph | bulletList | orderedList | image)+',
+    // Images are never cut; tables are cut between rows (see ./tables.js).
+    content: '(paragraph | bulletList | orderedList | image | table)+',
     isolating: true,
     defining: true,
     addAttributes() {
@@ -146,13 +148,19 @@ function sharedExtensions() {
         Italic,
         Underline,
         HardBreak,
-        BlockImage,
+        FlowImage,
+        FlowTable,
+        FlowTableRow,
+        FlowTableCell,
+        FlowTableHeader,
         FlowBulletList,
         FlowOrderedList,
         ListItem,
         ListKeymap,
         TextAlign.configure({ types: ['paragraph'], alignments: ['left', 'center', 'right', 'justify'] }),
         UndoRedo.configure({ depth: 100, newGroupDelay: 1000 }),
+        // A caret before/after a table or image that starts or ends a box.
+        Gapcursor,
         FlowCell,
     ];
 }

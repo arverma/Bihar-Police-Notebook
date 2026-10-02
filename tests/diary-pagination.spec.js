@@ -37,6 +37,34 @@ test.describe('Diary pagination reflow', () => {
     expect(await columnBlocks(page)).toEqual(paras);
   });
 
+  test('emptying a full box pulls the rest of the column up in one settle', async ({ page }) => {
+    const capacity = await fillSinglePage(page);
+    const lines = numberedLines(1, capacity * 3);
+    await setDoc(page, [{ right: lines }]);
+    expect(await pageCount(page)).toBeGreaterThanOrEqual(3);
+    const onFirst = (await columnPages(page, 'right'))[0].length;
+    // Select the whole page-1 box and delete it: every later line flows up.
+    await setCaret(page, { col: 'right', page: 0 });
+    await page.keyboard.press('ControlOrMeta+a');
+    await page.keyboard.press('Delete');
+    await settle(page);
+    expect(await columnBlocks(page)).toEqual(lines.slice(onFirst));
+    expect((await columnPages(page, 'right'))[0][0]).toBe(String(onFirst + 1));
+    expect(await clippedBoxes(page)).toEqual([]);
+    const c = await caret(page);
+    expect(c.page).toBe(0);
+    expect(c.col).toBe('right');
+  });
+
+  test('a blank box between two pages does not block the page before it', async ({ page }) => {
+    // Page 2's box is blank (its only content was deleted); page 1 has room.
+    await setDoc(page, [{ right: ['one'] }, { right: [''] }, { right: ['three', 'four'] }]);
+    await setCaret(page, { col: 'right', page: 0 });
+    await page.keyboard.type('!');
+    await settle(page);
+    expect(await columnPages(page, 'right')).toEqual([['one!', 'three', 'four']]);
+  });
+
   test('healthy two-page diary is not re-cut on open', async ({ page }) => {
     await setDoc(page, [
       { left: ['बायाँ एक'], right: ['पृष्ठ एक की पहली पंक्ति।'] },

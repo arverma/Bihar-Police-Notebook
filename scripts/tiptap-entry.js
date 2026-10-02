@@ -19,10 +19,14 @@ export { HardBreak } from '@tiptap/extension-hard-break';
 export { Image } from '@tiptap/extension-image';
 export { BulletList, OrderedList, ListItem, ListKeymap } from '@tiptap/extension-list';
 export { TextAlign } from '@tiptap/extension-text-align';
-export { UndoRedo } from '@tiptap/extensions';
+export { UndoRedo, Gapcursor } from '@tiptap/extensions';
+export { Table, TableRow, TableCell, TableHeader } from '@tiptap/extension-table';
 
-export { Plugin, PluginKey, TextSelection, AllSelection, Selection, EditorState } from '@tiptap/pm/state';
-export { Fragment } from '@tiptap/pm/model';
+export { Plugin, PluginKey, TextSelection, AllSelection, NodeSelection, Selection, EditorState } from '@tiptap/pm/state';
+export { Fragment, DOMSerializer } from '@tiptap/pm/model';
 export { Decoration, DecorationSet } from '@tiptap/pm/view';
 export { canJoin, ReplaceStep, ReplaceAroundStep } from '@tiptap/pm/transform';
-export { undoDepth } from '@tiptap/pm/history';
+export { undoDepth, closeHistory } from '@tiptap/pm/history';
+export {
+    TableMap, CellSelection, selectedRect, isInTable, addColumn, removeColumn, goToNextCell,
+} from '@tiptap/pm/tables';

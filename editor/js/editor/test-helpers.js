@@ -5,29 +5,12 @@
 import { getSchema, EditorState, TextSelection } from './tiptap.js';
 import { letterExtensions, diaryExtensions } from './schema.js';
 import { emptyHeader } from './diary-geometry.js';
+import { blockJSON, tableText } from './block-spec.js';
+
+export { blockJSON, tableText };
 
 export const letterSchema = getSchema(letterExtensions());
 export const diarySchema = getSchema(diaryExtensions());
-
-/**
- * Block spec: 'text' → paragraph; '' → blank line; { t, cont, align } → paragraph;
- * { ol: ['a','b'], start, cont } → ordered list.
- */
-export function blockJSON(b) {
-    if (typeof b === 'string') return b ? { type: 'paragraph', content: [{ type: 'text', text: b }] } : { type: 'paragraph' };
-    if (b.ol) {
-        return {
-            type: 'orderedList',
-            attrs: { start: b.start ?? 1, cont: Boolean(b.cont) },
-            content: b.ol.map((t) => ({ type: 'listItem', content: [blockJSON(t)] })),
-        };
-    }
-    return {
-        type: 'paragraph',
-        attrs: { cont: Boolean(b.cont), textAlign: b.align ?? null },
-        content: b.t ? [{ type: 'text', text: b.t }] : undefined,
-    };
-}
 
 function cellJSON(col, blocks) {
     return { type: 'flowCell', attrs: { col }, content: (blocks.length ? blocks : ['']).map(blockJSON) };
@@ -84,6 +67,8 @@ export function columnPages(doc, col) {
             cell.forEach((b) => {
                 const prefix = b.attrs.cont ? '+' : '';
                 if (b.type.name === 'orderedList') blocks.push(`${prefix}ol(${b.attrs.start}):${b.textContent}`);
+                else if (b.type.name === 'table') blocks.push(`${prefix}table:${tableText(b)}`);
+                else if (b.type.name === 'image') blocks.push(`${prefix}img`);
                 else blocks.push(prefix + b.textContent);
             });
         });

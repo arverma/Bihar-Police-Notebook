@@ -5,7 +5,7 @@
  * dictation.
  */
 import { createDocEditor, loadDocContent } from './mount.js';
-import { serializeDoc, parseDoc, docPlainText, docPages } from './doc-format.js';
+import { serializeDoc, parseDoc, docPlainText, docPages, docHasObjects } from './doc-format.js';
 import { emptyLetterJSON, emptyDiaryJSON, diaryPageJSON } from './schema.js';
 import { createTextField } from './text-field.js';
 import { PAGER_META } from './pager/plugin.js';
@@ -120,6 +120,8 @@ export function createDocSheet(container, template, hooks = {}) {
 
     function hasMeaningfulContent() {
         if (getPlainText().trim()) return true;
+        // A photo or an (empty) table is work too: it must be saved.
+        if (docHasObjects(getJSON())) return true;
         if (template !== 'diary') return false;
         return docPages(getJSON()).some((p) => Object.entries(p.fields)
             .some(([k, v]) => k !== 'rule_no' && String(v ?? '').trim()));

@@ -28,6 +28,8 @@ Run locally after any pager or editor change, before deploying. Automated covera
 11. **Blank lines** — Press Enter several times on the last page. Blanks survive moving to another page, reload, and PDF.
 12. **Undo/redo across pages** — Type on page 1, click page 2, Ctrl+Z: page 1's edit is undone and the caret returns there. Paste that creates page 2: one Ctrl+Z per step returns to one page; Ctrl+Shift+Z restores.
 13. **Lists** — A numbered list that crosses a page edge keeps counting on the next page.
+13b. **Tables** — Insert a table (toolbar), type with Tab between cells, keep pressing Tab in the last cell until it crosses the page. It is cut between rows, page 2 repeats the header row, nothing clips. Add a column from page 2: page 1 gets it too. Turn the header row off: the repeat disappears. Delete table from page 2: every piece goes; Ctrl+Z brings it back. PDF shows the repeated header.
+13c. **Images** — Insert a phone photo (toolbar → camera / gallery on a phone). It appears at the caret, scaled to the column. Select it, drag the corner handle, and Alt+←/→: the width changes and survives reload and PDF; Ctrl+Z undoes one resize at a time. Paste a screenshot; drop a file from the desktop. A very tall image never exceeds one box.
 14. **Older-format documents** — With an old document in History: it shows "Older format"; clicking it offers Delete / Keep; Escape keeps it.
 
 ## Real devices

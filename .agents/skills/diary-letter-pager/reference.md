@@ -14,6 +14,11 @@
 | `editor/js/editor/diary-geometry.js` | A4 geometry, header fields, header prefill |
 | `editor/js/editor/doc-sheet.js` | Sheet API used by `main.js` (content, undo, page focus, active field) |
 | `editor/js/editor/text-field.js` | Paragraph-offset text view for transliteration / dictation |
+| `editor/js/editor/tables.js` | Table schema, split-table chain (`tablePieces`), chain-wide commands, Tab across pieces, repeated header (decoration + node view) |
+| `editor/js/editor/images.js` | Image node (width % of column), resize node view, paste/drop |
+| `editor/js/editor/image-file.js` | Downscale/re-encode picked files to a data URL |
+| `editor/js/editor/insert-block.js` | Insert an image/table as a direct child of the flowCell |
+| `editor/js/editor/block-spec.js` | Block specs shared by unit helpers and `__bpTest.setDoc` |
 | `editor/js/editor/doc-format.js` | Saved format `{format:'bp-doc', v, doc}`, unsupported detection |
 | `editor/js/editor/test-hooks.js` | `window.__bpTest` for e2e tests |
 | `editor/js/export/print-document.js` | Live-clone print source of truth |
@@ -51,6 +56,9 @@ Codex agent shells often set `PLAYWRIGHT_BROWSERS_PATH` to a throwaway sandbox d
 - Only a cell's first block may carry `cont`; page 1 never does.
 - The caret stays on the same character across any pager transaction.
 - A writing box never clips its last line, at any `--page-scale`.
+- Tables are cut only between rows (`tableCutIndex`: no rowspan crossed, a header row keeps one body row). The pieces of one table share one column layout; every column/header/delete command walks `tablePieces`. The repeated header is never in the document.
+- Images and tables are only ever direct children of a flowCell (`insert-block.js`); table cells hold text and lists only.
+- Absorbing into a blank box keeps a caret that was on that blank line in the box (`keepCaretInFilledBox`); a blank box never blocks the page before it (`mustVisit` / step-back in `plugin.js`).
 
 ## History
 

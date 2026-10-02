@@ -218,6 +218,41 @@ body {
     background: rgba(26, 54, 93, 0.22);
 }
 
+/* Table actions: a second pill above the toolbar, only while in a table. */
+.format-toolbar-table {
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 8px);
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    width: max-content;
+    padding: 4px 8px;
+    border: inherit;
+    border-radius: 999px;
+    background: inherit;
+    box-shadow: inherit;
+}
+
+.format-toolbar-table[hidden] {
+    display: none;
+}
+
+.format-toolbar button svg {
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.4;
+    stroke-linecap: round;
+}
+
+.format-toolbar button svg .fill {
+    fill: currentColor;
+    stroke: none;
+}
+
 /* Legacy dashed markers removed — letter now uses diary-style page cards */
 
 .editor-wrapper.editor-diary {

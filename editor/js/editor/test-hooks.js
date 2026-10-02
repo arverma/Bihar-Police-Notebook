@@ -3,23 +3,14 @@
  * tests through document state, never through DOM internals, so a test can
  * never change what it is measuring by reading it.
  *
- * Block specs (setDoc / blocks):
- *   'text'  → paragraph      ''  → blank line
- *   { t: 'text', cont, align }  → paragraph (cont = continuation of a cut paragraph)
+ * Block specs (setDoc): see ./block-spec.js — paragraphs, continuations,
+ * lists, tables and images.
  */
 import { TextSelection } from './tiptap.js';
 import { serializeDoc } from './doc-format.js';
 import { collectPages, cellContentRange } from './pager/layout.js';
 import { emptyHeader } from './diary-geometry.js';
-
-function blockJSON(b) {
-    if (typeof b === 'string') return b ? { type: 'paragraph', content: [{ type: 'text', text: b }] } : { type: 'paragraph' };
-    return {
-        type: 'paragraph',
-        attrs: { cont: Boolean(b.cont), textAlign: b.align ?? null },
-        content: b.t ? [{ type: 'text', text: b.t }] : undefined,
-    };
-}
+import { blockJSON, tableText } from './block-spec.js';
 
 const cell = (col, blocks = []) => ({
     type: 'flowCell',
@@ -64,7 +55,10 @@ export function createTestHooks(sheets) {
             const ed = sheetFor(template).editor;
             return collectPages(ed.state.doc).map((p) => {
                 const out = [];
-                p.cells[col]?.node.forEach((b) => out.push((b.attrs.cont ? '+' : '') + b.textContent));
+                p.cells[col]?.node.forEach((b) => {
+                    const label = b.type.name === 'table' ? `table:${tableText(b)}` : b.type.name === 'image' ? 'img' : b.textContent;
+                    out.push((b.attrs.cont ? '+' : '') + label);
+                });
                 return out;
             });
         },

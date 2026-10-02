@@ -61,6 +61,15 @@ export function printDocumentExtraCss() {
     .print-pages .bp-cell {
       color: #000;
     }
+    /* Editing state cloned from the live page: a selected image or table
+       cells, and the gap cursor, never reach paper. */
+    .print-pages .ProseMirror-selectednode {
+      outline: none !important;
+    }
+    .print-pages .selectedCell::after,
+    .print-pages .ProseMirror-gapcursor {
+      display: none !important;
+    }
     /* Static replacement for the titles-row input keeps its own line (the live
        rule targets input, which no longer matches after flattening). */
     .print-pages .fir-table th.right-column .print-static {

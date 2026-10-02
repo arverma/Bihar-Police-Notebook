@@ -7,7 +7,7 @@
  * a delete + insert, and a plain delete would map a caret inside the moved
  * range to the deletion point. `moveBlocks` remaps it explicitly.
  */
-import { Fragment, TextSelection, Selection, canJoin } from '../tiptap.js';
+import { Fragment, TextSelection, NodeSelection, Selection, canJoin } from '../tiptap.js';
 import { collectPages, cellContentRange, isBlankCell } from './layout.js';
 
 /** Transaction meta listing the moves an op made (see mapThroughPager). */
@@ -25,16 +25,26 @@ export const MOVES_META = 'bpPagerMoves';
 /** Selection anchor/head, and stored marks, before an op. */
 function captureSelection(tr) {
     const { anchor, head } = tr.selection;
-    return { anchor, head, stored: tr.storedMarks, stepStart: tr.steps.length, isText: tr.selection instanceof TextSelection };
+    return {
+        anchor,
+        head,
+        stored: tr.storedMarks,
+        stepStart: tr.steps.length,
+        isText: tr.selection instanceof TextSelection,
+        isNode: tr.selection instanceof NodeSelection,
+    };
 }
 
-function setSelectionSafe(tr, anchor, head) {
+function setSelectionSafe(tr, anchor, head, isNode = false) {
     const size = tr.doc.content.size;
     const a = Math.max(0, Math.min(anchor, size));
     const h = Math.max(0, Math.min(head, size));
     const $a = tr.doc.resolve(a);
     const $h = tr.doc.resolve(h);
-    if ($a.parent.inlineContent && $h.parent.inlineContent) {
+    // A selected image keeps its selection (and resize handle) when it moves.
+    if (isNode && tr.doc.nodeAt(a) && NodeSelection.isSelectable(tr.doc.nodeAt(a))) {
+        tr.setSelection(NodeSelection.create(tr.doc, a));
+    } else if ($a.parent.inlineContent && $h.parent.inlineContent) {
         tr.setSelection(TextSelection.create(tr.doc, a, h));
     } else {
         tr.setSelection(Selection.near($h));
@@ -52,7 +62,20 @@ function restoreSelection(tr, cap, from, to, insertAt) {
     if (!inside(cap.anchor) && !inside(cap.head)) return;
     const mapping = tr.mapping.slice(cap.stepStart);
     const remap = (p) => (inside(p) ? insertAt + (p - from) : mapping.map(p));
-    setSelectionSafe(tr, remap(cap.anchor), remap(cap.head));
+    setSelectionSafe(tr, remap(cap.anchor), remap(cap.head), cap.isNode);
+    if (cap.stored) tr.setStoredMarks(cap.stored);
+}
+
+/**
+ * A caret on the blank line of a box that an op fills (the line is replaced,
+ * not kept) goes to the start of what filled it. Plain mapping would push it
+ * past the replaced range into the next box — another column or page.
+ * `blankFrom`/`blankTo` are pre-op positions; `insertAt` is post-op.
+ */
+function keepCaretInFilledBox(tr, cap, blankFrom, blankTo, insertAt) {
+    const inBlank = (p) => p >= blankFrom && p <= blankTo;
+    if (!inBlank(cap.anchor) || !inBlank(cap.head)) return;
+    tr.setSelection(Selection.near(tr.doc.resolve(insertAt), 1));
     if (cap.stored) tr.setStoredMarks(cap.stored);
 }
 
@@ -82,6 +105,53 @@ export function splitList(tr, listPos, itemIndex) {
     return pos + 1;
 }
 
+/** A row made only of header cells. */
+export function isHeaderRow(row) {
+    return Boolean(row) && row.childCount > 0 && row.content.content.every((c) => c.type.name === 'tableHeader');
+}
+
+/**
+ * Fewest rows the first piece of a table may keep on a page: a header row is
+ * never left alone at a page bottom, it goes with at least one body row.
+ */
+export function tableMinRows(table) {
+    return !table.attrs.cont && table.childCount > 1 && isHeaderRow(table.firstChild) ? 2 : 1;
+}
+
+/**
+ * Row index to cut a table before: the last boundary at or before `rowIndex`
+ * that no rowspan crosses and that keeps at least `minRows` rows before it.
+ * @returns {number} a row index >= 1, or -1 when the table cannot be cut
+ */
+export function tableCutIndex(table, rowIndex, minRows = 1) {
+    const safe = [];
+    let reach = 0; // first row not covered by a rowspan from the rows above
+    for (let i = 0; i < table.childCount; i++) {
+        safe[i] = reach <= i;
+        table.child(i).forEach((cell) => {
+            reach = Math.max(reach, i + (cell.attrs.rowspan || 1));
+        });
+    }
+    for (let i = Math.min(rowIndex, table.childCount - 1); i >= Math.max(1, minRows); i--) {
+        if (safe[i]) return i;
+    }
+    return -1;
+}
+
+/**
+ * Split a table before row `rowIndex`; the tail table becomes a
+ * continuation (its header row is repeated on screen and paper, never in
+ * the document — see ../tables.js).
+ * @returns {number} position before the tail table
+ */
+export function splitTable(tr, tablePos, rowIndex) {
+    const table = tr.doc.nodeAt(tablePos);
+    let pos = tablePos + 1;
+    for (let i = 0; i < rowIndex; i++) pos += table.child(i).nodeSize;
+    tr.split(pos, 1, [{ type: table.type, attrs: { ...table.attrs, cont: true } }]);
+    return pos + 1;
+}
+
 /**
  * Move blocks [from, end of cell) of page `pageIndex`/`col` to the start of
  * the same column on the next page, creating that page if needed.
@@ -101,6 +171,7 @@ export function spillToNext(tr, template, pageIndex, col, from) {
     const map = (p) => tr.mapping.slice(delStep).map(p);
 
     let insertAt;
+    let blank = null; // the next page's blank line this spill replaces
     const next = pages[pageIndex + 1];
     if (!next) {
         const at = map(page.pos + page.node.nodeSize);
@@ -109,11 +180,16 @@ export function spillToNext(tr, template, pageIndex, col, from) {
     } else {
         const tgt = next.cells[col];
         const s = map(tgt.pos + 1);
-        if (isBlankCell(tgt.node)) tr.replaceWith(s, s + tgt.node.content.size, frag);
-        else tr.insert(s, frag);
+        if (isBlankCell(tgt.node)) {
+            tr.replaceWith(s, s + tgt.node.content.size, frag);
+            blank = { from: tgt.pos + 1, to: tgt.pos + 1 + tgt.node.content.size };
+        } else {
+            tr.insert(s, frag);
+        }
         insertAt = s;
     }
     restoreSelection(tr, cap, from, end, insertAt);
+    if (blank) keepCaretInFilledBox(tr, cap, blank.from, blank.to, insertAt);
     normalizeContinuations(tr);
     return tr;
 }
@@ -138,7 +214,8 @@ export function absorbFromNext(tr, pageIndex, col) {
     else tr.delete(from, to);
 
     let insertAt;
-    if (isBlankCell(cur.node)) {
+    const blank = isBlankCell(cur.node);
+    if (blank) {
         insertAt = cur.pos + 1;
         tr.replaceWith(insertAt, insertAt + cur.node.content.size, Fragment.from(first));
     } else {
@@ -146,6 +223,8 @@ export function absorbFromNext(tr, pageIndex, col) {
         tr.insert(insertAt, first);
     }
     restoreSelection(tr, cap, from, to, insertAt);
+    // `cur` sits before the removed block, so its pre-op range is unchanged.
+    if (blank) keepCaretInFilledBox(tr, cap, cur.pos + 1, cur.pos + 1 + cur.node.content.size, insertAt);
     normalizeContinuations(tr);
     return tr;
 }

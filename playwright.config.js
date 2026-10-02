@@ -74,6 +74,7 @@ export default defineConfig({
         '**/unsupported-docs.spec.js',
         '**/history.spec.js',
         '**/startup-document.spec.js',
+        '**/tables-images.spec.js',
       ],
     },
     {

@@ -53,12 +53,14 @@ Routing lives in [`editor/js/export/router.js`](../../editor/js/export/router.js
 letter doc = letterPage+        letterPage = flowCell[col=main]
 diary doc  = diaryPage+         diaryPage  = flowCell[col=left] flowCell[col=right]
                                              attrs { hasHeader, fields }
-flowCell   = (paragraph | orderedList | bulletList | image)+
+flowCell   = (paragraph | orderedList | bulletList | image | table)+
 ```
 
 - A **flowCell** is one fixed-height writing box. Both diary columns are rich text (bold, italic, underline, alignment, lists) and flow across pages independently.
 - The **diary header** (case-diary number, थाना, जिला, FIR, dates, धारा, अन्वेषण का अभिलेख …) is stored as page attributes and edited through native inputs in the page's node view (`editor/js/editor/page-views.js`). Header edits are transactions, so they autosave and undo like body text; a burst of typing in one field is one undo step.
-- **`cont`** on a paragraph or list marks the tail of a block the pager cut at a page edge: "this continues the last block of the previous page's cell in this column". Only continuations are ever re-joined, so moving a page boundary can never weld two separate paragraphs together. A numbered list cut across pages continues its numbering (`start`).
+- **Images** (`editor/js/editor/images.js`) are inserted from the toolbar (file picker; camera on phones), by paste or by drop. Each file is scaled to at most 1600px on its long side and re-encoded (JPEG, or PNG when it has transparency) before it is stored in the document as a `data:` URL (`image-file.js`); remote `<img>` URLs in pasted HTML are dropped, so a document never depends on a server. Width is stored as a percentage of the column (10–100, or natural size); drag the corner handle of a selected image or press Alt+←/→. The aspect ratio caps the width so an image is never taller than one writing box. Images are centred.
+- **Tables** (`editor/js/editor/tables.js`) are inserted as 3×3 with a header row. While the caret is in a table the toolbar shows a second bar: insert row above/below, column left/right, delete row/column, header row, delete table. Tab / Shift+Tab move between cells (Tab in the last cell adds a row). Cells hold text and lists only; tables do not nest and never sit inside a list. Columns share the width equally.
+- **`cont`** on a paragraph, list or table marks the tail of a block the pager cut at a page edge: "this continues the last block of the previous page's cell in this column". Only continuations are ever re-joined, so moving a page boundary can never weld two separate paragraphs together. A numbered list cut across pages continues its numbering (`start`).
 - New pages created by the pager have no header. A page whose header the user switched on is kept even when empty.
 
 Saved content is `{ "format": "bp-doc", "v": 1, "doc": … }` (`editor/js/editor/doc-format.js`). Content in any other shape is shown in History as **Older format**; opening it offers to delete it (`editor/js/unsupported-docs.js`) instead of mounting the editor.
@@ -67,9 +69,10 @@ Saved content is `{ "format": "bp-doc", "v": 1, "doc": … }` (`editor/js/editor
 
 The pager (`editor/js/editor/pager/`) runs after the DOM reflects each change (plugin view update, then one animation frame) and loops measure → dispatch → measure until every box fits:
 
-- **Spill:** when a cell's last block crosses the bottom of its box, the content from the first line that doesn't fit moves to the same column on the next page (created if needed). A paragraph is cut at the start of a rendered line found with `coordsAtPos`, so the browser's own line breaking decides the cut; it is snapped to a grapheme boundary so Devanagari clusters are never split. Lists are cut between items; an image is never cut (CSS caps it at one box).
+- **Spill:** when a cell's last block crosses the bottom of its box, the content from the first line that doesn't fit moves to the same column on the next page (created if needed). A paragraph is cut at the start of a rendered line found with `coordsAtPos`, so the browser's own line breaking decides the cut; it is snapped to a grapheme boundary so Devanagari clusters are never split. Lists are cut between items; an image is never cut (CSS caps it at one box). A table is cut between rows, never inside a row or through a rowspan, and a header row is never left alone at a page bottom. The pieces of a split table form one table: column changes, the header-row toggle and Delete table apply to every piece, and each continuation repeats the header row above its rows — drawn by the table's node view from a decoration, never stored in the document.
 - **Absorb:** when a cell has at least one free line, the next page's first block in that column moves up — a continuation re-joins its head, a separate paragraph moves as a paragraph — and spill re-cuts it at a real line. A pass that would only undo itself stops absorbing that cell.
 - **Opening a document** repairs overflow but never absorbs: a stored layout opens exactly as saved, and text is pulled back only after an edit near it.
+- A blank box between two pages (its content was deleted) does not block the page before it: the pass visits the blank page, fills it, then steps back so the earlier page can pull the text up. A caret on the blank line that gets replaced stays in that box. The loop guard scales with the number of blocks, so emptying a whole box reflows in one settle.
 - Empty trailing pages are dropped, except the page holding the caret (so Enter that spills a lone blank line keeps that page).
 - **Measurement** compares viewport rects only (`getBoundingClientRect`, `coordsAtPos`), scaling layout pixels by the cell's own `rect.height / offsetHeight`, so it is exact under `--page-scale`. Cells use `overflow: clip` and cannot scroll.
 - **Suspension:** the pager waits while the IME is composing (Android keyboards compose most words), while a mouse button is down, and while the Hinglish suggestion box owns the word. The cell being typed in shows overflow meanwhile (`[data-bp-suspended]`).
@@ -79,7 +82,7 @@ Writing-box height comes from the live header height, snapped to whole 24px line
 
 ## Undo / redo
 
-One history per document (ProseMirror history, depth 100). A pager transaction that follows an edit is merged into that edit's undo step, so one Ctrl/Cmd+Z restores both the text and the page layout it had. Opening a document starts a fresh history. Ctrl/Cmd+Z in a header input undoes the document too (`main.js` routes the shortcut).
+One history per document (ProseMirror history, depth 100). Inserting an image or table, and each image resize, is its own undo step. A pager transaction that follows an edit is merged into that edit's undo step, so one Ctrl/Cmd+Z restores both the text and the page layout it had. Opening a document starts a fresh history. Ctrl/Cmd+Z in a header input undoes the document too (`main.js` routes the shortcut).
 
 ## Selection and keys at page edges
 

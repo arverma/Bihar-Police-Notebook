@@ -7,6 +7,7 @@
  * space that getBoundingClientRect / coordsAtPos report.
  */
 import { cellBlocks } from './layout.js';
+import { tableMinRows } from './ops.js';
 
 /** Sub-pixel slack so rounding never reports a fitting line as overflow. */
 const EPS = 0.5;
@@ -144,10 +145,55 @@ export function firstOverflowingItem(view, listPos, listNode, limit) {
     return -1;
 }
 
+/** Viewport rects of a table's rows (the document rows, not a repeated header). */
+function rowRects(view, tablePos, table) {
+    const out = [];
+    let pos = tablePos + 1;
+    for (let i = 0; i < table.childCount; i++) {
+        const dom = view.nodeDOM(pos);
+        if (dom instanceof HTMLElement) out.push(dom.getBoundingClientRect());
+        else return [];
+        pos += table.child(i).nodeSize;
+    }
+    return out;
+}
+
+/**
+ * Index of the first table row that does not fit above `limit`, or -1.
+ * Whatever sits under the last row (bottom border, margin) is counted for
+ * every row, since it follows whichever row ends up last on the page.
+ * @param {number} blockBottom viewport y of the table block's bottom (margin included)
+ */
+export function firstOverflowingRow(view, tablePos, table, limit, blockBottom) {
+    const rows = rowRects(view, tablePos, table);
+    if (!rows.length) return -1;
+    const below = Math.max(0, blockBottom - rows[rows.length - 1].bottom);
+    return rows.findIndex((r) => r.bottom + below > limit + EPS);
+}
+
+/**
+ * Height a table adds when its first rows move up: a continuation joins the
+ * table above it (its rows only); a separate table brings its own top, the
+ * fewest rows it may keep on a page, and the edge under them.
+ */
+function tableAbsorbHeight(view, pos, node, dom) {
+    const rows = rowRects(view, pos, node);
+    if (!rows.length) return Infinity;
+    const n = Math.min(rows.length, tableMinRows(node));
+    if (node.attrs.cont) return rows[n - 1].bottom - rows[0].top;
+    const r = dom.getBoundingClientRect();
+    const s = dom.offsetHeight ? r.height / dom.offsetHeight : 1;
+    const cs = getComputedStyle(dom);
+    const top = r.top - (parseFloat(cs.marginTop) || 0) * s;
+    const below = r.bottom + (parseFloat(cs.marginBottom) || 0) * s - rows[rows.length - 1].bottom;
+    return rows[n - 1].bottom - top + below;
+}
+
 /** Height (viewport px) of a block in the next cell, for absorb decisions. */
 export function blockHeight(view, pos, node) {
     const dom = view.nodeDOM(pos);
     if (!(dom instanceof HTMLElement)) return Infinity;
+    if (node.type.name === 'table') return tableAbsorbHeight(view, pos, node, dom);
     if (node.type.name === 'orderedList' || node.type.name === 'bulletList') {
         const item = view.nodeDOM(pos + 1);
         if (item instanceof HTMLElement) return item.getBoundingClientRect().height;

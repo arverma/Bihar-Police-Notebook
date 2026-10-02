@@ -19,8 +19,12 @@
  */
 import { Extension, Plugin, PluginKey, Decoration, DecorationSet } from '../tiptap.js';
 import { collectPages, isBlankCell, pageIndexAt } from './layout.js';
-import { spillToNext, absorbFromNext, splitParagraph, splitList, collapseTrailingPages } from './ops.js';
-import { measureCell, firstOverflowingBlock, firstNonFittingPos, firstOverflowingItem, blockHeight } from './measure.js';
+import {
+    spillToNext, absorbFromNext, splitParagraph, splitList, splitTable, tableCutIndex, tableMinRows, collapseTrailingPages,
+} from './ops.js';
+import {
+    measureCell, firstOverflowingBlock, firstNonFittingPos, firstOverflowingItem, firstOverflowingRow, blockHeight,
+} from './measure.js';
 
 export const pagerKey = new PluginKey('bpPager');
 
@@ -190,14 +194,23 @@ class PagerController {
         const recent = [doc0];
         let lastAbsorbKey = null;
         let lastActedPage = -1;
+        let mustVisit = -1; // a page past the dirty range that still needs a look
         let iterations = 0;
-        const cap = collectPages(doc0).length * 4 + 20;
+        // Loop guard. Absorb moves one block per iteration, so emptying a box
+        // (deleting a page of text, or a long table) legitimately takes about
+        // one iteration per block that flows up — scale with blocks, not just
+        // pages. Real oscillations are stopped earlier by `noAbsorb`.
+        const pages0 = collectPages(doc0);
+        let blocks0 = 0;
+        for (const p of pages0) for (const c of Object.values(p.cells)) blocks0 += c.node.childCount;
+        const cap = pages0.length * 4 + blocks0 * 2 + 20;
 
         let i = startPage;
         for (;;) {
             const pages = collectPages(view.state.doc);
             if (i >= pages.length) break;
             let acted = null;
+            let filledBlank = false;
             for (const col of template.columns) {
                 const cell = pages[i].cells[col];
                 if (!cell) continue;
@@ -212,7 +225,12 @@ class PagerController {
                 } else if (allowAbsorb && pages[i + 1] && !noAbsorb.has(`${i}:${col}`) && this.absorb(pages, i, col, m)) {
                     acted = 'absorb';
                     lastAbsorbKey = `${i}:${col}`;
+                    filledBlank = isBlankCell(cell.node);
                     break;
+                } else if (allowAbsorb && pages[i + 2] && m.slack >= m.lineH - EPS && isBlankCell(pages[i + 1].cells[col]?.node ?? cell.node)) {
+                    // Room here, but the next box is blank: visit it so it fills
+                    // from the page after, then this page can absorb (below).
+                    mustVisit = Math.max(mustVisit, i + 1);
                 }
             }
             if (acted) {
@@ -228,9 +246,13 @@ class PagerController {
                     this.stats.capHits++;
                     break;
                 }
+                // A blank box (e.g. its only table or text was deleted) blocks
+                // the page before it from absorbing; once it holds text again,
+                // that page may pull the text up past it.
+                if (filledBlank && i > 0) i--;
                 continue; // re-measure the same page
             }
-            if (i >= Math.max(dirtyEndPage, lastActedPage + 1)) break;
+            if (i >= Math.max(dirtyEndPage, lastActedPage + 1, mustVisit)) break;
             i++;
         }
         this.stats.lastIterations = iterations;
@@ -261,6 +283,11 @@ class PagerController {
             } else if (type === 'orderedList' || type === 'bulletList') {
                 const idx = firstOverflowingItem(view, b.pos, b.node, m.limit);
                 if (idx > 0) from = splitList(tr, b.pos, idx);
+            } else if (type === 'table') {
+                // Tables break between rows, never inside one.
+                const idx = firstOverflowingRow(view, b.pos, b.node, m.limit, b.bottom);
+                const at = tableCutIndex(b.node, idx, tableMinRows(b.node));
+                if (at > 0) from = splitTable(tr, b.pos, at);
             }
         }
         if (from === null) {
@@ -288,7 +315,9 @@ class PagerController {
         const first = nxt.node.firstChild;
         // Text is moved optimistically: if it overflows, the spill pass cuts it
         // again at a real line start, so the pair always makes progress.
-        const optimistic = first.type.name === 'paragraph' || first.attrs.cont;
+        // A table only moves up when its next row fits: rows are never cut, so
+        // an optimistic move would just bounce back.
+        const optimistic = first.type.name === 'paragraph' || (first.attrs.cont && first.type.name !== 'table');
         if (!optimistic && blockHeight(view, nxt.pos + 1, first) > m.slack + EPS) return false;
         const tr = absorbFromNext(view.state.tr, i, col);
         if (!tr.docChanged) return false;

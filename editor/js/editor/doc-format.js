@@ -62,6 +62,15 @@ export function docPlainText(docJSON) {
     return out.join('').replace(/\n+$/, '');
 }
 
+/** Block types that are content even with no text in them. */
+const OBJECT_TYPES = new Set(['image', 'table']);
+
+/** Whether a doc JSON holds an image or a table (content without text). */
+export function docHasObjects(docJSON) {
+    const walk = (node) => Boolean(node) && (OBJECT_TYPES.has(node.type) || (node.content || []).some(walk));
+    return walk(docJSON);
+}
+
 /** Diary page attributes in order: [{ hasHeader, fields }]. */
 export function docPages(docJSON) {
     return (docJSON?.content || []).map((p) => ({
