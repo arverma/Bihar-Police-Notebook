@@ -45,7 +45,6 @@ import { runDocumentExport } from './export/router.js';
 
 const letterPagesEl = document.getElementById('letterPages');
 const suggestionsBox = document.getElementById('suggestions');
-const pageIndicator = document.getElementById('pageIndicator');
 const filenameInput = document.getElementById('filenameInput');
 const exportBtnEl = document.getElementById('exportBtn');
 const filenameWrap = document.querySelector('.filename-resize-wrap');
@@ -258,12 +257,6 @@ function hasMeaningfulContent() {
     return Boolean(activeSheet()?.hasMeaningfulContent());
 }
 
-function updatePageIndicator(current, total) {
-    if (!pageIndicator) return;
-    pageIndicator.hidden = false;
-    pageIndicator.textContent = `Page ${current} of ${total}`;
-}
-
 async function flushSave() {
     saveTimer = null;
     if (!hasMeaningfulContent() && currentDoc.id == null) {
@@ -337,7 +330,6 @@ async function loadDocumentState(doc) {
         document.querySelector('.editor-diary').style.display = '';
         setTemplateSegmentUI('diary');
         diarySheet?.setContent(doc.content);
-        updatePageIndicator(1, diarySheet?.pageCount || 1);
         const fir = diarySheet?.firNumber() ?? '';
         diaryFilenameManual = !isAutoDiaryFilename(
             doc.filename,
@@ -351,7 +343,6 @@ async function loadDocumentState(doc) {
         setTemplateSegmentUI('letter');
         letterSheet?.setContent(doc.content || '');
         letterSheet?.focus();
-        updatePageIndicator(1, letterSheet?.pageCount || 1);
     }
     
     setSaveStatus('saved');
@@ -410,7 +401,6 @@ async function startNewDocument(type = getActiveTemplate()) {
         document.querySelector('.editor-diary').style.display = 'none';
         setTemplateSegmentUI('letter');
         letterSheet?.clear();
-        updatePageIndicator(1, letterSheet?.pageCount || 1);
         letterSheet?.focus();
     } else {
         document.querySelector('.editor-letter').style.display = 'none';
@@ -418,7 +408,6 @@ async function startNewDocument(type = getActiveTemplate()) {
         setTemplateSegmentUI('diary');
         diarySheet?.clear();
         diaryFilenameManual = false;
-        updatePageIndicator(1, diarySheet?.pageCount || 1);
     }
     setSaveStatus('saved');
     updateDocumentTitle();
@@ -1270,12 +1259,8 @@ function initApp() {
             },
             isHeld: suggestionsOwnInput,
             placeholder: letterPlaceholder,
-            onPageFocus: (current, total) => {
-                if (getActiveTemplate() === 'letter') {
-                    updatePageIndicator(current, total);
-                }
-                pageScale?.refresh();
-            },
+            // The scaled stage's height follows the number of pages.
+            onPageCountChange: () => pageScale?.refresh(),
             onSpill: ({ toPage }) => {
                 showNotification(`Continued on page ${toPage}`);
             },
@@ -1303,12 +1288,8 @@ function initApp() {
                     el.addEventListener('change', scheduleSave);
                 }
             },
-            onPageFocus: (current, total) => {
-                if (getActiveTemplate() === 'diary') {
-                    updatePageIndicator(current, total);
-                }
-                pageScale?.refresh();
-            },
+            // The scaled stage's height follows the number of pages.
+            onPageCountChange: () => pageScale?.refresh(),
             onSpill: ({ toPage }) => {
                 showNotification(`Continued on page ${toPage}`);
             },

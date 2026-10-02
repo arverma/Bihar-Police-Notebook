@@ -17,7 +17,7 @@ import { TextSelection } from './tiptap.js';
  * @typedef {object} SheetHooks
  * @property {() => void} [onChange]                      document changed (autosave)
  * @property {(el: HTMLElement) => void} [onAttachField]  wire transliteration on an editable
- * @property {(current: number, total: number) => void} [onPageFocus]
+ * @property {(count: number) => void} [onPageCountChange]  pages added or removed
  * @property {(info: { toPage: number }) => void} [onSpill] caret carried onto a later page
  * @property {() => boolean} [isHeld]                     pause pagination (suggestion popup open)
  * @property {(ctx: {pageIndex:number, col:string}) => string} [placeholder]
@@ -50,10 +50,10 @@ export function createDocSheet(container, template, hooks = {}) {
             if (tr.getMeta(PAGER_META) && page > lastCaretPage && ed.view.hasFocus()) {
                 hooks.onSpill?.({ toPage: page + 1 });
             }
-            if (page !== lastCaretPage || count !== lastPageCount) {
-                lastCaretPage = page;
+            lastCaretPage = page;
+            if (count !== lastPageCount) {
                 lastPageCount = count;
-                hooks.onPageFocus?.(page + 1, count);
+                hooks.onPageCountChange?.(count);
             }
         },
     });
@@ -107,7 +107,7 @@ export function createDocSheet(container, template, hooks = {}) {
         loadDocContent(editor, doc ?? empty());
         lastCaretPage = 0;
         lastPageCount = editor.state.doc.childCount;
-        hooks.onPageFocus?.(1, lastPageCount);
+        hooks.onPageCountChange?.(lastPageCount);
     }
 
     function getJSON() {

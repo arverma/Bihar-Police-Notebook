@@ -220,26 +220,6 @@ body {
 
 /* Legacy dashed markers removed — letter now uses diary-style page cards */
 
-.page-indicator {
-    position: fixed;
-    bottom: 24px;
-    right: 24px;
-    padding: 6px 12px;
-    background: var(--brand-primary);
-    color: var(--brand-white);
-    border-radius: 999px;
-    font-size: 12px;
-    font-weight: 500;
-    box-shadow: var(--shadow-medium);
-    z-index: 20;
-    pointer-events: none;
-    width: fit-content;
-}
-
-.page-indicator[hidden] {
-    display: none !important;
-}
-
 .editor-wrapper.editor-diary {
     background: transparent;
     width: 210mm;
@@ -2106,7 +2086,6 @@ span.diary-dotted-flow:focus {
     .sidebar,
     .switch-btn,
     .help-fab,
-    .page-indicator,
     .dictation-fab,
     .dictation-interim,
     .dictation-sheet,

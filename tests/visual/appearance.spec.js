@@ -70,7 +70,7 @@ async function freezeFrame(page) {
     content: `
       #formatToolbar, #dictationFab, #dictationInterim, .restore-message,
       .punctuation-panel, .punctuation-toggle, .header-frame,
-      .diary-header-toggle, .page-badge, #pageIndicator, .page-fit-chip,
+      .diary-header-toggle, .page-fit-chip,
       .diary-page-delete, .help-fab { visibility: hidden !important; }
       .editor-stage {
         height: auto !important; max-height: none !important;

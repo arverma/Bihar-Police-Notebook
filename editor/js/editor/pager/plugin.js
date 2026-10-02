@@ -55,6 +55,14 @@ class PagerController {
             this.schedule();
         };
         window.addEventListener('mouseup', this.onMouseUp, true);
+        // Layout can change with no document change: a font or an image
+        // finishing loading resizes text that was already measured. `load`
+        // does not bubble, so listen in the capture phase.
+        this.onMediaLoad = (e) => {
+            if (e.target instanceof HTMLImageElement) this.requestFull();
+        };
+        view.dom.addEventListener('load', this.onMediaLoad, true);
+        view.dom.addEventListener('error', this.onMediaLoad, true);
         this.setRootState('pending');
         this.schedule();
         if (document.fonts?.ready) document.fonts.ready.then(() => this.requestFull());
@@ -63,6 +71,8 @@ class PagerController {
     destroy() {
         if (this.raf) cancelAnimationFrame(this.raf);
         window.removeEventListener('mouseup', this.onMouseUp, true);
+        this.view?.dom.removeEventListener('load', this.onMediaLoad, true);
+        this.view?.dom.removeEventListener('error', this.onMediaLoad, true);
         this.view = null;
         this.flushWaiters();
     }

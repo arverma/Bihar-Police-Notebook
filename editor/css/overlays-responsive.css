@@ -1,21 +1,5 @@
 /* Floating controls + bottom chrome offsets */
 
-.page-indicator {
-    position: fixed;
-    bottom: calc(var(--overlay-bottom) + 8px);
-    right: calc(24px + var(--safe-right));
-    padding: 6px 12px;
-    background: var(--brand-primary);
-    color: var(--brand-white);
-    border-radius: 999px;
-    font-size: 12px;
-    font-weight: 500;
-    box-shadow: var(--shadow-medium);
-    z-index: 20;
-    pointer-events: none;
-    width: fit-content;
-}
-
 .help-fab {
     left: calc(16px + var(--safe-left));
     bottom: var(--overlay-bottom);
@@ -29,15 +13,8 @@
     bottom: calc(var(--overlay-bottom) + 48px);
 }
 
-/* Tablet: raise toolbar above raised page-indicator */
+/* Tablet: keep the toolbar clear of the bottom overlay band */
 @media (max-width: 1024px) {
-    .page-indicator {
-        right: calc(16px + var(--safe-right));
-        bottom: calc(var(--overlay-bottom) + 56px);
-        font-size: 11px;
-        padding: 5px 10px;
-    }
-
     .format-toolbar {
         --format-tb-bottom: calc(var(--overlay-bottom) + 64px);
     }
