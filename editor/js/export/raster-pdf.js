@@ -173,30 +173,6 @@ function injectScriptIntoDocument(doc, src, markerAttr) {
  * @param {Document} doc
  */
 export function prepareCloneForRaster(doc) {
-  // html2canvas cannot lay out textarea content (no soft wrapping), so swap in
-  // an equivalent static box that keeps the same metrics and wrap behavior.
-  doc.querySelectorAll('textarea').forEach((ta) => {
-    const view = doc.defaultView;
-    const cs = view ? view.getComputedStyle(ta) : null;
-    const div = doc.createElement('div');
-    div.className = ta.className;
-    Object.keys(ta.dataset || {}).forEach((k) => { div.dataset[k] = ta.dataset[k]; });
-    div.textContent = ta.value || ta.textContent || '';
-
-    const copy = [
-      'width', 'height', 'padding', 'margin', 'boxSizing', 'border',
-      'fontFamily', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing',
-      'color', 'textAlign', 'direction', 'background',
-    ];
-    if (cs) copy.forEach((p) => { div.style[p] = cs[p]; });
-    div.style.whiteSpace = 'pre-wrap';
-    div.style.overflowWrap = 'break-word';
-    div.style.wordBreak = 'normal';
-    div.style.overflow = 'hidden';
-    div.style.display = 'block';
-    ta.replaceWith(div);
-  });
-
   // html2canvas ignores border-collapse, so it paints every cell's own border
   // and each shared edge comes out as two adjacent lines. Emulate collapse by
   // giving each edge exactly one owner. The frame is drawn by the edge cells

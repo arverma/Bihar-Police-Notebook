@@ -27,94 +27,65 @@ test('printDocumentExtraCss keeps the titles-row field on its own line', () => {
   );
 });
 
-test('printDocumentStylesheetLinks loads Quill snow after app CSS', () => {
+test('printDocumentStylesheetLinks loads the same editor stylesheets as the app', () => {
   const html = printDocumentStylesheetLinks();
-  const styleIdx = html.indexOf('css/editor.css');
-  const quillIdx = html.indexOf('quill.snow.css');
-  expect(styleIdx).toBeGreaterThan(-1);
-  expect(quillIdx).toBeGreaterThan(styleIdx);
+  const appIdx = html.indexOf('css/editor.css');
+  const docIdx = html.indexOf('css/doc-editor.css');
+  expect(appIdx).toBeGreaterThan(-1);
+  expect(docIdx).toBeGreaterThan(appIdx);
 });
 
-test('sanitizeExportPage removes screen chrome and locks left textarea', () => {
-  const page = document.createElement('div');
-  page.className = 'diary-page';
-  page.innerHTML = `
-    <div class="diary-page-chrome screen-only"><span>Page 1</span></div>
-    <div class="diary-page-header">
-      <input class="diary-dotted" data-field="thana" value="पटना">
-      <span class="diary-dotted diary-dotted-flow" contenteditable="true" data-field="sections">302</span>
-    </div>
-    <div class="diary-cell">
-      <textarea class="fir-input" data-col="left" placeholder="x">left text</textarea>
-    </div>
-    <div class="diary-cell">
-      <div class="fir-input ql-container bp-ql-container">
-        <div class="ql-editor bp-ql-editor" contenteditable="true"><p>right text</p></div>
-      </div>
-    </div>
-  `;
-
-  sanitizeExportPage(page);
-
-  expect(page.querySelector('.screen-only')).toBeNull();
-  expect(page.querySelector('.diary-page-chrome')).toBeNull();
-  expect(page.querySelector('input')).toBeNull();
-  expect(page.querySelector('[contenteditable]')).toBeNull();
-  expect(page.querySelector('[data-field="thana"]')?.textContent).toBe('पटना');
-  expect(page.querySelector('[data-field="sections"]')?.textContent).toBe('302');
-  expect(page.querySelector('[data-field="sections"]')?.classList.contains('print-static')).toBe(true);
-
-  const ta = page.querySelector('textarea[data-col="left"]');
-  expect(ta).toBeTruthy();
-  expect(ta.readOnly).toBe(true);
-  expect(ta.getAttribute('placeholder')).toBeNull();
-
-  expect(page.querySelector('.print-static-quill-host')).toBeTruthy();
-  const body = page.querySelector('.print-static-quill');
-  expect(body).toBeTruthy();
-  expect(body.innerHTML).toContain('right text');
-  expect(body.querySelector('p')?.textContent).toBe('right text');
+test('printDocumentExtraCss hides the screen-only page footer (raster PDF renders screen media)', () => {
+  expect(printDocumentExtraCss()).toMatch(/\.print-pages \.bp-page::after\s*\{[^}]*content:\s*none/s);
 });
 
-test('sanitizeExportPage preserves Quill paragraphs and align classes', () => {
-  const page = document.createElement('div');
-  page.className = 'diary-page';
+/** A cloned diary page as the editor renders it. */
+function diaryPageFixture(rightHtml) {
+  const page = document.createElement('section');
+  page.className = 'diary-page bp-page';
   page.innerHTML = `
-    <div class="diary-page-header">
+    <div class="diary-page-chrome screen-only" contenteditable="false"><span class="diary-page-label">Page 1</span></div>
+    <div class="diary-page-header" contenteditable="false">
+      <input class="diary-dotted" data-field="thana" value="कोतवाली">
       <span class="diary-dotted diary-dotted-flow" contenteditable="true" data-field="event_date_place">स्थान</span>
     </div>
-    <div class="diary-cell">
-      <div class="fir-input ql-container bp-ql-container">
-        <div class="ql-editor bp-ql-editor" contenteditable="true">
-          <p>चार</p>
-          <p class="ql-align-center">सेंटर</p>
-          <p class="ql-align-right">राइट</p>
-          <p class="ql-align-justify">जस्टिफाई</p>
-        </div>
-      </div>
-    </div>
-  `;
+    <table class="fir-table"><tbody><tr class="diary-body-row">
+      <td class="bp-cell-host left-column"><div class="diary-cell"><div class="bp-cell fir-input" data-col="left"><p class="is-empty" data-placeholder="यहाँ विवरण लिखें..."><br class="ProseMirror-trailingBreak"></p></div></div></td>
+      <td class="bp-cell-host right-column"><div class="diary-cell"><div class="bp-cell fir-input" data-col="right" data-overflow="true">${rightHtml}</div></div></td>
+    </tr></tbody></table>`;
+  return page;
+}
 
+test('sanitizeExportPage removes screen chrome, editor state and controls', () => {
+  const page = diaryPageFixture('<p>right text</p>');
   sanitizeExportPage(page);
-
-  const paras = page.querySelectorAll('.print-static-quill p');
-  expect(paras).toHaveLength(4);
-  expect(paras[0].textContent).toBe('चार');
-  expect(paras[0].className).not.toMatch(/ql-align-/);
-  expect(paras[1].classList.contains('ql-align-center')).toBe(true);
-  expect(paras[1].textContent).toBe('सेंटर');
-  expect(paras[2].classList.contains('ql-align-right')).toBe(true);
-  expect(paras[2].textContent).toBe('राइट');
-  expect(paras[3].classList.contains('ql-align-justify')).toBe(true);
-  expect(paras[3].textContent).toBe('जस्टिफाई');
-
-  // Must not collapse to a single text span
-  expect(page.querySelector('.print-static-quill')?.childElementCount).toBe(4);
-
+  expect(page.querySelector('.screen-only')).toBeNull();
+  expect(page.querySelector('.diary-page-chrome')).toBeNull();
+  expect(page.querySelector('[data-placeholder]')).toBeNull();
+  expect(page.querySelector('.is-empty')).toBeNull();
+  expect(page.querySelector('[data-overflow]')).toBeNull();
+  expect(page.querySelector('[contenteditable]')).toBeNull();
+  expect(page.querySelector('input')).toBeNull();
+  expect(page.querySelector('[data-field="thana"]')?.textContent).toBe('कोतवाली');
   const flow = page.querySelector('[data-field="event_date_place"]');
   expect(flow?.classList.contains('print-static')).toBe(true);
   expect(flow?.textContent).toBe('स्थान');
-  expect(page.querySelector('[contenteditable]')).toBeNull();
+  // Blank lines keep their <br> so they take a line on paper too.
+  expect(page.querySelector('[data-col="left"] p br')).toBeTruthy();
+});
+
+test('sanitizeExportPage keeps cell paragraphs, alignment and marks as rendered', () => {
+  const page = diaryPageFixture(
+    '<p>चार</p><p style="text-align: center">सेंटर</p><p style="text-align: justify"><strong>जस्टिफाई</strong></p><ol start="3"><li><p>सूची</p></li></ol>',
+  );
+  sanitizeExportPage(page);
+  const cell = page.querySelector('[data-col="right"]');
+  const paras = cell.querySelectorAll(':scope > p');
+  expect(paras).toHaveLength(3);
+  expect(paras[1].style.textAlign).toBe('center');
+  expect(paras[2].style.textAlign).toBe('justify');
+  expect(paras[2].querySelector('strong')?.textContent).toBe('जस्टिफाई');
+  expect(cell.querySelector('ol')?.getAttribute('start')).toBe('3');
 });
 
 test('sanitizeExportPage formats date inputs as dd/mm/yyyy', () => {
@@ -138,32 +109,21 @@ test('buildPrintDocumentHtml clones diary pages and preserves CSS vars', async (
   const pagesHost = document.createElement('div');
   pagesHost.id = 'diaryPages';
   pagesHost.style.setProperty('--diary-left-col', '22%');
-  const page = document.createElement('div');
-  page.className = 'diary-page';
+  const page = diaryPageFixture('<p>right</p>');
   page.style.setProperty('--diary-box-h', '800px');
-  page.innerHTML = `
-    <textarea class="fir-input" data-col="left">left</textarea>
-    <div class="diary-cell">
-      <div class="fir-input ql-container bp-ql-container">
-        <div class="ql-editor bp-ql-editor" style="width:400px;height:200px"><p>right</p></div>
-      </div>
-    </div>
-  `;
-  // Fake layout metrics for jsdom
-  Object.defineProperty(page.querySelector('.ql-editor'), 'clientWidth', { value: 400 });
-  Object.defineProperty(page.querySelector('.ql-editor'), 'clientHeight', { value: 200 });
-  Object.defineProperty(page.querySelector('textarea'), 'clientWidth', { value: 80 });
-  Object.defineProperty(page.querySelector('textarea'), 'clientHeight', { value: 200 });
+  page.querySelector('[data-col="left"]').innerHTML = '<p>left</p>';
   pagesHost.appendChild(page);
   wrap.appendChild(pagesHost);
   document.body.appendChild(wrap);
 
   const built = buildPrintDocumentHtml('diary');
-  expect(built).toBeTruthy();
   expect(built?.pageCount).toBe(1);
   expect(built?.html).toContain('print-pages');
-  expect(built?.html).toContain('--diary-left-col');
-  expect(built?.html).toContain('right');
-  expect(built?.html).toContain('left');
+  expect(built?.html).toContain('--diary-left-col: 22%');
+  expect(built?.html).toContain('--diary-box-h: 800px');
+  expect(built?.html).toContain('<p>right</p>');
+  expect(built?.html).toContain('<p>left</p>');
+  // Typed values (not attributes) are what print.
+  expect(built?.html).toContain('कोतवाली');
   wrap.remove();
 });

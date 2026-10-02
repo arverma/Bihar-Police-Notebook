@@ -1,1443 +1,537 @@
 import { test, expect } from '@playwright/test';
 import {
-  clippedDiaryBoxes,
-  disableTranslit,
-  fillSinglePage,
-  installDiaryQuillHelper,
-  rightColumnBlocks,
+  openFresh, setDoc, setCaret, settle, columnBlocks, columnPages, pageCount, clippedBoxes, caret,
+  disableTranslit, numberedLines, fillSinglePage, switchTemplate,
 } from './pagination-helpers.js';
 
-async function setLeftColumnText(page, pageIndex, text) {
-  await page.evaluate(({ pageIndex: i, text: value }) => {
-    const pageEl = document.querySelectorAll('.diary-page')[i];
-    const ta = pageEl?.querySelector('[data-col="left"]');
-    if (!(ta instanceof HTMLTextAreaElement)) throw new Error('left textarea missing');
-    ta.focus();
-    ta.value = value;
-    ta.dispatchEvent(new Event('input', { bubbles: true }));
-  }, { pageIndex, text });
-}
+/**
+ * Diary pagination: each column flows across fixed-height A4 boxes.
+ *
+ * Invariants checked throughout:
+ *  - no writing box ever clips its text (`clippedBoxes` is empty);
+ *  - moving the page boundary never changes the document (`columnBlocks` —
+ *    the column's paragraphs in reading order — is unchanged by spill/absorb);
+ *  - the caret stays on the character the user was at.
+ */
+
+const SENTENCE = 'यह एक लंबा वाक्य है जो पृष्ठ को भर देता है। ';
+const LONG_PARA = 'यह एक बहुत लंबा पैराग्राफ है जो कई पंक्तियों में लपेटा जाएगा। ';
 
 test.describe('Diary pagination reflow', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    await page.waitForSelector('.editor-diary .diary-page');
+    await openFresh(page);
     await disableTranslit(page);
-    await page.waitForFunction(() => window.__bpDiarySheet != null);
-    await installDiaryQuillHelper(page);
+  });
+
+  test.afterEach(async ({ page }) => {
+    // The pager must always settle without hitting its loop guard.
+    const stats = await page.evaluate(() => window.__bpTest.stats());
+    expect(stats.capHits).toBe(0);
   });
 
   test('open-repair spills an overflowing single page without leaving clip', async ({ page }) => {
-    const huge = `<p>${'यह एक लंबा वाक्य है जो पृष्ठ को भर देता है। '.repeat(8)}</p>`.repeat(40);
-    await page.evaluate((right) => {
-      window.__bpDiarySheet.setModel({
-        pages: [{
-          hasHeader: true,
-          header: {
-            fir_number: '', thana: '', district: '', case_diary_no: '',
-            rule_no: '', against_1: '', against_2: '', special_report_no: '',
-            fir_date: '', event_date_place: '', sections: '', investigation_record: '',
-          },
-          left: '',
-          right,
-        }],
-      });
-    }, huge);
-
-    await expect.poll(async () => page.locator('.diary-page').count(), { timeout: 15000 })
-      .toBeGreaterThan(1);
-    await expect.poll(async () => clippedDiaryBoxes(page), { timeout: 10000 }).toEqual([]);
+    const paras = Array.from({ length: 40 }, () => SENTENCE.repeat(8));
+    await setDoc(page, [{ right: paras }]);
+    expect(await pageCount(page)).toBeGreaterThan(1);
+    expect(await clippedBoxes(page)).toEqual([]);
+    expect(await columnBlocks(page)).toEqual(paras);
   });
 
   test('healthy two-page diary is not re-cut on open', async ({ page }) => {
-    const line1 = '<p>पृष्ठ एक की पहली पंक्ति।</p>';
-    const line2 = '<p>पृष्ठ दो की पहली पंक्ति।</p>';
-    await page.evaluate(({ a, b }) => {
-      window.__bpDiarySheet.setModel({
-        pages: [
-          {
-            hasHeader: true,
-            header: {
-              fir_number: '', thana: '', district: '', case_diary_no: '',
-              rule_no: '', against_1: '', against_2: '', special_report_no: '',
-              fir_date: '', event_date_place: '', sections: '', investigation_record: '',
-            },
-            left: 'बायाँ एक',
-            right: a,
-          },
-          {
-            hasHeader: false,
-            header: null,
-            left: 'बायाँ दो',
-            right: b,
-          },
-        ],
-      });
-    }, { a: line1, b: line2 });
-
-    await page.waitForTimeout(400);
-    expect(await page.locator('.diary-page').count()).toBe(2);
-
-    const snap = await page.evaluate(() => {
-      const pages = [...document.querySelectorAll('.diary-page')];
-      return pages.map((p) => ({
-        left: p.querySelector('[data-col="left"]')?.value ?? '',
-        rightHead: (
-          window.Quill.find(p.querySelector('[data-col="right"]'))?.getText()
-          || p.querySelector('[data-col="right"] .ql-editor')?.innerText
-          || ''
-        ).slice(0, 40),
-      }));
-    });
-    expect(snap).toHaveLength(2);
-    expect(snap[0].left).toBe('बायाँ एक');
-    expect(snap[1].left).toBe('बायाँ दो');
-    expect(snap[0].rightHead).toContain('पृष्ठ एक');
-    expect(snap[1].rightHead).toContain('पृष्ठ दो');
-    expect(await clippedDiaryBoxes(page)).toEqual([]);
+    await setDoc(page, [
+      { left: ['बायाँ एक'], right: ['पृष्ठ एक की पहली पंक्ति।'] },
+      { left: ['बायाँ दो'], right: ['पृष्ठ दो की पहली पंक्ति।'] },
+    ]);
+    expect(await columnPages(page, 'left')).toEqual([['बायाँ एक'], ['बायाँ दो']]);
+    expect(await columnPages(page, 'right')).toEqual([['पृष्ठ एक की पहली पंक्ति।'], ['पृष्ठ दो की पहली पंक्ति।']]);
+    expect(await clippedBoxes(page)).toEqual([]);
   });
 
   test('overflow on left column creates an extra page', async ({ page }) => {
-    const filler = `${'लंबा परीक्षण पाठ जो पृष्ठ भर देता है। '.repeat(8)}\n`.repeat(40);
-    await setLeftColumnText(page, 0, filler);
-
-    await expect.poll(async () => page.locator('.diary-page').count()).toBeGreaterThan(1);
-
-    await expect.poll(async () => {
-      return page.locator('.diary-page').nth(0).locator('[data-col="left"]').evaluate(
-        (el) => el.scrollHeight <= el.clientHeight + 1,
-      );
-    }).toBe(true);
+    const lines = Array.from({ length: 40 }, () => 'लंबा परीक्षण पाठ जो पृष्ठ भर देता है। '.repeat(8));
+    await setCaret(page, { page: 0, col: 'left' });
+    await page.keyboard.insertText(lines[0]);
+    for (let i = 1; i < 6; i++) {
+      await page.keyboard.press('Enter');
+      await page.keyboard.insertText(lines[i]);
+    }
+    await settle(page);
+    expect(await pageCount(page)).toBeGreaterThan(1);
+    expect(await clippedBoxes(page)).toEqual([]);
+    expect(await columnBlocks(page, 'left')).toEqual(lines.slice(0, 6));
+    // The right column is untouched by the left column's spill (blank on every page).
+    expect((await columnBlocks(page, 'right')).every((b) => b === '')).toBe(true);
   });
 
   test('Backspace at start of page 2 left merges into page 1', async ({ page }) => {
-    const filler = `${'पंक्ति परीक्षण। '.repeat(10)}\n`.repeat(35);
-    await setLeftColumnText(page, 0, filler);
+    await setDoc(page, [{ left: numberedLines(1, 200) }]);
+    const pagesBefore = await columnPages(page, 'left');
+    expect(pagesBefore.length).toBeGreaterThan(1);
+    const lastOnPage1 = pagesBefore[0][pagesBefore[0].length - 1];
+    const firstOnPage2 = pagesBefore[1][0];
 
-    await expect.poll(async () => page.locator('.diary-page').count()).toBeGreaterThan(1);
+    await setCaret(page, { page: 1, col: 'left', start: true });
+    await page.keyboard.press('Backspace');
+    await settle(page);
 
-    const left0 = page.locator('.diary-page').nth(0).locator('[data-col="left"]');
-    const left1 = page.locator('.diary-page').nth(1).locator('[data-col="left"]');
-    const beforeP0 = await left0.inputValue();
-    const beforeP1 = await left1.inputValue();
-    expect(beforeP1.length).toBeGreaterThan(0);
-
-    await left1.click();
-    await left1.evaluate((el) => {
-      el.focus();
-      el.setSelectionRange(0, 0);
-    });
-    await left1.press('Backspace');
-
-    await expect.poll(async () => {
-      const p0 = await page.locator('.diary-page').nth(0).locator('[data-col="left"]').inputValue();
-      const p1 = await page.locator('.diary-page').nth(1).locator('[data-col="left"]').inputValue().catch(() => '');
-      return p0 !== beforeP0 || p1 !== beforeP1;
-    }).toBe(true);
-
-    const afterP0 = await page.locator('.diary-page').nth(0).locator('[data-col="left"]').inputValue();
-    expect(afterP0.length).not.toBe(beforeP0.length);
+    const blocks = await columnBlocks(page, 'left');
+    expect(blocks).toContain(`${lastOnPage1}${firstOnPage2}`);
+    expect(await caret(page)).toMatchObject({ col: 'left', text: `${lastOnPage1}${firstOnPage2}`, offset: lastOnPage1.length });
+    expect(await clippedBoxes(page)).toEqual([]);
   });
 
   test('Backspace on right column page 2 leaves caret at the merged text', async ({ page }) => {
-    // Overflow page 1 so page 2 is created the way it is in real use.
-    await page.evaluate((text) => {
-      const quill = window.__q(0);
-      if (!quill) throw new Error('page 1 quill missing');
-      quill.focus();
-      quill.setText(text);
-    }, `${'यह एक लंबा वाक्य है जो पृष्ठ को भर देता है। '.repeat(6)}\n`.repeat(30));
+    const capacity = await fillSinglePage(page);
+    await setDoc(page, [{ right: [...numberedLines(1, capacity), 'second-page'] }]);
+    await setCaret(page, { page: 1, col: 'right', start: true });
+    await page.keyboard.press('Backspace');
+    await settle(page);
+    const merged = `${capacity}second-page`;
+    expect(await columnBlocks(page)).toEqual([...numberedLines(1, capacity - 1), merged]);
+    expect(await caret(page)).toMatchObject({ text: merged, offset: String(capacity).length });
 
-    await expect.poll(async () => page.locator('.diary-page').count(), { timeout: 15000 })
-      .toBeGreaterThan(1);
-    // Reflow must be finished before we place the caret, or a late spill moves
-    // it and Backspace deletes a character instead of merging the boundary.
-    await expect.poll(async () => clippedDiaryBoxes(page), { timeout: 10000 }).toEqual([]);
-
-    // The text the caret sits in front of must not change, whether page 2's
-    // line merges back into page 1 or stays put.
-    const ahead = await page.evaluate(() => {
-      const quill = window.__q(1);
-      if (!quill) throw new Error('page 2 quill missing');
-      quill.focus();
-      quill.setSelection(0, 0);
-      return quill.getText().slice(0, 24);
-    });
-    expect(ahead.trim().length).toBeGreaterThan(0);
-    await expect.poll(async () => page.evaluate(() => {
-      const q = window.__liveQ(1);
-      return q?.hasFocus() ? q.getSelection()?.index ?? null : null;
-    }), { timeout: 10000 }).toBe(0);
-
-    await page.locator('.diary-page').nth(1).locator('.ql-editor').press('Backspace');
-
-    await expect.poll(async () => page.evaluate((expected) => {
-      const n = document.querySelectorAll('.diary-page').length;
-      let quill = null;
-      for (let i = 0; i < n; i++) {
-        // __liveQ, not __q: activating a static page would move the caret we
-        // are asking about.
-        const candidate = window.__liveQ(i);
-        if (candidate?.hasFocus()) {
-          quill = candidate;
-          break;
-        }
-      }
-      if (!quill) return 'no-focused-editor';
-      const sel = quill.getSelection();
-      if (!sel) return 'no-selection';
-      return quill.getText().slice(sel.index, sel.index + expected.length) === expected
-        ? 'caret-at-expected-text'
-        : 'caret-misplaced';
-    }, ahead), { timeout: 15000 }).toBe('caret-at-expected-text');
+    // Typing continues at the junction.
+    await page.keyboard.type('|');
+    expect((await caret(page)).text).toBe(`${capacity}|second-page`);
   });
 
   test('Backspace at a right-column page boundary keeps the caret in the page box', async ({ page }) => {
-    const errors = [];
-    page.on('pageerror', (e) => errors.push(e.message));
-
-    // Overflow page 1 so page 2 exists, then trim page 2 to a single short
-    // line and leave blank lines at the end of page 1. That is the shape that
-    // used to merge the line into a clipped position with no caret.
-    await page.evaluate((text) => {
-      const q = window.__q(0);
-      q.focus();
-      q.setText(text, 'user');
-    }, `${'यह एक लंबा वाक्य है जो पृष्ठ को भर देता है। '.repeat(6)}\n`.repeat(14));
-    await expect.poll(async () => page.locator('.diary-page').count(), { timeout: 15000 })
-      .toBeGreaterThan(1);
-
-    await page.evaluate(() => {
-      const q = window.__q(0);
-      q.focus();
-      q.setSelection(Math.max(0, q.getLength() - 1), 0);
+    const capacity = await fillSinglePage(page);
+    await setDoc(page, [{ right: [...numberedLines(1, capacity), 'x'] }]);
+    await setCaret(page, { page: 1, col: 'right', start: true });
+    await page.keyboard.press('Backspace');
+    await settle(page);
+    const inBox = await page.evaluate(() => {
+      const sel = getSelection();
+      if (!sel?.rangeCount) return false;
+      const r = sel.getRangeAt(0).getBoundingClientRect();
+      const node = sel.anchorNode instanceof Element ? sel.anchorNode : sel.anchorNode?.parentElement;
+      const box = node?.closest('.bp-cell')?.getBoundingClientRect();
+      return Boolean(box && r.top >= box.top - 1 && r.bottom <= box.bottom + 1);
     });
-    for (let i = 0; i < 3; i++) {
-      await page.keyboard.press('Enter');
-      await page.waitForTimeout(150);
-    }
-
-    // Pin a short line on page 2 via the model so absorb cannot collapse it
-    // before the boundary Backspace under continuous-right.
-    await page.evaluate(() => {
-      const m = window.__bpDiarySheet.getModel();
-      if (m.pages.length < 2) {
-        m.pages.push({ hasHeader: false, header: null, left: '', right: '' });
-      }
-      m.pages = m.pages.slice(0, 2);
-      m.pages[1].right = '<p>यही बात है</p>';
-      window.__bpDiarySheet.setModel(m);
-    });
-    await page.waitForTimeout(300);
-    expect(await page.locator('.diary-page').count()).toBeGreaterThan(1);
-
-    await page.evaluate(() => {
-      const q = window.__q(1);
-      q.focus();
-      q.setSelection(0, 0);
-    });
-    const scrollBefore = await page.evaluate(
-      () => document.querySelector('main.main-content').scrollTop,
-    );
-    await page.locator('.diary-page').nth(1).locator('.ql-editor').press('Backspace');
-    await page.waitForTimeout(700);
-
-    const caret = await page.evaluate(() => {
-      const n = document.querySelectorAll('.diary-page').length;
-      let q = null;
-      for (let i = 0; i < n; i++) {
-        const candidate = window.__liveQ(i);
-        if (candidate?.hasFocus()) {
-          q = candidate;
-          break;
-        }
-      }
-      if (!q) return { reason: 'no-focused-editor' };
-      const sel = q.getSelection();
-      if (!sel) return { reason: 'focused-editor-has-no-selection' };
-
-      const editorRect = q.root.getBoundingClientRect();
-      const scale = q.root.offsetHeight ? editorRect.height / q.root.offsetHeight : 1;
-      const b = q.getBounds(sel.index, 0);
-      const caretBottom = editorRect.top + b.bottom * scale;
-
-      return {
-        reason: 'ok',
-        // The caret must land on rendered text, not in a clipped overhang.
-        insideBox: caretBottom <= editorRect.bottom + 1,
-        editorScrollTop: q.root.scrollTop,
-        stageScrollTop: document.querySelector('main.main-content').scrollTop,
-      };
-    });
-
-    expect(caret.reason).toBe('ok');
-    expect(caret.insideBox).toBe(true);
-    expect(caret.editorScrollTop).toBe(0);
-    // Restoring the caret must never scroll the stage for the user.
-    expect(caret.stageScrollTop).toBe(scrollBefore);
-    expect(errors).toEqual([]);
+    expect(inBox).toBe(true);
+    expect(await clippedBoxes(page)).toEqual([]);
   });
 
-  test('offscreen fit measurement does not steal the caret', async ({ page }) => {
-    const before = await page.evaluate(() => {
-      const host = document.querySelectorAll('.diary-page')[0]
-        ?.querySelector('[data-col="right"]');
-      const quill = host && window.Quill ? window.Quill.find(host) : null;
-      if (!quill) throw new Error('page 1 quill missing');
-      quill.setText('कुछ पाठ यहाँ लिखा है\n', 'user');
-      quill.setSelection(4, 0, 'api');
-      return { sel: quill.getSelection(), hasFocus: quill.hasFocus() };
-    });
-    expect(before.sel).toEqual({ index: 4, length: 0 });
-    expect(before.hasFocus).toBe(true);
-
-    // Measuring content in the offscreen mirror must not touch the document
-    // selection, or the caret vanishes from the editor the user is typing in.
-    const after = await page.evaluate(async () => {
-      const mod = await import('./js/quill-pages.js');
-      mod.splitRichToFit(
-        `${'<p>यह एक लंबा वाक्य है जो पृष्ठ को भर देता है।</p>'.repeat(40)}`,
-        544,
-        795,
-        { fontSize: 16, lineHeight: 24, padding: '4px 6px' },
-      );
-
-      const host = document.querySelectorAll('.diary-page')[0]
-        ?.querySelector('[data-col="right"]');
-      const quill = window.Quill.find(host);
-      const domSel = window.getSelection();
-      const anchorEl = domSel?.anchorNode?.nodeType === 1
-        ? domSel.anchorNode
-        : domSel?.anchorNode?.parentElement;
-      return {
-        sel: quill.getSelection(),
-        hasFocus: quill.hasFocus(),
-        anchorInEditor: Boolean(anchorEl && quill.root.contains(anchorEl)),
-      };
-    });
-
-    expect(after.hasFocus).toBe(true);
-    expect(after.sel).toEqual({ index: 4, length: 0 });
-    expect(after.anchorInEditor).toBe(true);
+  test('a reflow never moves a caret that is not in the moved text', async ({ page }) => {
+    const capacity = await fillSinglePage(page);
+    // Caret mid-page; type enough to push the last lines to page 2.
+    await setCaret(page, { page: 0, col: 'right', block: 5 });
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('mid');
+    await settle(page);
+    expect(await pageCount(page)).toBe(2);
+    expect(await caret(page)).toMatchObject({ page: 0, text: 'mid', offset: 3 });
+    expect(capacity).toBeGreaterThan(0);
   });
 
   test('Enter that pushes the last line to page 2 takes the caret with it', async ({ page }) => {
-    const marker = 'यही बात है';
-    const filler = `${'यह एक लंबा वाक्य है जो पृष्ठ को भर देता है। '.repeat(6)}\n`.repeat(9);
-
-    const setBody = async (blanks) => {
-      await page.evaluate(({ f, n, m }) => {
-        const q = window.__q(0);
-        q.focus();
-        q.setText(`${f}${'\n'.repeat(n)}${m}\n`, 'user');
-      }, { f: filler, n: blanks, m: marker });
-      await page.waitForTimeout(140);
-    };
-
-    // Grow the blank run until the marker is the last line of a full page 1.
-    let blanks = 0;
-    for (let n = 0; n <= 30; n++) {
-      await setBody(n);
-      if (await page.locator('.diary-page').count() > 1) break;
-      blanks = n;
-    }
-    await setBody(blanks);
-    await page.waitForTimeout(400);
-
-    // Caret immediately before the marker, then a plain Enter.
-    await page.evaluate((m) => {
-      const q = window.__q(0);
-      q.focus();
-      q.setSelection(q.getText().indexOf(m), 0, 'api');
-    }, marker);
-    await page.locator('.diary-page').nth(0).locator('.ql-editor').press('Enter');
-
-    // The caret belongs wherever the marker ended up, right at its start.
-    await expect.poll(async () => page.evaluate((m) => {
-      const n = document.querySelectorAll('.diary-page').length;
-      let focused = null;
-      let holder = null;
-      for (let i = 0; i < n; i++) {
-        const host = document.querySelectorAll('.diary-page')[i]
-          ?.querySelector('[data-col="right"]');
-        const q = window.Quill.find(host);
-        const text = q
-          ? q.getText()
-          : (host?.querySelector('.ql-editor')?.innerText || '');
-        const markerAt = text.indexOf(m);
-        if (markerAt >= 0) holder = { i, markerAt, q };
-        if (q?.hasFocus()) focused = { i, q };
-      }
-      if (!focused) return 'no-focused-editor';
-      if (!holder) return 'marker-missing';
-      if (focused.i !== holder.i) return 'caret-on-wrong-page';
-      const sel = focused.q.getSelection();
-      if (!sel) return 'no-selection';
-      return sel.index === holder.markerAt ? 'caret-at-marker' : `caret-off-by-${sel.index - holder.markerAt}`;
-    }, marker), { timeout: 15000 }).toBe('caret-at-marker');
+    const capacity = await fillSinglePage(page);
+    await setCaret(page, { page: 0, col: 'right', block: capacity - 1, offset: 0 });
+    await page.keyboard.press('Enter');
+    await settle(page);
+    expect(await columnPages(page)).toEqual([[...numberedLines(1, capacity - 1), ''], [String(capacity)]]);
+    expect(await caret(page)).toMatchObject({ page: 1, text: String(capacity), offset: 0 });
   });
 
   test('repeated Enter at the bottom of a full page never clips a page', async ({ page }) => {
-    await page.evaluate(() => {
-      window.__clipped = () => [...document.querySelectorAll('.diary-page .ql-editor')]
-        .map((el, i) => ({
-          page: i + 1,
-          overflowPx: el.scrollHeight - el.clientHeight,
-          scrollTop: el.scrollTop,
-        }))
-        .filter((p) => p.overflowPx > 1 || p.scrollTop > 0);
-    });
-
-    await page.evaluate((t) => {
-      const q = window.__q(0);
-      q.focus();
-      q.setText(t, 'user');
-    }, `${'यह एक लंबा वाक्य है जो पृष्ठ को भर देता है। '.repeat(6)}\n`.repeat(14));
-    await expect.poll(async () => page.locator('.diary-page').count()).toBeGreaterThan(1);
-    await expect.poll(async () => page.evaluate(() => window.__clipped())).toEqual([]);
-
-    for (let i = 0; i < 5; i++) {
-      await page.evaluate(() => {
-        const last = document.querySelectorAll('.diary-page').length - 1;
-        const q = window.__q(last);
-        q.focus();
-        q.setSelection(Math.max(0, q.getLength() - 1), 0, 'api');
-      });
+    await fillSinglePage(page);
+    await setCaret(page, { page: 0, col: 'right' });
+    // The pager reflows on the next frame; check after each reflow.
+    for (let i = 0; i < 6; i++) {
       await page.keyboard.press('Enter');
-      await expect.poll(
-        async () => page.evaluate(() => window.__clipped()),
-        { timeout: 10000 },
-      ).toEqual([]);
+      await settle(page);
+      expect(await clippedBoxes(page)).toEqual([]);
     }
-
-    expect(await page.evaluate(() => {
-      const last = document.querySelectorAll('.diary-page').length - 1;
-      const q = window.__q(last);
-      if (!q.hasFocus()) return 'caret-left-the-last-page';
-      if (q.getLength() <= 1) return 'blank-lines-collapsed';
-      const sel = q.getSelection();
-      if (!sel) return 'no-selection';
-      return sel.index === q.getLength() - 1 ? 'caret-at-end' : `caret-off-by-${sel.index - (q.getLength() - 1)}`;
-    })).toBe('caret-at-end');
+    await settle(page);
+    expect(await clippedBoxes(page)).toEqual([]);
+    expect((await caret(page)).page).toBe(1);
   });
-
 
   test('Enter after the last line of a full page creates a blank next page', async ({ page }) => {
-    await fillSinglePage(page, { lastLine: '33' });
-    await page.evaluate(() => {
-      const q = window.__q(0);
-      q.focus();
-      q.setSelection(q.getLength() - 1, 0, 'api');
-    });
-    await expect.poll(async () => page.locator('.diary-page').count()).toBe(1);
-
-    await page.locator('.diary-page').nth(0).locator('.ql-editor').press('Enter');
-    await page.waitForTimeout(500);
-
-    await expect.poll(async () => page.locator('.diary-page').count(), { timeout: 10000 })
-      .toBeGreaterThanOrEqual(2);
-
-    const state = await page.evaluate(() => {
-      const pages = window.__bpDiarySheet.getModel().pages;
-      const p1 = pages[1]?.right || '';
-      const n = document.querySelectorAll('.diary-page').length;
-      let focused = -1;
-      let sel = null;
-      for (let i = 0; i < n; i++) {
-        // __liveQ, not __q: activating a static page here would steal the caret
-        // we are trying to observe.
-        const q = window.__liveQ(i);
-        if (q?.hasFocus()) {
-          focused = i;
-          sel = q.getSelection();
-          break;
-        }
-      }
-      return {
-        pageCount: pages.length,
-        page1Right: p1,
-        focused,
-        selIndex: sel?.index ?? null,
-        selLength: sel?.length ?? null,
-      };
-    });
-
-    expect(state.pageCount).toBeGreaterThanOrEqual(2);
-    // Caret-owned blank spill must survive collapse. Quill's default empty doc
-    // stores '' (same as a lone blank line); static fill still shows <p><br></p>.
-    const normalized = (state.page1Right || '').replace(/\s+/g, '').toLowerCase();
-    expect(normalized === '' || /<p><br\/?><\/p>/.test(normalized)).toBe(true);
-    expect(state.focused).toBe(1);
-    expect(state.selIndex).toBe(0);
-    expect(state.selLength).toBe(0);
-    expect(await clippedDiaryBoxes(page)).toEqual([]);
+    const capacity = await fillSinglePage(page);
+    await setCaret(page, { page: 0, col: 'right' });
+    await page.keyboard.press('Enter');
+    await settle(page);
+    expect(await columnPages(page)).toEqual([numberedLines(1, capacity), ['']]);
+    expect(await caret(page)).toMatchObject({ page: 1, text: '', offset: 0 });
   });
 
+  // Regression: separate paragraphs welded together ("29 30 31 32" → "29303132")
+  // after Enter above the last lines of a full page and one Backspace at the
+  // top of page 2.
   test('Backspace after an Enter spill pulls lines back without welding them', async ({ page }) => {
-    await fillSinglePage(page);
-    const before = await rightColumnBlocks(page);
-    expect(before.length).toBeGreaterThan(8);
-    const head = before.slice(0, before.length - 4);
-    const tail = before.slice(-4);
-
-    // Caret at the start of the 4th line from the end, then four Enters: the
-    // blank lines stay on page 1 and push the last four lines onto page 2.
-    await page.evaluate((keep) => {
-      const q = window.__q(0);
-      q.focus();
-      const lines = q.getText().split('\n').slice(0, -1);
-      q.setSelection(lines.slice(0, keep).join('\n').length + 1, 0, 'api');
-    }, head.length);
-    for (let i = 0; i < 4; i++) {
-      await page.keyboard.press('Enter');
-      await page.waitForTimeout(250);
-    }
-    expect(await rightColumnBlocks(page)).toEqual([...head, '', '', '', '', ...tail]);
-
-    // The caret must be at the very start of page 2 so Backspace hits the
-    // page boundary rather than deleting a character.
-    await expect.poll(async () => page.evaluate(() => {
-      const q = window.__liveQ(1);
-      return q?.hasFocus() ? q.getSelection()?.index ?? null : null;
-    }), { timeout: 10000 }).toBe(0);
-
+    const capacity = await fillSinglePage(page);
+    const before = await columnBlocks(page);
+    await setCaret(page, { page: 0, col: 'right', block: capacity - 4 });
+    await page.keyboard.press('Enter');
+    await settle(page);
+    expect(await pageCount(page)).toBe(2);
     await page.keyboard.press('Backspace');
-    await page.waitForTimeout(600);
-
-    // One blank line goes; every other line survives as its own block. Absorb
-    // used to weld the pulled-back lines onto one line ("29303132").
-    expect(await rightColumnBlocks(page)).toEqual([...head, '', '', '', ...tail]);
-    expect(await clippedDiaryBoxes(page)).toEqual([]);
+    await settle(page);
+    expect(await columnBlocks(page)).toEqual(before);
+    expect(await columnPages(page)).toEqual([before]);
   });
 
   test('Enter at page edge does not jump main.main-content scroll', async ({ page }) => {
     await fillSinglePage(page, { lastLine: '33' });
-    await page.evaluate(() => {
-      const q = window.__q(0);
-      q.focus();
-      q.setSelection(q.getLength() - 1, 0, 'api');
-    });
-
-    // Scroll stage so we can detect a jump.
+    await setCaret(page, { page: 0, col: 'right' });
     const before = await page.evaluate(() => {
       const main = document.querySelector('main.main-content');
-      if (!(main instanceof HTMLElement)) return null;
       const target = Math.min(120, Math.max(40, main.scrollHeight - main.clientHeight));
       main.scrollTop = target;
       return main.scrollTop;
     });
-    expect(before).not.toBeNull();
     expect(before).toBeGreaterThan(0);
-
-    await page.locator('.diary-page').nth(0).locator('.ql-editor').press('Enter');
-    await page.waitForTimeout(500);
-
-    const after = await page.evaluate(() => {
-      const main = document.querySelector('main.main-content');
-      return main instanceof HTMLElement ? main.scrollTop : -1;
-    });
+    await page.keyboard.press('Enter');
+    await settle(page);
+    const after = await page.evaluate(() => document.querySelector('main.main-content').scrollTop);
     expect(Math.abs(after - before)).toBeLessThanOrEqual(1);
   });
 
   test('letter template still opens after diary pagination', async ({ page }) => {
-    page.on('dialog', (d) => d.accept().catch(() => {}));
-    const letterBtn = page.getByRole('button', { name: 'Letter' });
-    await letterBtn.click();
-    await expect(page.locator('.editor-letter')).toBeVisible({ timeout: 5000 });
+    await fillSinglePage(page);
+    await switchTemplate(page, 'letter');
+    await expect(page.locator('.editor-letter .letter-page')).toBeVisible();
   });
 
-  test('paste after mid-page line then ArrowDown never clips from top', async ({ page }) => {
+  test('paste after a mid-page line then ArrowDown never clips', async ({ page }) => {
     await fillSinglePage(page);
-    await expect.poll(async () => page.locator('.diary-page').count()).toBe(1);
-
     const paste = 'मगर इन दोनों को उसी वक़्त बुलाते, जब दो आदमियों से एक का काम पाकर भी संतोष कर लेने के सिवा और कोई चारा न होता। अगर दोनो साधु होते, तो उन्हें संतोष और धैर्य के लिए, संयम और नियम की बिलकुल ज़रूरत न होती। यह तो इनकी प्रकृति थी। विचित्र जीवन था इनका! घर में मिट्टी के दो-चार बर्तन के सिवा कोई संपत्ति नहीं।';
+    await setCaret(page, { page: 0, col: 'right', block: 21 });
+    await page.keyboard.press('Enter');
+    await page.keyboard.insertText(paste);
+    await settle(page);
+    expect(await pageCount(page)).toBeGreaterThan(1);
+    expect(await clippedBoxes(page)).toEqual([]);
 
-    await page.evaluate((t) => {
-      const q = window.__q(0);
-      q.focus();
-      const text = q.getText();
-      const needle = '22\n';
-      let at = text.indexOf(needle);
-      if (at < 0) {
-        // Capacity may not include 22 — paste after ~70% of the page.
-        at = Math.floor(Math.max(0, q.getLength() - 1) * 0.7);
-      } else {
-        at += needle.length;
-      }
-      q.setSelection(at, 0, 'api');
-      q.insertText(at, `${t}\n`, 'user');
-    }, paste);
-
-    await expect.poll(async () => page.locator('.diary-page').count(), { timeout: 15000 })
-      .toBeGreaterThan(1);
-    await expect.poll(async () => clippedDiaryBoxes(page), { timeout: 10000 }).toEqual([]);
-
-    // Caret toward end of page 0, then ArrowDown — must not scroll the fixed box.
-    await page.evaluate(() => {
-      const q = window.__liveQ(0) || window.__q(0);
-      q.focus();
-      const end = Math.max(0, q.getLength() - 1);
-      q.setSelection(end, 0, 'user');
-    });
+    await setCaret(page, { page: 0, col: 'right' });
     await page.keyboard.press('ArrowDown');
     await page.keyboard.press('ArrowDown');
-    await page.waitForTimeout(200);
-
-    // Simulate the browser trying to reveal the caret by scrolling the editor.
-    await page.evaluate(() => {
-      const q = window.__liveQ(0);
-      if (q) q.root.scrollTop = 80;
-    });
-    await page.waitForTimeout(100);
-
-    const clip = await clippedDiaryBoxes(page);
-    expect(clip).toEqual([]);
-    const tops = await page.evaluate(() => [...document.querySelectorAll('.diary-page [data-col="right"] .ql-editor')]
-      .map((el) => el.scrollTop));
-    expect(tops.every((t) => t === 0)).toBe(true);
-
-    const joined = await page.evaluate(() => window.__bpDiarySheet.getModel().pages
-      .map((p) => p.right || '')
-      .join(''));
-    expect(joined).toContain('मगर इन दोनों');
-    expect(joined).toContain('कोई संपत्ति नहीं');
+    await settle(page);
+    expect(await clippedBoxes(page)).toEqual([]);
+    expect(await columnBlocks(page)).toContain(paste);
   });
 
   test('paste large Hindi block never clips a diary page', async ({ page }) => {
-    const block = `${'यह एक लंबा वाक्य है जो पृष्ठ को भर देता है। '.repeat(10)}\n`.repeat(25);
-    await page.evaluate((t) => {
-      const q = window.Quill.find(
-        document.querySelector('.diary-page [data-col="right"]'),
-      );
-      q.focus();
-      q.setText(t, 'user');
-    }, block);
-    await expect.poll(async () => page.locator('.diary-page').count()).toBeGreaterThan(1);
-    await expect.poll(async () => clippedDiaryBoxes(page), { timeout: 10000 }).toEqual([]);
+    await setCaret(page, { page: 0, col: 'right' });
+    await page.keyboard.insertText(Array.from({ length: 25 }, () => SENTENCE.repeat(10)).join(''));
+    await settle(page);
+    expect(await pageCount(page)).toBeGreaterThan(1);
+    expect(await clippedBoxes(page)).toEqual([]);
   });
 
-  test('mid-paragraph paste fills remainder; Backspace pulls when slack', async ({ page }) => {
-    // Nearly fill page 0, leaving a few lines of slack for the paste to use.
-    await fillSinglePage(page, { freeLines: 3 });
-    await expect.poll(async () => page.locator('.diary-page').count()).toBe(1);
+  test('a long paragraph fills the remainder of the page, then continues; Backspace at the cut joins it back', async ({ page }) => {
+    const capacity = await fillSinglePage(page, { freeLines: 3 });
+    const marker = 'PASTE_MARKER_शुरुआत';
+    const longPara = `${marker} ${LONG_PARA.repeat(35)}`;
+    await setCaret(page, { page: 0, col: 'right' });
+    await page.keyboard.press('Enter');
+    await page.keyboard.insertText(longPara);
+    await settle(page);
 
-    const pasteMarker = 'PASTE_MARKER_शुरुआत';
-    const longPara = `${pasteMarker} ${'यह एक बहुत लंबा पैराग्राफ है जो कई पंक्तियों में लपेटा जाएगा। '.repeat(35)}`;
-    await page.evaluate((t) => {
-      const q = window.__q(0);
-      q.focus();
-      const at = Math.max(0, q.getLength() - 1);
-      q.setSelection(at, 0);
-      q.insertText(at, `\n${t}`, 'user');
-    }, longPara);
+    const pages = await columnPages(page);
+    expect(pages.length).toBeGreaterThan(1);
+    // The paragraph starts on page 1 (filling its free lines) and continues.
+    expect(pages[0][pages[0].length - 1].startsWith(marker)).toBe(true);
+    expect(pages[1][0].startsWith('+')).toBe(true);
+    expect(await columnBlocks(page)).toEqual([...numberedLines(1, capacity - 3), longPara]);
+    expect(await clippedBoxes(page)).toEqual([]);
 
-    await expect.poll(async () => page.locator('.diary-page').count(), { timeout: 15000 })
-      .toBeGreaterThan(1);
-    await expect.poll(async () => clippedDiaryBoxes(page), { timeout: 10000 }).toEqual([]);
-
-    const afterPaste = await page.evaluate((marker) => {
-      const pages = [...document.querySelectorAll('.diary-page')];
-      const eds = pages.map((p) => p.querySelector('[data-col="right"] .ql-editor'));
-      const e0 = eds[0];
-      const fill = e0.clientHeight ? e0.scrollHeight / e0.clientHeight : 0;
-      const plain = eds.map((e) => (e?.innerText || '').replace(/\n/g, '')).join('');
-      return {
-        fill,
-        hasMarker: plain.includes(marker),
-        markerOnPage0: (eds[0]?.innerText || '').includes(marker),
-        page1HasContinuation: (eds[1]?.innerText || '').trim().length > 0,
-      };
-    }, pasteMarker);
-    expect(afterPaste.fill).toBeGreaterThan(0.85);
-    expect(afterPaste.hasMarker).toBe(true);
-    expect(afterPaste.markerOnPage0).toBe(true);
-    expect(afterPaste.page1HasContinuation).toBe(true);
-
-    // After a mid-paragraph fill, page 0 is typically full — free slack by
-    // dropping early filler blocks so absorb-first Backspace can pull.
-    await page.evaluate(() => {
-      const m = window.__bpDiarySheet.getModel();
-      const html = m.pages[0].right || '';
-      const parts = html.split(/(?=<p\b)/i).filter(Boolean);
-      if (parts.length > 10) {
-        m.pages[0].right = parts.slice(8).join('');
-        window.__bpDiarySheet.setModel(m);
-      }
-    });
-    await page.waitForTimeout(400);
-
-    const beforeBs = await page.evaluate(() => {
-      const m = window.__bpDiarySheet.getModel();
-      const plain = (html) => String(html || '').replace(/<[^>]+>/g, '');
-      return {
-        p0: m.pages[0].right,
-        p1: m.pages[1]?.right || '',
-        p0plain: plain(m.pages[0].right),
-        p1plain: plain(m.pages[1]?.right || ''),
-      };
-    });
-
-    await page.evaluate(() => {
-      const q = window.__q(1);
-      q.focus();
-      q.setSelection(0, 0);
-    });
-    const ahead = await page.evaluate(() => window.__q(1).getText().slice(0, 24));
-    expect(ahead.trim().length).toBeGreaterThan(0);
-
-    await page.locator('.diary-page').nth(1).locator('.ql-editor').press('Backspace');
-    await page.waitForTimeout(800);
-
-    const afterBs = await page.evaluate((expected) => {
-      const m = window.__bpDiarySheet.getModel();
-      const plain = (html) => String(html || '').replace(/<[^>]+>/g, '');
-      const p0plain = plain(m.pages[0].right);
-      const p1plain = plain(m.pages[1]?.right || '');
-      let caretOk = false;
-      let midCluster = false;
-      for (let i = 0; i < m.pages.length; i++) {
-        const q = window.__liveQ(i);
-        if (!q?.hasFocus()) continue;
-        const sel = q.getSelection();
-        if (!sel) continue;
-        const text = q.getText();
-        caretOk = text.slice(sel.index, sel.index + expected.length) === expected;
-        // Off-by-one into Devanagari would put caret after first code unit of "कई".
-        if (expected.startsWith('कई') && text.slice(sel.index, sel.index + 1) === 'ई') {
-          midCluster = true;
-        }
-      }
-      return {
-        p0: m.pages[0].right,
-        p1: m.pages[1]?.right || '',
-        p0plain,
-        p1plain,
-        caretOk,
-        midCluster,
-        pageCount: m.pages.length,
-      };
-    }, ahead);
-
-    // Must not only delete the last char of page 0 while page 1 stays unchanged.
-    const eatenOnly = afterBs.p1 === beforeBs.p1
-      && afterBs.p0plain === beforeBs.p0plain.slice(0, -1);
-    expect(eatenOnly).toBe(false);
-    expect(
-      afterBs.p1plain.length < beforeBs.p1plain.length
-      || afterBs.pageCount < 2
-      || afterBs.p0plain.length > beforeBs.p0plain.length,
-    ).toBe(true);
-    expect(afterBs.midCluster).toBe(false);
-    expect(afterBs.caretOk).toBe(true);
-    await expect.poll(async () => clippedDiaryBoxes(page), { timeout: 10000 }).toEqual([]);
+    // Backspace at the top of page 2 deletes the character before the page
+    // edge — the same paragraph, as in one continuous column.
+    const head = pages[0][pages[0].length - 1];
+    await setCaret(page, { page: 1, col: 'right', start: true });
+    await page.keyboard.press('Backspace');
+    await settle(page);
+    const blocks = await columnBlocks(page);
+    expect(blocks).toHaveLength(capacity - 2);
+    expect(blocks[blocks.length - 1]).toBe(longPara.slice(0, head.length - 1) + longPara.slice(head.length));
+    // The caret sits where the character was — never inside a Devanagari cluster.
+    const c = await caret(page);
+    expect(c.text.slice(0, c.offset).endsWith(longPara.slice(head.length - 10, head.length - 1))).toBe(true);
+    expect(await clippedBoxes(page)).toEqual([]);
   });
 
   test('justified spill stays one paragraph; Backspace absorbs into page 1', async ({ page }) => {
-    // Live peel sheds words when align is set; without prependPeeledBlock those
-    // become one <p> per word on page 2. Use numbered filler + one justified
-    // overflow block so absorb slack can drop early <p>s without emptying the
-    // last line (fitMergeIntoLastBlock needs a full last line).
-    await fillSinglePage(page, { freeLines: 3 });
-    await expect.poll(async () => page.locator('.diary-page').count()).toBe(1);
+    const capacity = await fillSinglePage(page, { freeLines: 3 });
+    const long = LONG_PARA.repeat(40).trim();
+    await setDoc(page, [{ right: [...numberedLines(1, capacity - 3), { t: long, align: 'justify' }] }]);
+    const pages = await columnPages(page);
+    expect(pages.length).toBeGreaterThan(1);
+    expect(await columnBlocks(page)).toEqual([...numberedLines(1, capacity - 3), long]);
+    // Every piece of the paragraph keeps its alignment.
+    const aligns = await page.evaluate(() => [...document.querySelectorAll('.editor-diary .bp-cell[data-col="right"] p')]
+      .filter((p) => p.textContent.includes('लंबा')).map((p) => p.style.textAlign));
+    expect(new Set(aligns)).toEqual(new Set(['justify']));
 
-    const long = `${'यह एक बहुत लंबा पैराग्राफ है जो कई पंक्तियों में लपेटा जाएगा। '.repeat(40)}`.trim();
-    const capacityHtml = await page.evaluate(
-      () => window.__bpDiarySheet.getModel().pages[0].right,
-    );
-    await page.evaluate(({ cap, para }) => {
-      window.__bpDiarySheet.setModel({
-        pages: [{
-          hasHeader: true,
-          header: {
-            fir_number: '', thana: '', district: '', case_diary_no: '',
-            rule_no: '', against_1: '', against_2: '', special_report_no: '',
-            fir_date: '', event_date_place: '', sections: '', investigation_record: '',
-          },
-          left: '',
-          right: `${cap}<p class="ql-align-justify">${para}</p>`,
-        }],
-      });
-    }, { cap: capacityHtml, para: long });
-
-    await expect.poll(async () => page.locator('.diary-page').count(), { timeout: 15000 })
-      .toBeGreaterThan(1);
-    await expect.poll(async () => clippedDiaryBoxes(page), { timeout: 10000 }).toEqual([]);
-
-    const page2Shape = await page.evaluate(() => {
-      const html = window.__bpDiarySheet.getModel().pages[1]?.right || '';
-      const holder = document.createElement('div');
-      holder.innerHTML = html;
-      const content = [...holder.children].filter((el) => /\S/.test(el.textContent || ''));
-      const wordCounts = content.map((el) => (el.textContent || '')
-        .trim()
-        .split(/\s+/)
-        .filter(Boolean).length);
-      const oneWordBlocks = wordCounts.filter((n) => n === 1).length;
-      const justified = content.find((el) => (el.getAttribute('class') || '')
-        .includes('ql-align-justify'));
-      return {
-        contentBlocks: content.length,
-        firstClass: content[0]?.getAttribute('class') || '',
-        justifiedWords: justified
-          ? (justified.textContent || '').trim().split(/\s+/).filter(Boolean).length
-          : 0,
-        oneWordBlocks,
-      };
-    });
-    expect(page2Shape.contentBlocks).toBeGreaterThan(0);
-    expect(page2Shape.justifiedWords).toBeGreaterThan(1);
-    expect(page2Shape.oneWordBlocks).toBeLessThan(5);
-    expect(page2Shape.oneWordBlocks / Math.max(1, page2Shape.contentBlocks)).toBeLessThan(0.5);
-
-    // Drop early filler blocks so page 1 has slack; justified cut stays full-line.
-    await page.evaluate(() => {
-      const m = window.__bpDiarySheet.getModel();
-      const html = m.pages[0].right || '';
-      const parts = html.split(/(?=<p\b)/i).filter(Boolean);
-      if (parts.length > 10) {
-        m.pages[0].right = parts.slice(8).join('');
-        window.__bpDiarySheet.setModel(m);
-      }
-    });
-    await page.waitForTimeout(400);
-
-    const beforeBs = await page.evaluate(() => {
-      const m = window.__bpDiarySheet.getModel();
-      const plain = (html) => String(html || '').replace(/<[^>]+>/g, '');
-      return {
-        p0plain: plain(m.pages[0].right),
-        p1plain: plain(m.pages[1]?.right || ''),
-        p1: m.pages[1]?.right || '',
-        pageCount: m.pages.length,
-      };
-    });
-    expect(beforeBs.pageCount).toBeGreaterThan(1);
-    expect(beforeBs.p1plain.trim().length).toBeGreaterThan(0);
-
-    await page.evaluate(() => {
-      const q = window.__q(1);
-      q.focus();
-      q.setSelection(0, 0, 'api');
-    });
-    await page.locator('.diary-page').nth(1).locator('.ql-editor').press('Backspace');
-    await page.waitForTimeout(800);
-
-    const afterBs = await page.evaluate(() => {
-      const m = window.__bpDiarySheet.getModel();
-      const plain = (html) => String(html || '').replace(/<[^>]+>/g, '');
-      return {
-        p0plain: plain(m.pages[0].right),
-        p1plain: plain(m.pages[1]?.right || ''),
-        p1: m.pages[1]?.right || '',
-        pageCount: m.pages.length,
-      };
-    });
-    const eatenOnly = afterBs.p1 === beforeBs.p1
-      && afterBs.p0plain === beforeBs.p0plain.slice(0, -1);
-    expect(eatenOnly).toBe(false);
-    expect(
-      afterBs.p1plain.length < beforeBs.p1plain.length
-      || afterBs.pageCount < 2
-      || afterBs.p0plain.length > beforeBs.p0plain.length,
-    ).toBe(true);
-    await expect.poll(async () => clippedDiaryBoxes(page), { timeout: 10000 }).toEqual([]);
+    await setCaret(page, { page: 1, col: 'right', start: true });
+    await page.keyboard.press('Backspace');
+    await settle(page);
+    const after = await columnBlocks(page);
+    expect(after).toHaveLength(capacity - 2);
+    expect(after[after.length - 1].length).toBe(long.length - 1);
+    expect(await clippedBoxes(page)).toEqual([]);
   });
 
   test('Enter on aligned page 1 does not leave blank gaps between page 2 content lines', async ({ page }) => {
-    // Repro: fill with a justified paragraph, press Enter near the bottom so
-    // blanks + continuation spill. Page 2 must not look sparse (blank <p>
-    // between every content line / one-word peels stacked above blanks).
-    await fillSinglePage(page, { freeLines: 2 });
-    await expect.poll(async () => page.locator('.diary-page').count()).toBe(1);
+    const capacity = await fillSinglePage(page, { freeLines: 2 });
+    const long = LONG_PARA.repeat(35).trim();
+    await setDoc(page, [{ right: [...numberedLines(1, capacity - 2), { t: long, align: 'right' }] }]);
+    expect(await pageCount(page)).toBeGreaterThan(1);
+    await setCaret(page, { page: 0, col: 'right', offset: 0 });
+    for (let i = 0; i < 3; i++) await page.keyboard.press('Enter');
+    await settle(page);
+    expect(await clippedBoxes(page)).toEqual([]);
 
-    const long = `${'यह एक बहुत लंबा पैराग्राफ है जो कई पंक्तियों में लपेटा जाएगा। '.repeat(35)}`.trim();
-    const capacityHtml = await page.evaluate(
-      () => window.__bpDiarySheet.getModel().pages[0].right,
-    );
-    await page.evaluate(({ cap, para }) => {
-      window.__bpDiarySheet.setModel({
-        pages: [{
-          hasHeader: true,
-          header: {
-            fir_number: '', thana: '', district: '', case_diary_no: '',
-            rule_no: '', against_1: '', against_2: '', special_report_no: '',
-            fir_date: '', event_date_place: '', sections: '', investigation_record: '',
-          },
-          left: '',
-          // Right-align matches the toolbar case in the gap screenshot.
-          right: `${cap}<p class="ql-align-right">${para}</p>`,
-        }],
-      });
-    }, { cap: capacityHtml, para: long });
-
-    await expect.poll(async () => page.locator('.diary-page').count(), { timeout: 15000 })
-      .toBeGreaterThan(1);
-    await expect.poll(async () => clippedDiaryBoxes(page), { timeout: 10000 }).toEqual([]);
-
-    // Caret in the aligned paragraph on page 1 (near its start on this page),
-    // then Enter several times to push blanks and text onto page 2.
-    await page.evaluate(() => {
-      const q = window.__q(0);
-      q.focus();
-      const text = q.getText();
-      const marker = 'यह एक बहुत लंबा';
-      const at = text.lastIndexOf(marker);
-      q.setSelection(at >= 0 ? at : Math.max(0, q.getLength() - 80), 0, 'api');
-    });
-    for (let i = 0; i < 3; i++) {
-      await page.locator('.diary-page').nth(0).locator('.ql-editor').press('Enter');
-      await page.waitForTimeout(300);
-    }
-    await expect.poll(async () => clippedDiaryBoxes(page), { timeout: 10000 }).toEqual([]);
-
-    const shape = await page.evaluate(() => {
-      const html = window.__bpDiarySheet.getModel().pages[1]?.right || '';
-      const holder = document.createElement('div');
-      holder.innerHTML = html;
-      const blocks = [...holder.children].map((el) => ({
-        blank: !/\S/.test(el.textContent || ''),
-        align: (el.getAttribute('class') || '').match(/ql-align-\w+/)?.[0] || '',
-        words: (el.textContent || '').trim().split(/\s+/).filter(Boolean).length,
-        text: (el.textContent || '').slice(0, 40),
-      }));
-      let i = 0;
-      while (i < blocks.length && blocks[i].blank) i += 1;
-      const leadingBlanks = i;
-      // Count blank runs only when another content block follows (trailing
-      // Quill `<p><br></p>` after the last line is not a gap between lines).
-      let blanksBetweenContent = 0;
-      let contentBlocks = 0;
-      let oneWordContent = 0;
-      let sawContent = false;
-      let blankSinceContent = false;
-      for (; i < blocks.length; i++) {
-        if (blocks[i].blank) {
-          if (sawContent) blankSinceContent = true;
-        } else {
-          if (blankSinceContent) blanksBetweenContent += 1;
-          blankSinceContent = false;
-          sawContent = true;
-          contentBlocks += 1;
-          if (blocks[i].words === 1) oneWordContent += 1;
-        }
-      }
-      return {
-        leadingBlanks,
-        blanksBetweenContent,
-        contentBlocks,
-        oneWordContent,
-        totalBlocks: blocks.length,
-        head: blocks.slice(0, 12),
-        htmlHead: html.slice(0, 400),
-      };
-    });
-
-    // Intentional Enter blanks may lead page 2; they must not interleave the
-    // spilled aligned continuation into a sparse column.
-    expect(shape.contentBlocks).toBeGreaterThan(0);
-    expect(shape.blanksBetweenContent).toBe(0);
-    expect(shape.oneWordContent).toBeLessThan(5);
-    // Continuation should stay in few blocks (ideally one), not one line per <p>.
-    expect(shape.contentBlocks).toBeLessThanOrEqual(3);
+    const page2 = (await columnPages(page))[1];
+    const firstContent = page2.findIndex((b) => b.replace(/^\+/, '').trim());
+    const afterContent = page2.slice(firstContent);
+    // Intentional blank lines may lead page 2; none appear between its text.
+    expect(afterContent.every((b) => b.replace(/^\+/, '').trim())).toBe(true);
+    expect(afterContent.length).toBeLessThanOrEqual(2);
   });
 
   test('showing header on a full page spills instead of clipping', async ({ page }) => {
-    await page.evaluate((t) => {
-      window.__bpDiarySheet.setModel({
-        pages: [{
-          hasHeader: false,
-          header: null,
-          left: '',
-          right: `<p>${t}</p>`.repeat(35),
-        }],
-      });
-    }, 'यह एक लंबा वाक्य है जो पृष्ठ को भर देता है। '.repeat(6));
-
-    await expect.poll(async () => page.locator('.diary-page').count()).toBeGreaterThan(0);
-    await page.waitForTimeout(300);
-
-    const toggle = page.locator('.diary-page').nth(0).locator('.diary-header-toggle');
-    if (await toggle.count()) {
-      await toggle.click();
-    } else {
-      await page.evaluate(() => {
-        const m = window.__bpDiarySheet.getModel();
-        m.pages[0].hasHeader = true;
-        m.pages[0].header = m.pages[0].header || {
-          fir_number: '', thana: '', district: '', case_diary_no: '',
-          rule_no: '', against_1: '', against_2: '', special_report_no: '',
-          fir_date: '', event_date_place: '', sections: '', investigation_record: '',
-        };
-        window.__bpDiarySheet.setModel(m);
-      });
-    }
-
-    await expect.poll(async () => clippedDiaryBoxes(page), { timeout: 15000 }).toEqual([]);
+    const paras = Array.from({ length: 35 }, () => SENTENCE.repeat(6));
+    await setDoc(page, [{ hasHeader: false, right: paras }]);
+    await page.locator('.diary-page').first().locator('.diary-header-toggle').click();
+    await settle(page);
+    expect(await clippedBoxes(page)).toEqual([]);
+    expect(await columnBlocks(page)).toEqual(paras);
   });
 
-  test('continuous right: save/load round-trip keeps pages[] shape', async ({ page }) => {
-    await disableTranslit(page);
+  test('save/load round-trip keeps pages, cuts and text', async ({ page }) => {
+    await setCaret(page, { page: 0, col: 'right' });
+    await page.keyboard.insertText(Array.from({ length: 14 }, () => SENTENCE.repeat(6)).join(''));
+    await settle(page);
+    const before = await columnPages(page);
+    expect(before.length).toBeGreaterThan(1);
+    await page.waitForTimeout(900); // autosave
+    const stored = await page.evaluate(() => window.__bpTest.content());
+    expect(JSON.parse(stored)).toMatchObject({ format: 'bp-doc', v: 1 });
 
-    await page.evaluate((t) => {
-      const q = window.Quill.find(
-        document.querySelector('.diary-page [data-col="right"]'),
-      );
-      q.focus();
-      q.setText(t, 'user');
-    }, `${'यह एक लंबा वाक्य है जो पृष्ठ को भर देता है। '.repeat(6)}\n`.repeat(14));
-
-    await expect.poll(async () => page.locator('.diary-page').count()).toBeGreaterThan(1);
-    await expect.poll(async () => clippedDiaryBoxes(page)).toEqual([]);
-
-    const model = await page.evaluate(() => window.__bpDiarySheet.getModel());
-    expect(Array.isArray(model.pages)).toBe(true);
-    expect(model.pages.length).toBeGreaterThan(1);
-    expect(model.pages[0]).toHaveProperty('right');
-    expect(model).not.toHaveProperty('rightStream');
-
-    await page.evaluate((m) => window.__bpDiarySheet.setModel(m), model);
-    await page.waitForTimeout(300);
-    expect(await page.locator('.diary-page').count()).toBe(model.pages.length);
-    expect(await clippedDiaryBoxes(page)).toEqual([]);
+    await page.reload();
+    await page.waitForFunction(() => window.__uxInitComplete === true);
+    await settle(page);
+    expect(await columnPages(page)).toEqual(before);
   });
 
   test('Enter at start of last right line spills instead of clipping', async ({ page }) => {
-    const marker = 'यही बात है';
-    await page.evaluate(({ t, m }) => {
-      const q = window.__q(0);
-      q.focus();
-      q.setText(`${t}${m}`, 'user');
-    }, {
-      t: `${'यह एक लंबा वाक्य है जो पृष्ठ को भर देता है। '.repeat(6)}\n`.repeat(12),
-      m: marker,
-    });
-
-    await expect.poll(async () => page.locator('.diary-page').count()).toBeGreaterThan(1);
-    await expect.poll(async () => clippedDiaryBoxes(page)).toEqual([]);
-
-    await page.evaluate((m) => {
-      const n = document.querySelectorAll('.diary-page').length;
-      for (let i = 0; i < n; i++) {
-        const q = window.__q(i);
-        const at = q.getText().indexOf(m);
-        if (at >= 0) {
-          q.focus();
-          q.setSelection(at, 0, 'api');
-          return;
-        }
-      }
-      throw new Error('marker missing');
-    }, marker);
-
+    const capacity = await fillSinglePage(page);
+    await setCaret(page, { page: 0, col: 'right', block: capacity - 1, offset: 0 });
     await page.keyboard.press('Enter');
-    await page.waitForTimeout(400);
-
-    await expect.poll(async () => clippedDiaryBoxes(page), { timeout: 10000 }).toEqual([]);
-    expect(await page.locator('.diary-page').count()).toBeGreaterThan(1);
+    await settle(page);
+    expect(await clippedBoxes(page)).toEqual([]);
+    expect(await columnBlocks(page)).toEqual([...numberedLines(1, capacity - 1), '', String(capacity)]);
   });
 
   test('Enter at end of last right line spills blanks without clipping', async ({ page }) => {
-    await page.evaluate((t) => {
-      const q = window.__q(0);
-      q.focus();
-      q.setText(t, 'user');
-    }, `${'यह एक लंबा वाक्य है जो पृष्ठ को भर देता है। '.repeat(6)}\n`.repeat(13));
-
-    await expect.poll(async () => page.locator('.diary-page').count()).toBeGreaterThan(1);
-
-    await page.evaluate(() => {
-      const last = document.querySelectorAll('.diary-page').length - 1;
-      const q = window.__q(last);
-      q.focus();
-      q.setSelection(Math.max(0, q.getLength() - 1), 0, 'api');
-    });
-    await page.keyboard.press('Enter');
-    await page.keyboard.press('Enter');
-    await page.waitForTimeout(400);
-
-    await expect.poll(async () => clippedDiaryBoxes(page), { timeout: 10000 }).toEqual([]);
+    const capacity = await fillSinglePage(page);
+    await setCaret(page, { page: 0, col: 'right' });
+    for (let i = 0; i < 3; i++) await page.keyboard.press('Enter');
+    await settle(page);
+    expect(await clippedBoxes(page)).toEqual([]);
+    expect(await columnBlocks(page)).toEqual([...numberedLines(1, capacity), '', '', '']);
   });
 
   test('Enter after absorb to-and-fro does not clip', async ({ page }) => {
-    await page.evaluate((t) => {
-      const q = window.__q(0);
-      q.focus();
-      q.setText(t, 'user');
-    }, `${'यह एक लंबा वाक्य है जो पृष्ठ को भर देता है। '.repeat(6)}\n`.repeat(14));
-
-    await expect.poll(async () => page.locator('.diary-page').count()).toBeGreaterThan(1);
-    await expect.poll(async () => clippedDiaryBoxes(page)).toEqual([]);
-
-    // Free slack on page 0 so later pages absorb back (to-and-fro churn).
-    await page.evaluate(() => {
-      const q = window.__q(0);
-      q.focus();
-      const len = q.getLength();
-      const del = Math.min(50, Math.max(1, len - 2));
-      const at = Math.max(1, len - del - 1);
-      q.deleteText(at, del, 'user');
-    });
-    await page.waitForTimeout(400);
-
-    // Enter mid-page while height may still be settling after absorb.
-    await page.evaluate(() => {
-      const q = window.__q(0);
-      q.focus();
-      q.setSelection(Math.max(1, Math.floor(q.getLength() / 2)), 0, 'api');
-    });
+    await setDoc(page, [{ right: Array.from({ length: 14 }, () => SENTENCE.repeat(6)) }]);
+    expect(await pageCount(page)).toBeGreaterThan(1);
+    // Free slack on page 1 so text flows back, then Enter mid-page.
+    await setCaret(page, { page: 0, col: 'right', block: 2 });
+    await page.keyboard.press('Shift+Home');
+    await page.keyboard.press('Backspace');
+    await page.keyboard.press('Backspace');
+    await setCaret(page, { page: 0, col: 'right', block: 4, offset: 10 });
     await page.keyboard.press('Enter');
     await page.keyboard.press('Enter');
-    await page.waitForTimeout(500);
-
-    await expect.poll(async () => clippedDiaryBoxes(page), { timeout: 10000 }).toEqual([]);
+    await settle(page);
+    expect(await clippedBoxes(page)).toEqual([]);
   });
 
-  test('left page-0 slack absorbs marker line from page 2', async ({ page }) => {
+  test('left page-1 slack absorbs the next page\'s lines after an edit', async ({ page }) => {
     const marker = 'मगर इन दोनों को उसी';
-    await page.evaluate((m) => {
-      window.__bpDiarySheet.setModel({
-        pages: [
-          {
-            hasHeader: true,
-            header: {
-              fir_number: '', thana: '', district: '', case_diary_no: '',
-              rule_no: '', against_1: '', against_2: '', special_report_no: '',
-              fir_date: '', event_date_place: '', sections: '', investigation_record: '',
-            },
-            left: 'छोटी पंक्ति।\n',
-            right: '',
-          },
-          {
-            hasHeader: false,
-            header: null,
-            left: `${m}\nदूसरी पंक्ति\n`,
-            right: '',
-          },
-        ],
-      });
-    }, marker);
-    await page.waitForTimeout(300);
-
-    // Editing page 0 with slack must pull page-2 lines back (absorbAround).
-    await page.evaluate(() => {
-      const ta = document.querySelector('.diary-page [data-col="left"]');
-      ta.focus();
-      ta.value = `${ta.value} `;
-      ta.dispatchEvent(new Event('input', { bubbles: true }));
-      ta.value = ta.value.replace(/ $/, '');
-      ta.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-    await page.waitForTimeout(400);
-
-    await expect.poll(async () => clippedDiaryBoxes(page)).toEqual([]);
-    const restored = await page.evaluate((m) => {
-      const ta0 = document.querySelectorAll('.diary-page [data-col="left"]')[0];
-      return ta0 instanceof HTMLTextAreaElement && ta0.value.includes(m);
-    }, marker);
-    expect(restored).toBe(true);
+    await setDoc(page, [
+      { left: ['छोटी पंक्ति।'] },
+      { left: [marker, 'दूसरी पंक्ति'] },
+    ]);
+    // Opening keeps the stored layout…
+    expect(await columnPages(page, 'left')).toEqual([['छोटी पंक्ति।'], [marker, 'दूसरी पंक्ति']]);
+    // …and an edit on page 1 pulls the later lines back into its free space.
+    await setCaret(page, { page: 0, col: 'left' });
+    await page.keyboard.type('!');
+    await settle(page);
+    expect(await columnPages(page, 'left')).toEqual([['छोटी पंक्ति।!', marker, 'दूसरी पंक्ति']]);
+    expect(await clippedBoxes(page)).toEqual([]);
   });
 
   test('left Enter on full page spills without clipping', async ({ page }) => {
-    const marker = 'मगर इन दोनों को उसी';
-    await page.evaluate((m) => {
-      const ta = document.querySelector('.diary-page [data-col="left"]');
-      if (!(ta instanceof HTMLTextAreaElement)) throw new Error('left missing');
-      const line = 'पंक्ति परीक्षण पाठ बायाँ कॉलम।\n';
-      let n = 1;
-      ta.value = line;
-      ta.dispatchEvent(new Event('input', { bubbles: true }));
-      while (n < 200 && ta.scrollHeight <= ta.clientHeight + 1) {
-        n += 1;
-        ta.value = line.repeat(n);
-        ta.dispatchEvent(new Event('input', { bubbles: true }));
-      }
-      // Back off one line and append marker so page is maxed with marker last.
-      ta.value = `${line.repeat(Math.max(1, n - 1))}${m}\n`;
-      ta.dispatchEvent(new Event('input', { bubbles: true }));
-      const at = ta.value.indexOf(m);
-      ta.focus();
-      ta.setSelectionRange(at, at);
-    }, marker);
-    await page.waitForTimeout(200);
-
+    await setDoc(page, [{ left: numberedLines(1, 100) }]);
+    const capacity = (await columnPages(page, 'left'))[0].length;
+    await setDoc(page, [{ left: numberedLines(1, capacity) }]);
+    await setCaret(page, { page: 0, col: 'left' });
     await page.keyboard.press('Enter');
-    await page.waitForTimeout(400);
-
-    await expect.poll(async () => clippedDiaryBoxes(page), { timeout: 10000 }).toEqual([]);
+    await page.keyboard.type('next');
+    await settle(page);
+    expect(await clippedBoxes(page)).toEqual([]);
+    expect(await caret(page)).toMatchObject({ page: 1, col: 'left', text: 'next' });
   });
 
-
-  test('blank lines on last right page survive switching to another page', async ({ page }) => {
-    await page.evaluate((t) => {
-      const q = window.__q(0);
-      q.focus();
-      q.setText(t, 'user');
-    }, `${'यह एक लंबा वाक्य है जो पृष्ठ को भर देता है। '.repeat(6)}\n`.repeat(12));
-
-    await expect.poll(async () => page.locator('.diary-page').count()).toBeGreaterThan(1);
-
-    const blankCount = 4;
-    await page.evaluate((n) => {
-      const last = document.querySelectorAll('.diary-page').length - 1;
-      const q = window.__q(last);
-      q.focus();
-      const end = Math.max(0, q.getLength() - 1);
-      q.setSelection(end, 0, 'api');
-      q.insertText(end, '\n'.repeat(n), 'user');
-    }, blankCount);
-    await page.waitForTimeout(400);
-
-    const before = await page.evaluate(() => {
-      const pages = document.querySelectorAll('.diary-page');
-      const last = pages.length - 1;
-      const editor = pages[last].querySelector('[data-col="right"] .ql-editor');
-      const emptyPs = [...editor.querySelectorAll('p')].filter((p) => {
-        const t = (p.textContent || '').replace(/\u00a0/g, ' ').trim();
-        return !t && !p.querySelector('img');
-      });
-      return {
-        last,
-        emptyCount: emptyPs.length,
-        html: editor.innerHTML,
-        scrollHeight: editor.scrollHeight,
-      };
-    });
-    expect(before.emptyCount).toBeGreaterThanOrEqual(blankCount);
-
-    // Switch to page 0 — last page becomes a static clone.
-    await page.evaluate(() => {
-      const host = document.querySelectorAll('.diary-page')[0]
-        ?.querySelector('[data-col="right"]');
-      host.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-    });
-    await page.waitForTimeout(300);
-
-    const after = await page.evaluate((lastIdx) => {
-      const pages = document.querySelectorAll('.diary-page');
-      const host = pages[lastIdx]?.querySelector('[data-col="right"]');
-      const editor = host?.querySelector('.ql-editor');
-      if (!editor) return { error: 'no editor' };
-      const isStatic = host.dataset.staticRight === '1'
-        || editor.getAttribute('contenteditable') === 'false';
-      const emptyPs = [...editor.querySelectorAll('p')].filter((p) => {
-        const t = (p.textContent || '').replace(/\u00a0/g, ' ').trim();
-        return !t && !p.querySelector('img');
-      });
-      const brCount = editor.querySelectorAll('br').length;
-      return {
-        isStatic,
-        emptyCount: emptyPs.length,
-        brCount,
-        html: editor.innerHTML,
-        scrollHeight: editor.scrollHeight,
-      };
-    }, before.last);
-
-    expect(after.error).toBeUndefined();
-    expect(after.isStatic).toBe(true);
-    expect(after.emptyCount).toBeGreaterThanOrEqual(blankCount);
-    expect(after.brCount).toBeGreaterThanOrEqual(blankCount);
-    // Blank lines must still occupy vertical space (not collapsed <p></p>).
-    expect(after.scrollHeight).toBeGreaterThanOrEqual(before.scrollHeight - 4);
+  test('blank lines on the last page survive moving to another page and reloading', async ({ page }) => {
+    await setDoc(page, [{ right: [...Array.from({ length: 12 }, () => SENTENCE.repeat(6)), 'end'] }]);
+    const last = (await pageCount(page)) - 1;
+    await setCaret(page, { page: last, col: 'right' });
+    for (let i = 0; i < 4; i++) await page.keyboard.press('Enter');
+    await settle(page);
+    await setCaret(page, { page: 0, col: 'right', block: 0, offset: 0 });
+    await settle(page);
+    const blocks = await columnBlocks(page);
+    expect(blocks.slice(-5)).toEqual(['end', '', '', '', '']);
+    await page.waitForTimeout(900);
+    await page.reload();
+    await page.waitForFunction(() => window.__uxInitComplete === true);
+    await settle(page);
+    expect((await columnBlocks(page)).slice(-5)).toEqual(['end', '', '', '', '']);
   });
 
-  test('undo restores page-1 edit after focusing another page', async ({ page }) => {
-    const marker = 'UNDO_PAGE_SWITCH_MARKER';
-    // Page 0 must be full enough that absorb cannot pull page 1 away.
-    await fillSinglePage(page);
-    const page0 = await page.evaluate(() => window.__bpDiarySheet.getModel().pages[0].right);
-    await page.evaluate(({ a, b }) => {
-      window.__bpDiarySheet.setModel({
-        pages: [
-          {
-            hasHeader: true,
-            header: {
-              fir_number: '', thana: '', district: '', case_diary_no: '',
-              rule_no: '', against_1: '', against_2: '', special_report_no: '',
-              fir_date: '', event_date_place: '', sections: '', investigation_record: '',
-            },
-            left: '',
-            right: a,
-          },
-          {
-            hasHeader: false,
-            header: null,
-            left: '',
-            right: b,
-          },
-        ],
-      });
-    }, {
-      a: page0,
-      b: '<p>पृष्ठ दो मूल पाठ।</p>',
-    });
-    await expect.poll(async () => page.locator('.diary-page').count()).toBe(2);
-    await page.waitForTimeout(300);
-
-    await page.evaluate((t) => {
-      const q = window.__q(0);
-      q.focus();
-      // Replace last few chars so page stays full (no absorb of page 2).
-      const end = Math.max(0, q.getLength() - 1);
-      const from = Math.max(0, end - 2);
-      q.deleteText(from, end - from, 'user');
-      q.insertText(from, t.slice(0, 2), 'user');
-    }, marker);
-    await page.waitForTimeout(400);
-
-    await expect.poll(async () => page.locator('.diary-page').count()).toBe(2);
-
-    const withEdit = await page.evaluate(() => window.__bpDiarySheet.getModel().pages[0].right);
-    expect(withEdit).toContain(marker.slice(0, 2));
-
-    // Focus page 2 (static → live). Undo must still reverse the page-1 edit.
-    await page.evaluate(() => {
-      const host = document.querySelectorAll('.diary-page')[1]
-        ?.querySelector('[data-col="right"]');
-      if (!host) throw new Error('page 1 right host missing');
-      host.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }));
-    });
-    await page.waitForTimeout(200);
-
+  test('undo restores a page-1 edit after moving to another page', async ({ page }) => {
+    const capacity = await fillSinglePage(page);
+    await setDoc(page, [{ right: [...numberedLines(1, capacity), 'पृष्ठ दो मूल पाठ।'] }]);
+    const before = await columnPages(page);
+    await setCaret(page, { page: 0, col: 'right', block: 3 });
+    await page.keyboard.type('UN');
+    await settle(page);
+    await setCaret(page, { page: 1, col: 'right', start: true });
     await page.keyboard.press('ControlOrMeta+z');
-    await page.waitForTimeout(400);
-
-    const after = await page.evaluate(() => {
-      const m = window.__bpDiarySheet.getModel();
-      return {
-        pageCount: m.pages.length,
-        p0: m.pages[0].right,
-        p1: m.pages[1]?.right || '',
-        liveOn0: Boolean(window.__liveQ(0)),
-      };
-    });
-    expect(after.pageCount).toBe(2);
-    expect(after.p0).toBe(page0);
-    expect(after.p1).toContain('पृष्ठ दो');
-    expect(after.liveOn0).toBe(true);
-    expect(await clippedDiaryBoxes(page)).toEqual([]);
+    await settle(page);
+    expect(await columnPages(page)).toEqual(before);
+    expect(await caret(page)).toMatchObject({ page: 0, text: '4', offset: 1 });
   });
 
-  test('undo/redo paste that spilled onto a second page', async ({ page }) => {
+  test('undo/redo a paste that spilled onto a second page', async ({ page }) => {
     await fillSinglePage(page, { freeLines: 1 });
-    await expect.poll(async () => page.locator('.diary-page').count()).toBe(1);
-    const before = await page.evaluate(() => window.__bpDiarySheet.getModel().pages[0].right);
-
-    const pasteBody = `${'यह एक बहुत लंबा पैराग्राफ है जो कई पंक्तियों में लपेटा जाएगा। '.repeat(40)}`;
-    await page.evaluate((t) => {
-      const q = window.__q(0);
-      q.focus();
-      const end = Math.max(0, q.getLength() - 1);
-      q.setSelection(end, 0, 'api');
-      q.insertText(end, `\n${t}`, 'user');
-    }, pasteBody);
-
-    await expect.poll(async () => page.locator('.diary-page').count(), { timeout: 15000 })
-      .toBeGreaterThan(1);
-    await expect.poll(async () => clippedDiaryBoxes(page), { timeout: 10000 }).toEqual([]);
+    const before = await columnPages(page);
+    await setCaret(page, { page: 0, col: 'right' });
+    await page.keyboard.press('Enter');
+    await page.keyboard.insertText(LONG_PARA.repeat(40));
+    await settle(page);
+    expect(await pageCount(page)).toBeGreaterThan(1);
 
     await page.keyboard.press('ControlOrMeta+z');
-    await page.waitForTimeout(500);
-
-    await expect.poll(async () => page.locator('.diary-page').count(), { timeout: 10000 })
-      .toBe(1);
-    const afterUndo = await page.evaluate(() => window.__bpDiarySheet.getModel().pages[0].right);
-    expect(afterUndo).toBe(before);
-    expect(await clippedDiaryBoxes(page)).toEqual([]);
+    await settle(page);
+    await page.keyboard.press('ControlOrMeta+z');
+    await settle(page);
+    expect(await columnPages(page)).toEqual(before);
 
     await page.keyboard.press('ControlOrMeta+Shift+z');
-    await page.waitForTimeout(500);
-
-    await expect.poll(async () => page.locator('.diary-page').count(), { timeout: 10000 })
-      .toBeGreaterThan(1);
-    expect(await clippedDiaryBoxes(page)).toEqual([]);
+    await page.keyboard.press('ControlOrMeta+Shift+z');
+    await settle(page);
+    expect(await pageCount(page)).toBeGreaterThan(1);
+    expect(await clippedBoxes(page)).toEqual([]);
   });
 
-  test('undo restores left-column spill', async ({ page }) => {
-    const lines = Array.from({ length: 80 }, (_, i) => `left-line-${i + 1}`).join('\n');
-    await page.evaluate(() => {
-      window.__bpDiarySheet.setModel({
-        pages: [{
-          hasHeader: true,
-          header: {
-            fir_number: '', thana: '', district: '', case_diary_no: '',
-            rule_no: '', against_1: '', against_2: '', special_report_no: '',
-            fir_date: '', event_date_place: '', sections: '', investigation_record: '',
-          },
-          left: 'seed',
-          right: '',
-        }],
-      });
-    });
-    await page.waitForTimeout(200);
-
-    await setLeftColumnText(page, 0, lines);
-    await expect.poll(async () => page.locator('.diary-page').count(), { timeout: 15000 })
-      .toBeGreaterThan(1);
-    await expect.poll(async () => clippedDiaryBoxes(page), { timeout: 10000 }).toEqual([]);
-
+  test('undo restores a left-column spill', async ({ page }) => {
+    await setDoc(page, [{ left: ['seed'] }]);
+    await setCaret(page, { page: 0, col: 'left' });
+    await page.keyboard.press('Enter');
+    await page.keyboard.insertText(Array.from({ length: 80 }, (_, i) => `left-line-${i + 1}`).join(' '));
+    await settle(page);
+    expect(await pageCount(page)).toBeGreaterThan(1);
     await page.keyboard.press('ControlOrMeta+z');
-    await page.waitForTimeout(500);
-
-    await expect.poll(async () => page.locator('.diary-page').count(), { timeout: 10000 })
-      .toBe(1);
-    const left = await page.evaluate(() => window.__bpDiarySheet.getModel().pages[0].left);
-    expect(left).toBe('seed');
-    expect(await clippedDiaryBoxes(page)).toEqual([]);
+    await settle(page);
+    await page.keyboard.press('ControlOrMeta+z');
+    await settle(page);
+    expect(await columnPages(page, 'left')).toEqual([['seed']]);
+    expect(await clippedBoxes(page)).toEqual([]);
   });
 
   test('clicking into another page while the pager is still settling keeps the caret', async ({ page }) => {
-    // Reflow restores the caret on a later frame, so there is a window — one
-    // animation frame wide when idle, far wider under load — in which a restore
-    // is queued against a caret target captured before the edit. Clicking into
-    // another page inside that window must win: the officer's click is the
-    // newer intent, and the queued restore is stale.
-    //
-    // The click is issued in the same task as the edit so the test lands inside
-    // that window every run instead of racing it. Both steps go through the
-    // same code paths a real click does (mousedown on the page's right column).
-    const placed = await page.evaluate((text) => {
-      const first = window.__q(0);
-      first.focus();
-      first.setText(text);
-      // Spill has run; its caret restore is queued for the next frame.
-      if (document.querySelectorAll('.diary-page').length < 2) return 'no-second-page';
-      const second = window.__q(1);
-      if (!second) return 'no-page-2-quill';
-      second.focus();
-      second.setSelection(0, 0);
-      return second.hasFocus() ? 'ok' : 'not-focused';
-    }, `${'यह एक लंबा वाक्य है जो पृष्ठ को भर देता है। '.repeat(6)}\n`.repeat(30));
-    expect(placed).toBe('ok');
+    // The edit and the click land in the same task, inside the frame before
+    // the pager runs: the user's click is the newer intent and must win.
+    await setDoc(page, [{ right: Array.from({ length: 30 }, () => SENTENCE.repeat(6)) }]);
+    const placed = await page.evaluate(() => {
+      const ed = window.__bpDiarySheet.editor;
+      window.__bpTest.setCaret({ page: 0, col: 'right', block: 0, offset: 0 });
+      ed.commands.insertContent('x'.repeat(200));
+      window.__bpTest.setCaret({ page: 1, col: 'right', block: 0, offset: 3 });
+      return window.__bpTest.caret();
+    });
+    expect(placed).toMatchObject({ page: 1, offset: 3 });
 
-    // Watch ~2s of frames: a late restore shows up as focus or caret leaving
-    // where the click put it. Sampling every frame catches a steal that a
-    // later reflow would otherwise paper over before a poll could see it.
-    const strayFrames = await page.evaluate(() => new Promise((resolve) => {
-      const stray = [];
+    // Sample every frame for ~2s: the caret must never leave the characters
+    // the click put it between. (Its offset within the paragraph may change
+    // when the pager re-joins a cut paragraph in front of it.)
+    const around = (c) => `${c.text.slice(Math.max(0, c.offset - 3), c.offset)}|${c.text.slice(c.offset, c.offset + 12)}`;
+    const want = around(placed);
+    const stray = await page.evaluate(({ wanted, src }) => new Promise((resolve) => {
+      const aroundFn = new Function('c', `return (${src})(c)`);
+      const bad = [];
       let frames = 0;
       const tick = () => {
         frames += 1;
-        const n = document.querySelectorAll('.diary-page').length;
-        let focused = null;
-        let caret = null;
-        for (let i = 0; i < n; i++) {
-          const q = window.__liveQ(i);
-          if (q?.hasFocus()) {
-            focused = i;
-            caret = q.getSelection()?.index ?? null;
-            break;
-          }
-        }
-        if (focused !== 1 || caret !== 0) stray.push({ frames, focused, caret });
+        const c = window.__bpTest.caret();
+        const got = aroundFn(c);
+        if (got !== wanted || !c.focused) bad.push({ frames, got, page: c.page });
         if (frames < 120) requestAnimationFrame(tick);
-        else resolve(stray);
+        else resolve(bad);
       };
       requestAnimationFrame(tick);
-    }));
-    expect(strayFrames).toEqual([]);
+    }), { wanted: want, src: around.toString() });
+    expect(stray).toEqual([]);
+    expect(await clippedBoxes(page)).toEqual([]);
+  });
 
-    // The click must not have cost the document its pagination invariant.
-    expect(await clippedDiaryBoxes(page)).toEqual([]);
+  test('each column flows on its own: a long left column does not move the right one', async ({ page }) => {
+    await setDoc(page, [{ left: numberedLines(1, 150), right: ['r1', 'r2'] }]);
+    expect((await columnPages(page, 'left')).length).toBeGreaterThan(1);
+    const right = await columnPages(page, 'right');
+    expect(right[0]).toEqual(['r1', 'r2']);
+    expect(right.slice(1).every((p) => p.length === 1 && p[0] === '')).toBe(true);
+  });
+
+  test('a numbered list cut across pages keeps counting', async ({ page }) => {
+    const capacity = await fillSinglePage(page, { freeLines: 2 });
+    await setCaret(page, { page: 0, col: 'right' });
+    await page.keyboard.press('Enter');
+    await page.locator('#formatToolbar [data-cmd="list:ordered"]').click();
+    for (let i = 1; i <= 6; i++) {
+      await page.keyboard.type(`item ${i}`);
+      if (i < 6) await page.keyboard.press('Enter');
+    }
+    await settle(page);
+    const numbers = await page.evaluate(() => [...document.querySelectorAll('.editor-diary .bp-cell[data-col="right"] ol')]
+      .map((ol) => ({ start: Number(ol.getAttribute('start') || 1), items: ol.children.length })));
+    expect(numbers.length).toBe(2);
+    expect(numbers[1].start).toBe(numbers[0].start + numbers[0].items);
+    expect(numbers[0].items + numbers[1].items).toBe(6);
+    expect(await clippedBoxes(page)).toEqual([]);
+    expect(capacity).toBeGreaterThan(2);
+  });
+
+  test('a large paste settles in one go across many pages', async ({ page }) => {
+    await setCaret(page, { page: 0, col: 'right' });
+    await page.keyboard.insertText(Array.from({ length: 300 }, (_, i) => `पंक्ति ${i + 1} — ${SENTENCE}`).join(''));
+    await settle(page);
+    expect(await pageCount(page)).toBeGreaterThan(3);
+    expect(await clippedBoxes(page)).toEqual([]);
+  });
+
+  test('an image taller than a whole box gets a page of its own; text after it flows on', async ({ page }) => {
+    const tall = `data:image/svg+xml;utf8,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="3000"><rect width="100" height="3000" fill="#ccc"/></svg>')}`;
+    await page.evaluate((src) => {
+      const ed = window.__bpDiarySheet.editor;
+      window.__bpTest.setCaret({ page: 0, col: 'right' });
+      ed.commands.insertContent([{ type: 'paragraph', content: [{ type: 'text', text: 'before' }] }, { type: 'image', attrs: { src } }, { type: 'paragraph', content: [{ type: 'text', text: 'after' }] }]);
+    }, tall);
+    await settle(page);
+    // CSS caps an image at one box, so it moves to its own page and fits.
+    expect(await clippedBoxes(page)).toEqual([]);
+    const blocks = await columnBlocks(page);
+    expect(blocks.indexOf('before')).toBeLessThan(blocks.indexOf('after'));
+    const imgPage = await page.evaluate(() => [...document.querySelectorAll('.editor-diary .diary-page')]
+      .findIndex((p) => p.querySelector('.bp-cell img')));
+    expect(imgPage).toBeGreaterThanOrEqual(0);
   });
 });

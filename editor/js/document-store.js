@@ -2,6 +2,7 @@
  * IndexedDB document store for letters and diaries.
  * Optional Google Drive sync metadata lives on each row.
  */
+import { parseDoc, docPlainText, docPages } from './editor/doc-format.js';
 
 const DB_NAME = 'bp-writing-tool';
 const DB_VERSION = 2;
@@ -83,10 +84,6 @@ async function withStore(storeName, mode, fn) {
     });
 }
 
-function stripHtml(html) {
-    return String(html || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-}
-
 /**
  * @param {object} doc
  * @param {'letter'|'diary'} type
@@ -130,21 +127,20 @@ export async function getDocumentsIncludingDeleted(type) {
 
 /**
  * Short plain-text preview for the history sidebar.
+ * Empty for content this version cannot open (shown as "Older format").
  * @param {object} doc
  * @returns {string}
  */
 export function previewText(doc) {
+    const json = parseDoc(doc.content);
+    if (!json) return '';
     if (doc.type === 'diary') {
-        let data = doc.content;
-        if (typeof data === 'string') {
-            try { data = JSON.parse(data); } catch (_) { data = {}; }
-        }
-        if (data && typeof data === 'object') {
-            const header = data.header && typeof data.header === 'object' ? data.header : data;
-            return `FIR ${header.fir_number || ''} · Case ${header.case_diary_no || ''}`.trim();
-        }
+        const header = docPages(json).find((p) => p.hasHeader)?.fields || {};
+        const fir = String(header.fir_number || '').trim();
+        const caseNo = String(header.case_diary_no || '').trim();
+        return [fir && `FIR ${fir}`, caseNo && `Case ${caseNo}`].filter(Boolean).join(' · ');
     }
-    return stripHtml(doc.content).slice(0, 40);
+    return docPlainText(json).replace(/\s+/g, ' ').trim().slice(0, 40);
 }
 
 /**
@@ -253,9 +249,11 @@ export async function saveDocument(type, filename, content) {
  * Soft-delete a document by id (for Drive tombstone sync).
  * @param {'letter'|'diary'} type
  * @param {number} id
+ * @param {{ purgeContent?: boolean }} [opts] also drop the body, keeping only
+ *   what the tombstone needs (for content this version cannot open)
  * @returns {Promise<object|null>} deleted row or null
  */
-export async function softDeleteDocumentById(type, id) {
+export async function softDeleteDocumentById(type, id, opts = {}) {
     const db = await openDb();
     return new Promise((resolve, reject) => {
         const tx = db.transaction(type, 'readwrite');
@@ -272,6 +270,7 @@ export async function softDeleteDocumentById(type, id) {
             row.deletedAt = now;
             row.updated_at = now;
             row.syncError = null;
+            if (opts.purgeContent) row.content = '';
             const putReq = store.put(row);
             putReq.onsuccess = () => resolve({ ...row, type, _id: String(row.id) });
             putReq.onerror = () => reject(putReq.error);

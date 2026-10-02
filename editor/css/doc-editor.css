@@ -1,0 +1,239 @@
+/*
+ * Paged document editor (Tiptap / ProseMirror).
+ * Loaded by the app and by the print document, so screen and paper share
+ * the exact same text layout — pagination depends on it.
+ */
+
+/* ── ProseMirror base (injectCSS is off so print clones get these too) ── */
+.bp-doc {
+    position: relative;
+    outline: none;
+    /* ProseMirror needs this on its root; cells repeat it for the print clone. */
+    white-space: pre-wrap;
+    white-space: break-spaces;
+}
+
+.bp-doc [contenteditable='false'] {
+    white-space: normal;
+}
+
+.bp-doc img.ProseMirror-separator {
+    display: inline !important;
+    border: none !important;
+    margin: 0 !important;
+}
+
+.ProseMirror-hideselection *::selection { background: transparent; }
+.ProseMirror-hideselection { caret-color: transparent; }
+.bp-doc .ProseMirror-selectednode { outline: 2px solid var(--brand-primary, #1a365d); }
+
+/* ── The editor root is the column of A4 pages ── */
+.bp-doc-letter,
+.bp-doc-diary {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 28px;
+    width: 100%;
+}
+
+.letter-page-body {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+/* ── Writing box shared by every template ── */
+/* Text layout lives on the cell (not the editor root) because print and PDF
+   clone pages without the root — wrapping must be identical on paper. */
+.bp-cell {
+    box-sizing: border-box;
+    overflow: clip;
+    outline: none;
+    word-wrap: break-word;
+    white-space: pre-wrap;
+    white-space: break-spaces;
+    /* ProseMirror disables ligatures by default; Devanagari needs them. */
+    font-variant-ligatures: normal;
+    font-family: 'Noto Sans Devanagari', Arial, sans-serif;
+    font-size: 16px;
+    line-height: 24px;
+    color: var(--color-text-primary);
+}
+
+/* --cell-content-h: the writing area inside a cell (box minus padding). */
+.letter-page .bp-cell {
+    height: 912px;
+    --cell-content-h: 912px;
+}
+
+.diary-cell .bp-cell {
+    --cell-content-h: calc(var(--diary-box-h, 806px) - 2 * var(--cell-pad-y, 4px));
+}
+
+/* The register's investigation-record column has always been inset further
+   than the narrow time/place column; keep the printed form unchanged. */
+.diary-cell .bp-cell[data-col='right'] {
+    --cell-pad-y: 8px;
+    padding: var(--cell-pad-y) 12px;
+}
+
+.bp-cell p { margin: 0; }
+.bp-cell ol,
+.bp-cell ul { margin: 0; padding-left: 1.4em; }
+.bp-cell li > p { margin: 0; }
+/* An image never exceeds one writing area, so the pager can always place it
+   on a page of its own. An explicit length (not max-height: 100%) because
+   WebKit does not resolve a percentage here. */
+.bp-cell img {
+    display: block;
+    max-width: 100%;
+    max-height: var(--cell-content-h, 912px);
+    width: auto;
+    height: auto;
+}
+
+/* Placeholder on an empty writing box. */
+.bp-cell p.is-empty:only-child::before {
+    content: attr(data-placeholder);
+    float: left;
+    height: 0;
+    color: var(--color-text-muted);
+    pointer-events: none;
+}
+
+/* While IME composition holds the pager, show the line being typed. */
+.bp-doc[data-bp-suspended] .bp-cell { overflow: visible; }
+
+/* A unit taller than a whole box (e.g. a huge image) cannot be paginated. */
+.bp-cell[data-overflow='true'] {
+    outline: 2px solid var(--color-error, #c53030);
+    outline-offset: -1px;
+}
+
+/* ── Screen-only "Page X of Y" footer from pager decorations ── */
+.bp-page::after {
+    content: 'Page ' attr(data-page-no) ' of ' attr(data-page-count);
+    position: absolute;
+    bottom: 4px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font: 400 10px/1 'Roboto', sans-serif;
+    color: var(--color-text-muted);
+    pointer-events: none;
+    user-select: none;
+}
+
+@media print {
+    .bp-page::after { content: none; }
+}
+
+/* ── History: documents in a format this version cannot open ── */
+.history-item[data-unsupported='true'] .history-item-name {
+    color: var(--color-text-muted);
+}
+
+.history-item-badge {
+    display: inline-block;
+    margin-top: 2px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-size: 11px;
+    color: var(--color-text-muted);
+    background: var(--color-surface-secondary, #edf2f7);
+}
+
+.history-item:focus-visible {
+    outline: 2px solid var(--brand-primary, #1a365d);
+    outline-offset: -2px;
+}
+
+.unsupported-dialog {
+    max-width: min(420px, calc(100vw - 32px));
+    padding: 20px 22px;
+    border: none;
+    border-radius: 12px;
+    box-shadow: var(--shadow-strong, 0 12px 40px rgba(0, 0, 0, 0.25));
+    color: var(--color-text-primary);
+    font-family: 'Roboto', sans-serif;
+}
+
+.unsupported-dialog::backdrop {
+    background: rgba(15, 23, 42, 0.4);
+}
+
+.unsupported-dialog h2 {
+    margin: 0 0 8px;
+    font-size: 17px;
+}
+
+.unsupported-dialog p {
+    margin: 0 0 8px;
+    font-size: 14px;
+    line-height: 1.45;
+}
+
+.unsupported-dialog-hint {
+    color: var(--color-text-muted);
+}
+
+.unsupported-dialog-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 16px;
+}
+
+.unsupported-dialog-actions button {
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+    border: 1px solid var(--color-border-light, #cbd5e0);
+    background: var(--brand-white, #fff);
+    color: var(--brand-primary, #1a365d);
+}
+
+.unsupported-dialog-actions .unsupported-dialog-danger {
+    border-color: var(--color-error, #c53030);
+    background: var(--color-error, #c53030);
+    color: #fff;
+}
+
+.unsupported-dialog-actions button:focus-visible {
+    outline: 2px solid var(--brand-primary, #1a365d);
+    outline-offset: 2px;
+}
+
+.unsupported-notice {
+    position: fixed;
+    left: 50%;
+    top: calc(var(--chrome-top, 56px) + 12px);
+    transform: translateX(-50%);
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: calc(100vw - 32px);
+    padding: 8px 10px 8px 14px;
+    border-radius: 10px;
+    background: var(--brand-primary, #1a365d);
+    color: #fff;
+    font: 14px/1.4 'Roboto', sans-serif;
+    box-shadow: var(--shadow-medium, 0 4px 16px rgba(26, 54, 93, 0.2));
+}
+
+.unsupported-notice button {
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    border-radius: 6px;
+    background: transparent;
+    color: #fff;
+    padding: 4px 10px;
+    cursor: pointer;
+}
+
+.unsupported-notice .unsupported-notice-dismiss {
+    border: none;
+    padding: 4px 6px;
+}

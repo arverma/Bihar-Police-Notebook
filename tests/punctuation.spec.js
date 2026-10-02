@@ -36,8 +36,8 @@ test.describe('Punctuation Panel', () => {
   test('clicking punctuation buttons should not steal focus from the editor', async ({ page }) => {
     await page.goto('/');
     
-    const editor = page.locator('.ql-editor:visible').first();
-    await editor.click();
+    await page.locator('.editor-diary .bp-cell[data-col="right"]').first().click();
+    const editor = page.locator('.editor-diary .bp-doc');
     await expect(editor).toBeFocused();
     
     // Open the panel

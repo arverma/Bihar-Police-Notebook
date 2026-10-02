@@ -1,4 +1,7 @@
 import { test, expect } from '@playwright/test';
+import {
+  openFresh, setDoc, setCaret, settle, disableTranslit, numberedLines, switchTemplate,
+} from './pagination-helpers.js';
 
 const HINDI_SAMPLE =
   'घीसू की स्त्री का तो बहुत दिन हुए, देहांत हो गया था, '
@@ -7,7 +10,7 @@ const HINDI_SAMPLE =
   + 'दोनों एक ही स्वभाव के थे — आलस्य और कामचोरी।';
 
 /**
- * Character indices where a new visual line starts in an element (Quill / div).
+ * Character indices where a new visual line starts in an element.
  * @param {import('@playwright/test').Locator} locator
  */
 async function lineBreakOffsets(locator) {
@@ -90,11 +93,7 @@ async function mountPrintDocumentInIframe(page, template) {
     }
     // Force layout
     void doc.body.offsetHeight;
-    return {
-      pageCount: built.pageCount,
-      sampleWidth: doc.querySelector('.print-static-quill')?.getAttribute('style') || '',
-      clientWidth: doc.querySelector('.print-static-quill')?.clientWidth ?? -1,
-    };
+    return { pageCount: built.pageCount };
   }, template);
 }
 
@@ -102,144 +101,71 @@ test.describe('Print parity (live clone)', () => {
   test.setTimeout(60_000);
 
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    await page.waitForSelector('.editor-diary .diary-page');
-    // Disable transliteration via DOM (checkbox may be visually hidden)
-    await page.evaluate(() => {
-      const toggle = document.getElementById('translitToggle');
-      if (toggle instanceof HTMLInputElement && toggle.checked) {
-        toggle.checked = false;
-        toggle.dispatchEvent(new Event('change', { bubbles: true }));
-      }
-    });
+    await openFresh(page);
+    await disableTranslit(page);
   });
 
-  test('sanitize/getQuillHtml path stores no nbsp in diary right HTML', async ({ page }) => {
-    const editor = page.locator('.editor-diary .diary-page .ql-editor').first();
-    await editor.click();
-    await editor.evaluate((el, text) => {
-      el.focus();
-      document.execCommand('selectAll', false);
-      document.execCommand('insertText', false, text);
-    }, 'यह एक परीक्षण वाक्य है जिसमें कई शब्द हैं');
+  const liveCell = (page, col, tpl = 'diary') => page.locator(`.editor-${tpl} .bp-cell[data-col="${col}"]`).first();
+  const printCell = (page, col, pageSel = '.diary-page') => page.frameLocator('#print-parity-iframe')
+    .locator(`${pageSel} .bp-cell[data-col="${col}"]`).first();
 
-    // Blur so model syncs via Quill text-change
-    await page.locator('.diary-page-label').first().click({ force: true }).catch(() => {});
-
-    const html = await page.evaluate(async () => {
-      const mod = await import('/js/quill-pages.js');
-      const root = document.querySelector('.editor-diary .ql-editor');
-      // Prefer live sanitize of semantic-like nbsp HTML
-      const poisoned = '<p>यह&nbsp;एक&nbsp;परीक्षण</p>';
-      return mod.sanitizeQuillHtml(poisoned);
-    });
-    expect(html).not.toMatch(/\u00a0/);
-    expect(html).not.toMatch(/&nbsp;/i);
-    expect(html).toContain('यह एक परीक्षण');
-  });
-
-  test('diary right column wrap offsets match print clone', async ({ page }) => {
-    const editor = page.locator('.editor-diary .diary-page .ql-editor').first();
-    await editor.click();
-    await editor.evaluate((el, text) => {
-      el.focus();
-      document.execCommand('selectAll', false);
-      document.execCommand('insertText', false, text);
-    }, HINDI_SAMPLE);
-
-    // Apply justify if toolbar present
-    const justify = page.locator('#quillToolbar [data-ql="align:justify"]');
-    if (await justify.count()) {
-      await editor.click();
-      await justify.click();
-    }
-
-    await page.waitForTimeout(200);
-    // Ensure editor fonts are ready before measuring wraps
+  async function fontsReady(page) {
     await page.evaluate(async () => {
       if (document.fonts?.load) {
         await document.fonts.load('16px "Noto Sans Devanagari"');
         await document.fonts.ready;
       }
     });
-    const screenBreaks = await lineBreakOffsets(editor);
+  }
 
-    const mounted = await mountPrintDocumentInIframe(page, 'diary');
-    expect(mounted.pageCount).toBeGreaterThanOrEqual(1);
-    expect(mounted.sampleWidth).toMatch(/width:\s*\d+px/);
+  test('saved text keeps ordinary spaces (no non-breaking spaces)', async ({ page }) => {
+    await setCaret(page, { page: 0, col: 'right' });
+    await page.keyboard.insertText('यह  एक परीक्षण  वाक्य');
+    await settle(page);
+    const content = await page.evaluate(() => window.__bpTest.content());
+    expect(content).not.toMatch(/\u00a0/);
+    expect(content).toContain('यह  एक परीक्षण  वाक्य');
+  });
 
-    const printEditor = page.frameLocator('#print-parity-iframe')
-      .locator('.diary-page .print-static-quill').first();
-    await expect(printEditor).toBeVisible({ timeout: 10000 });
+  for (const col of ['right', 'left']) {
+    test(`diary ${col} column wrap offsets match print clone`, async ({ page }) => {
+      await setCaret(page, { page: 0, col });
+      await page.keyboard.insertText(HINDI_SAMPLE);
+      if (col === 'right') {
+        await page.locator('#formatToolbar [data-cmd="align:justify"]').click();
+      }
+      await settle(page);
+      await fontsReady(page);
+      const screenBreaks = await lineBreakOffsets(liveCell(page, col));
 
-    const widths = await page.evaluate(() => {
-      const live = document.querySelector('.editor-diary .diary-page .ql-editor');
-      const frame = /** @type {HTMLIFrameElement|null} */ (document.getElementById('print-parity-iframe'));
-      const print = frame?.contentDocument?.querySelector('.print-static-quill');
-      return {
-        live: live ? live.clientWidth : 0,
-        print: print ? print.clientWidth : 0,
-        printStyle: print?.getAttribute('style') || '',
-      };
+      const mounted = await mountPrintDocumentInIframe(page, 'diary');
+      expect(mounted.pageCount).toBeGreaterThanOrEqual(1);
+      await expect(printCell(page, col)).toBeVisible({ timeout: 10000 });
+
+      const widths = await page.evaluate((c) => {
+        const live = document.querySelector(`.editor-diary .bp-cell[data-col="${c}"]`);
+        const frame = /** @type {HTMLIFrameElement|null} */ (document.getElementById('print-parity-iframe'));
+        const print = frame?.contentDocument?.querySelector(`.bp-cell[data-col="${c}"]`);
+        return { live: live?.clientWidth ?? 0, print: print?.clientWidth ?? 0 };
+      }, col);
+      expect(Math.abs(widths.print - widths.live)).toBeLessThanOrEqual(1);
+      expect(await lineBreakOffsets(printCell(page, col))).toEqual(screenBreaks);
     });
-    expect(Math.abs(widths.print - widths.live)).toBeLessThanOrEqual(1);
-
-    const printBreaks = await lineBreakOffsets(printEditor);
-
-    expect(printBreaks).toEqual(screenBreaks);
-  });
-
-  test('diary left column text and height match print clone textarea', async ({ page }) => {
-    const left = page.locator('.editor-diary textarea[data-col="left"]').first();
-    const sample = 'एक दो तीन चार पाँच छह सात आठ नौ दस ग्यारह बारह तेरह चौदह पंद्रह ';
-    await left.fill(sample.repeat(8));
-
-    const screenMeta = await left.evaluate((el) => ({
-      value: el.value,
-      clientWidth: el.clientWidth,
-      scrollHeight: el.scrollHeight,
-    }));
-
-    await mountPrintDocumentInIframe(page, 'diary');
-    const printMeta = await page.frameLocator('#print-parity-iframe')
-      .locator('textarea[data-col="left"]').first()
-      .evaluate((el) => ({
-        value: el.value,
-        clientWidth: el.clientWidth,
-        scrollHeight: el.scrollHeight,
-        readOnly: el.readOnly,
-      }));
-
-    expect(printMeta.value).toBe(screenMeta.value);
-    expect(printMeta.readOnly).toBe(true);
-    expect(Math.abs(printMeta.clientWidth - screenMeta.clientWidth)).toBeLessThanOrEqual(2);
-    expect(Math.abs(printMeta.scrollHeight - screenMeta.scrollHeight)).toBeLessThanOrEqual(2);
-  });
+  }
 
   test('print clone has no editor chrome', async ({ page }) => {
     await mountPrintDocumentInIframe(page, 'diary');
     const frame = page.frameLocator('#print-parity-iframe');
     await expect(frame.locator('.diary-page-chrome')).toHaveCount(0);
-    await expect(frame.locator('#quillToolbar')).toHaveCount(0);
+    await expect(frame.locator('#formatToolbar')).toHaveCount(0);
     await expect(frame.locator('.header-frame')).toHaveCount(0);
     await expect(frame.locator('.screen-only')).toHaveCount(0);
+    await expect(frame.locator('[data-placeholder]')).toHaveCount(0);
+    await expect(frame.locator('[contenteditable="true"]')).toHaveCount(0);
   });
 
-  test('multi-page spill clones all diary pages without overflow', async ({ page }) => {
-    const editor = page.locator('.editor-diary .diary-page .ql-editor').first();
-    await editor.click();
-    const long = (HINDI_SAMPLE + ' ').repeat(40);
-    await editor.evaluate((el, text) => {
-      el.focus();
-      document.execCommand('selectAll', false);
-      document.execCommand('insertText', false, text);
-    }, long);
-
-    // Wait for spill to add pages
-    await page.waitForFunction(() => {
-      return document.querySelectorAll('.editor-diary .diary-page').length >= 2;
-    }, null, { timeout: 15000 });
-
+  test('multi-page spill clones all diary pages and nothing overflows on paper', async ({ page }) => {
+    await setDoc(page, [{ right: Array.from({ length: 40 }, () => HINDI_SAMPLE), left: numberedLines(1, 70) }]);
     const liveCount = await page.locator('.editor-diary .diary-page').count();
     expect(liveCount).toBeGreaterThanOrEqual(2);
 
@@ -247,138 +173,87 @@ test.describe('Print parity (live clone)', () => {
     expect(mounted.pageCount).toBe(liveCount);
 
     const overflow = await page.frameLocator('#print-parity-iframe')
-      .locator('.diary-page')
-      .evaluateAll((pages) => pages.map((p) => {
-        const cell = p.querySelector('.diary-cell .print-static-quill, .diary-cell .bp-ql-editor, .diary-cell textarea');
-        if (!cell) return { ok: true };
-        return {
-          ok: cell.scrollHeight <= cell.clientHeight + 1,
-          scrollHeight: cell.scrollHeight,
-          clientHeight: cell.clientHeight,
-        };
+      .locator('.bp-cell')
+      .evaluateAll((cells) => cells.map((cell) => {
+        const last = cell.lastElementChild;
+        const pad = parseFloat(getComputedStyle(cell).paddingBottom) || 0;
+        const limit = cell.getBoundingClientRect().top + cell.clientHeight - pad;
+        return last ? last.getBoundingClientRect().bottom - limit : 0;
       }));
-    for (const row of overflow) {
-      expect(row.ok).toBe(true);
-    }
+    for (const px of overflow) expect(px).toBeLessThanOrEqual(0.5);
   });
 
   test('diary right column keeps paragraph breaks and text-align in print clone', async ({ page }) => {
-    const editor = page.locator('.editor-diary .diary-page .ql-editor').first();
-    await editor.click();
-
     const lines = [
       { text: 'चार', align: null },
       { text: 'सेंटर', align: 'center' },
       { text: 'राइट', align: 'right' },
       { text: 'जस्टिफाई', align: 'justify' },
     ];
-
+    await setCaret(page, { page: 0, col: 'right' });
     for (let i = 0; i < lines.length; i++) {
       const { text, align } = lines[i];
-      if (i > 0) await editor.press('Enter');
-      await editor.evaluate((el, t) => {
-        document.execCommand('insertText', false, t);
-      }, text);
-      if (align) {
-        // Left/right align buttons were removed from chrome; set via Quill API.
-        // Center/justify still have toolbar buttons.
-        const btn = page.locator(`#quillToolbar [data-ql="align:${align}"]`);
-        if (await btn.count()) {
-          await expect(btn).toBeVisible();
-          await btn.click();
-        } else {
-          await page.evaluate((a) => {
-            const host = document.querySelector('.editor-diary .diary-page [data-col="right"]');
-            const q = window.Quill?.find?.(host);
-            if (!q) throw new Error('quill missing');
-            q.format('align', a);
-          }, align);
-        }
+      if (i > 0) await page.keyboard.press('Enter');
+      await page.keyboard.insertText(text);
+      if (align === 'right') {
+        // No toolbar button for right alignment; set it through the editor.
+        await page.evaluate(() => window.__bpDiarySheet.editor.commands.setTextAlign('right'));
+      } else if (align) {
+        await page.locator(`#formatToolbar [data-cmd="align:${align}"]`).click();
       }
     }
+    await settle(page);
 
-    await page.waitForTimeout(200);
-
-    const liveAligns = await editor.locator('p').evaluateAll((paras) => paras.map((p) => ({
-      text: (p.textContent || '').trim(),
-      align: getComputedStyle(p).textAlign,
-      className: p.className,
-    })));
-    expect(liveAligns.length).toBe(4);
+    const norm = (a) => (a === 'start' ? 'left' : a);
+    const read = (paras) => paras.map((p) => ({ text: (p.textContent || '').trim(), align: getComputedStyle(p).textAlign }));
+    const liveAligns = await liveCell(page, 'right').locator('p').evaluateAll(read);
     expect(liveAligns.map((p) => p.text)).toEqual(['चार', 'सेंटर', 'राइट', 'जस्टिफाई']);
+    expect(liveAligns.map((p) => norm(p.align))).toEqual(['left', 'center', 'right', 'justify']);
 
     await mountPrintDocumentInIframe(page, 'diary');
-    const printParas = page.frameLocator('#print-parity-iframe')
-      .locator('.diary-page .print-static-quill p');
+    const printParas = page.frameLocator('#print-parity-iframe').locator('.diary-page .bp-cell[data-col="right"] p');
     await expect(printParas).toHaveCount(4);
-
-    const printAligns = await printParas.evaluateAll((paras) => paras.map((p) => ({
-      text: (p.textContent || '').trim(),
-      align: getComputedStyle(p).textAlign,
-      className: p.className,
-    })));
-
+    const printAligns = await printParas.evaluateAll(read);
     expect(printAligns.map((p) => p.text)).toEqual(liveAligns.map((p) => p.text));
-    for (let i = 0; i < 4; i++) {
-      const live = liveAligns[i].align;
-      const print = printAligns[i].align;
-      // Browsers may report left as "left" or "start"
-      const norm = (a) => (a === 'start' ? 'left' : a);
-      expect(norm(print)).toBe(norm(live));
-    }
-    expect(printAligns[1].className).toMatch(/ql-align-center/);
-    expect(printAligns[2].className).toMatch(/ql-align-right/);
-    expect(printAligns[3].className).toMatch(/ql-align-justify/);
+    expect(printAligns.map((p) => norm(p.align))).toEqual(liveAligns.map((p) => norm(p.align)));
   });
 
   test('letter mode wrap offsets match print clone', async ({ page }) => {
-    await page.locator('.segment-btn[data-template="letter"]').click();
-    // May prompt to save / switch — handle confirm dialogs
-    page.once('dialog', (d) => d.accept());
-    await page.waitForSelector('.editor-letter .letter-page .ql-editor', { timeout: 10000 });
-
-    const editor = page.locator('.editor-letter .letter-page .ql-editor').first();
-    await editor.click();
-    await editor.evaluate((el, text) => {
-      el.focus();
-      document.execCommand('selectAll', false);
-      document.execCommand('insertText', false, text);
-    }, HINDI_SAMPLE);
-
-    await page.waitForTimeout(200);
-    const screenBreaks = await lineBreakOffsets(editor);
+    await switchTemplate(page, 'letter');
+    await setCaret(page, { page: 0, col: 'main' }, 'letter');
+    await page.keyboard.insertText(HINDI_SAMPLE);
+    await settle(page, 'letter');
+    await fontsReady(page);
+    const screenBreaks = await lineBreakOffsets(liveCell(page, 'main', 'letter'));
     await mountPrintDocumentInIframe(page, 'letter');
-    const printEditor = page.frameLocator('#print-parity-iframe')
-      .locator('.letter-page .print-static-quill, .letter-page .ql-editor').first();
-    await expect(printEditor).toBeVisible({ timeout: 10000 });
-    const printBreaks = await lineBreakOffsets(printEditor);
-    expect(printBreaks).toEqual(screenBreaks);
+    const printed = printCell(page, 'main', '.letter-page');
+    await expect(printed).toBeVisible({ timeout: 10000 });
+    expect(await lineBreakOffsets(printed)).toEqual(screenBreaks);
   });
 
   test('PDF export opens print dialog with cloned pages (print stubbed)', async ({ page }) => {
     await page.evaluate(() => {
       window.__bpExportMode = 'native-print';
       window.__printOpened = false;
-      // Continuously re-bind: document.open/write can reset contentWindow.print.
-      const poll = setInterval(() => {
-        const frame = document.getElementById('bp-print-iframe');
-        if (!(frame instanceof HTMLIFrameElement)) return;
-        const w = frame.contentWindow;
-        if (!w) return;
-        w.print = () => {
-          window.__printOpened = true;
-          window.__printDocTitle = w.document.title;
-          window.__printHasDiary = !!w.document.querySelector('.diary-page');
-        };
-      }, 10);
-      setTimeout(() => clearInterval(poll), 20000);
+      // Stub print() the moment the export iframe is inserted. Polling for it
+      // races engines that print sooner after mounting (WebKit).
+      new MutationObserver((muts) => {
+        for (const m of muts) {
+          for (const node of m.addedNodes) {
+            if (node.id !== 'bp-print-iframe') continue;
+            const w = node.contentWindow;
+            w.print = () => {
+              window.__printOpened = true;
+              window.__printDocTitle = w.document.title;
+              window.__printHasDiary = !!w.document.querySelector('.diary-page');
+            };
+          }
+        }
+      }).observe(document.body, { childList: true });
     });
 
-    const editor = page.locator('.editor-diary .diary-page .ql-editor').first();
-    await editor.click();
-    await editor.evaluate((el) => {
-      document.execCommand('insertText', false, 'परीक्षण निर्यात');
-    });
+    await setCaret(page, { page: 0, col: 'right' });
+    await page.keyboard.insertText('परीक्षण निर्यात');
 
     await page.locator('#exportBtn').click();
     await page.waitForFunction(() => window.__printOpened === true, null, { timeout: 15000 });
@@ -391,101 +266,31 @@ test.describe('Print parity (live clone)', () => {
   });
 
 
-  test('blank lines on last diary page match print clone after page switch', async ({ page }) => {
-    await page.evaluate(() => {
-      const toggle = document.getElementById('translitToggle');
-      if (toggle instanceof HTMLInputElement && toggle.checked) {
-        toggle.checked = false;
-        toggle.dispatchEvent(new Event('change', { bubbles: true }));
-      }
-    });
-
-    // Install helper used by diary pagination tests.
-    await page.evaluate(() => {
-      window.__q = (i) => {
-        const host = document.querySelectorAll('.diary-page')[i]
-          ?.querySelector('[data-col="right"]');
-        if (!(host instanceof HTMLElement)) return null;
-        let quill = window.Quill ? window.Quill.find(host) : null;
-        if (!quill) {
-          host.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-          quill = window.Quill.find(host);
-        }
-        return quill;
-      };
-    });
-
-    await page.evaluate((t) => {
-      const q = window.__q(0);
-      q.focus();
-      q.setText(t, 'user');
-    }, `${'यह एक लंबा वाक्य है जो पृष्ठ को भर देता है। '.repeat(6)}\n`.repeat(12));
-
-    await page.waitForFunction(
-      () => document.querySelectorAll('.editor-diary .diary-page').length >= 2,
-      null,
-      { timeout: 15000 },
-    );
-
+  test('blank lines on the last diary page print as blank lines', async ({ page }) => {
+    const sentence = 'यह एक लंबा वाक्य है जो पृष्ठ को भर देता है। '.repeat(6);
     const blankCount = 4;
-    await page.evaluate((n) => {
-      const last = document.querySelectorAll('.diary-page').length - 1;
-      const q = window.__q(last);
-      q.focus();
-      const end = Math.max(0, q.getLength() - 1);
-      q.setSelection(end, 0, 'api');
-      q.insertText(end, '\n'.repeat(n), 'user');
-    }, blankCount);
-    await page.waitForTimeout(400);
+    await setDoc(page, [{ right: [...Array.from({ length: 12 }, () => sentence), 'आखिरी', ...Array(blankCount).fill('')] }]);
+    expect(await page.locator('.editor-diary .diary-page').count()).toBeGreaterThanOrEqual(2);
 
-    // Leave the last page so it is static (same path as print clone source).
-    await page.evaluate(() => {
-      const host = document.querySelectorAll('.diary-page')[0]
-        ?.querySelector('[data-col="right"]');
-      host.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-    });
-    await page.waitForTimeout(300);
-
-    const screen = await page.evaluate(() => {
-      const pages = [...document.querySelectorAll('.editor-diary .diary-page')];
-      const last = pages[pages.length - 1];
-      const editor = last.querySelector('[data-col="right"] .ql-editor');
-      const emptyPs = [...editor.querySelectorAll('p')].filter((p) => {
-        const t = (p.textContent || '').replace(/\u00a0/g, ' ').trim();
-        return !t && !p.querySelector('img');
-      });
+    const measure = (cell) => {
+      const paras = [...cell.querySelectorAll('p')];
       return {
-        emptyCount: emptyPs.length,
-        brCount: editor.querySelectorAll('br').length,
-        scrollHeight: editor.scrollHeight,
-        html: editor.innerHTML,
+        emptyCount: paras.filter((p) => !(p.textContent || '').trim()).length,
+        brCount: cell.querySelectorAll('p > br').length,
+        contentHeight: paras.length ? paras[paras.length - 1].getBoundingClientRect().bottom - paras[0].getBoundingClientRect().top : 0,
       };
-    });
-    expect(screen.emptyCount).toBeGreaterThanOrEqual(blankCount);
+    };
+    const screen = await page.locator('.editor-diary .diary-page').last()
+      .locator('.bp-cell[data-col="right"]').evaluate(measure);
+    expect(screen.emptyCount).toBe(blankCount);
 
     await mountPrintDocumentInIframe(page, 'diary');
-    const printed = await page.frameLocator('#print-parity-iframe')
-      .locator('.diary-page')
-      .last()
-      .locator('.ql-editor, .print-static-quill')
-      .first()
-      .evaluate((editor) => {
-        const emptyPs = [...editor.querySelectorAll('p')].filter((p) => {
-          const t = (p.textContent || '').replace(/\u00a0/g, ' ').trim();
-          return !t && !p.querySelector('img');
-        });
-        return {
-          emptyCount: emptyPs.length,
-          brCount: editor.querySelectorAll('br').length,
-          scrollHeight: editor.scrollHeight,
-          html: editor.innerHTML,
-        };
-      });
-
-    expect(printed.emptyCount).toBeGreaterThanOrEqual(blankCount);
+    const printed = await page.frameLocator('#print-parity-iframe').locator('.diary-page').last()
+      .locator('.bp-cell[data-col="right"]').evaluate(measure);
+    expect(printed.emptyCount).toBe(blankCount);
     expect(printed.brCount).toBeGreaterThanOrEqual(blankCount);
-    // WYSIWYG: print must not collapse blank-line height vs screen after switch.
-    expect(printed.scrollHeight).toBeGreaterThanOrEqual(screen.scrollHeight - 8);
+    // WYSIWYG: print must not collapse blank-line height.
+    expect(Math.abs(printed.contentHeight - screen.contentHeight)).toBeLessThanOrEqual(1);
   });
 
   test('forced raster-pdf path builds A4 blob without calling print', async ({ page }) => {
@@ -513,14 +318,13 @@ test.describe('Print parity (live clone)', () => {
         origError(...args);
       };
 
-      const poll = setInterval(() => {
-        const frame = document.getElementById('bp-print-iframe');
-        if (!(frame instanceof HTMLIFrameElement)) return;
-        const w = frame.contentWindow;
-        if (!w) return;
-        w.print = () => { window.__printOpened = true; };
-      }, 10);
-      setTimeout(() => clearInterval(poll), 60000);
+      new MutationObserver((muts) => {
+        for (const m of muts) {
+          for (const node of m.addedNodes) {
+            if (node.id === 'bp-print-iframe') node.contentWindow.print = () => { window.__printOpened = true; };
+          }
+        }
+      }).observe(document.body, { childList: true });
 
       // A blank tab opened before generation is exactly the iOS failure mode.
       window.open = () => { window.__tabsOpened += 1; return null; };
@@ -557,11 +361,9 @@ test.describe('Print parity (live clone)', () => {
       };
     });
 
-    const editor = page.locator('.editor-diary .diary-page .ql-editor').first();
-    await editor.click();
-    await editor.evaluate((el) => {
-      document.execCommand('insertText', false, 'मोबाइल पीडीएफ परीक्षण');
-    });
+    await setCaret(page, { page: 0, col: 'right' });
+    await page.keyboard.insertText('मोबाइल पीडीएफ परीक्षण');
+    await settle(page);
 
     const liveMeta = await page.evaluate(() => {
       const pages = [...document.querySelectorAll('.editor-diary .diary-page')];

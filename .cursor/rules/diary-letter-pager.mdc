@@ -1,14 +1,14 @@
 ---
-description: Diary/letter pager — load skill; never migrate pages[] or break print clone
-globs: editor/js/diary-sheet.js,editor/js/quill-pages.js,editor/js/page-fit.js,editor/js/letter-sheet.js,tests/diary-pagination.spec.js,tests/pagination-helpers.js,docs/manual-tests/diary-pagination.md,docs/components/templates.md
+description: Diary/letter pager — load skill; keep one editor per document, only the pager moves text between pages
+globs: editor/js/editor/**,editor/js/diary-sheet.js,editor/js/letter-sheet.js,editor/js/export/print-document.js,tests/diary-pagination.spec.js,tests/pagination-helpers.js,docs/manual-tests/diary-pagination.md,docs/components/templates.md
 alwaysApply: false
 ---
 
 # Diary / letter pager
 
-When working in these files (or on clipping, caret, Enter/Backspace at page edges, justify-under-scale, spill/absorb):
+When working in these files (or on clipping, caret, Enter/Backspace at page edges, welded lines, spill/absorb):
 
 1. Read and follow `.cursor/skills/diary-letter-pager/SKILL.md` (and `reference.md` when linked).
-2. **Never** change the persisted diary shape away from `pages[]` / add a parallel stream field / invent a print layout besides live-clone.
-3. Left column stays a **textarea**. Fit = static cut + **live peel**; absorb = **one line/block** into slack — not greedy full-column re-cut.
-4. Gate with `npm test` and `npx playwright test tests/diary-pagination.spec.js tests/print-parity.spec.js`.
+2. **Never** move text between pages outside the pager, re-join blocks that are not continuations (`cont`), or build a print layout besides the live clone.
+3. Edits stay inside one cell; never write attributes or styles onto DOM that ProseMirror manages.
+4. Gate with `npm test` and the e2e step in the skill (`make test-e2e`, or its two-spec fallback command).

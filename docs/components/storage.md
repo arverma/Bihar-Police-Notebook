@@ -25,12 +25,12 @@ sequenceDiagram
 |-------|---------|
 | `type` | `letter` or `diary` |
 | `filename` | Display name (often a date) |
-| `content` | Letter: text string. Diary: JSON `{ header, pages }` |
+| `content` | JSON `{ format: "bp-doc", v: 1, doc }` — the editor document (pages, header fields, text). Other shapes are shown as **Older format** in History and can only be deleted. |
 | `uuid` | Stable id used for Drive file matching |
 | `driveFileId` / `syncedAt` / `syncError` | Backup metadata |
 | `deletedAt` | Soft-delete (tombstone for Drive) |
 
-History lists live documents for the **active** template only. Delete soft-deletes when a Drive copy may exist; otherwise hard-delete.
+History lists live documents for the **active** template only. Delete soft-deletes when a Drive copy may exist; otherwise hard-delete. Deleting an older-format document also clears its `content` in the tombstone, so no unusable payload stays on the device or in Drive.
 
 Prefs for UI/auth flags use `localStorage` via `prefs.js` (`bpnt.*` keys) — separate from document IndexedDB.
 

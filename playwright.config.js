@@ -60,6 +60,22 @@ export default defineConfig({
       testMatch: '**/responsive/**',
     },
     {
+      // Safari's engine (the one iOS / iPadOS users run) on the specs that
+      // exercise editing, pagination and export. Run with `npm run test:webkit`;
+      // CI runs it on every pull request.
+      name: 'webkit',
+      use: { ...devices['Desktop Safari'] },
+      testMatch: [
+        '**/diary-pagination.spec.js',
+        '**/diary-navigation.spec.js',
+        '**/diary-undo.spec.js',
+        '**/print-parity.spec.js',
+        '**/editor-spaces.spec.js',
+        '**/unsupported-docs.spec.js',
+        '**/history.spec.js',
+      ],
+    },
+    {
       // Linux-baseline only — see snapshotPathTemplate above. Run separately
       // (`npm run test:visual`) so a Mac checkout is not red by default.
       name: 'visual',
@@ -78,7 +94,7 @@ export default defineConfig({
    * against the code under test. Failing loudly with "port in use" is correct;
    * set PORT to run alongside something else. */
   webServer: {
-    command: `cd editor && python3 -m http.server ${PORT}`,
+    command: `python3 scripts/serve.py ${PORT}`,
     url: BASE_URL,
     reuseExistingServer: false,
   },

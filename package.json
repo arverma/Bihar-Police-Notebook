@@ -1,7 +1,7 @@
 {
   "name": "bp-writingtool",
   "version": "1.0.0",
-  "description": "[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![Hindi](https://img.shields.io/badge/\u0939-Hindi%20Documentation-orange.svg)](README.hi.md)",
+  "description": "[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![Hindi](https://img.shields.io/badge/ह-Hindi%20Documentation-orange.svg)](README.hi.md)",
   "main": "index.js",
   "directories": {
     "doc": "docs"
@@ -10,7 +10,10 @@
     "test": "vitest run editor/",
     "test:e2e": "playwright test --project=chromium --project=mobile --project=tablet",
     "test:visual": "playwright test --project=visual",
-    "test:visual:update": "bash scripts/visual-baselines.sh"
+    "test:visual:update": "bash scripts/visual-baselines.sh",
+    "vendor:tiptap": "node scripts/vendor-tiptap.mjs",
+    "test:webkit": "playwright test --project=webkit",
+    "test:docker": "bash scripts/playwright-docker.sh"
   },
   "repository": {
     "type": "git",
@@ -25,6 +28,20 @@
   "homepage": "https://github.com/arverma/Bihar-Police-Notebook#readme",
   "devDependencies": {
     "@playwright/test": "^1.62.1",
+    "@tiptap/core": "3.31.4",
+    "@tiptap/extension-bold": "3.31.4",
+    "@tiptap/extension-document": "3.31.4",
+    "@tiptap/extension-hard-break": "3.31.4",
+    "@tiptap/extension-image": "3.31.4",
+    "@tiptap/extension-italic": "3.31.4",
+    "@tiptap/extension-list": "3.31.4",
+    "@tiptap/extension-paragraph": "3.31.4",
+    "@tiptap/extension-text": "3.31.4",
+    "@tiptap/extension-text-align": "3.31.4",
+    "@tiptap/extension-underline": "3.31.4",
+    "@tiptap/extensions": "3.31.4",
+    "@tiptap/pm": "3.31.4",
+    "esbuild": "0.28.2",
     "jsdom": "^27.0.1",
     "vitest": "^3.2.7"
   },

@@ -3,9 +3,9 @@ import { test, expect } from '@playwright/test';
 /**
  * The diary header mixes field types: most rows are <input>, but धारा and
  * घटना की तिथि और स्थान are contenteditable spans (they reflow the header).
- * Dictation used to only recognise Quill roots and input/textarea, so focusing
- * a span fell through to the *previously* focused field and the transcript
- * landed in the wrong row. These tests pin every target type.
+ * Dictation used to only recognise the document body and input/textarea, so
+ * focusing a span fell through to the *previously* focused field and the
+ * transcript landed in the wrong row. These tests pin every target type.
  */
 
 const FLOW_FIELDS = ['sections', 'event_date_place'];
@@ -81,30 +81,31 @@ test.describe('Dictation insertion target', () => {
     await expect(flow).toHaveText('अंतर्गत 302');
   });
 
-  test('dictated header text reaches the saved model', async ({ page }) => {
+  test('dictated header text reaches the document', async ({ page }) => {
     await gotoDiary(page);
 
     await page.locator('[data-field="sections"]').first().click();
     await dictate(page, 'धारा 302');
 
-    const saved = await page.evaluate(
-      () => window.__bpDiarySheet.getModel().pages[0].header.sections,
-    );
+    const saved = await page.evaluate(() => window.__bpTest.headers()[0].fields.sections);
     expect(saved).toBe('धारा 302');
   });
 
-  test('input and Quill targets still work', async ({ page }) => {
+  test('input and document body targets still work', async ({ page }) => {
     await gotoDiary(page);
 
     const thana = page.locator('[data-field="thana"]').first();
     await thana.click();
     await dictate(page, 'कोतवाली');
     await expect(thana).toHaveValue('कोतवाली');
+    expect(await page.evaluate(() => window.__bpTest.headers()[0].fields.thana)).toBe('कोतवाली');
 
-    const quill = page.locator('.editor-diary .ql-editor:visible').first();
-    await quill.click();
+    await page.locator('.editor-diary .bp-cell[data-col="right"]').first().click();
     await dictate(page, 'अन्वेषण शुरू किया');
-    await expect(quill).toContainText('अन्वेषण शुरू किया');
+    await expect(page.locator('.editor-diary .bp-cell[data-col="right"]').first())
+      .toContainText('अन्वेषण शुरू किया');
+    // The header field dictated into earlier is untouched.
+    await expect(thana).toHaveValue('कोतवाली');
   });
 
   test('clicking the punctuation panel keeps focus in a contenteditable field', async ({ page }) => {
@@ -117,7 +118,7 @@ test.describe('Dictation insertion target', () => {
     await page.locator('#punctuationToggle').click();
     await page.locator('.punctuation-grid div.punctuation-tile').first().click();
 
-    // Focus retention only covered ql-editor/input/textarea before.
+    // Focus retention only covered the document body/input/textarea before.
     await expect(flow).toBeFocused();
   });
 });

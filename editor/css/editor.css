@@ -158,96 +158,12 @@ body {
     border-radius: 999px;
 }
 
-.letter-page-input {
-    display: block;
-    width: 100%;
-    flex: 1 1 auto;
-    height: 912px;
-    max-height: 912px;
-    padding: 0;
-    margin: 0;
-    border: none;
-    border-radius: 0;
-    font-size: 16px;
-    line-height: 24px;
-    resize: none;
-    font-family: 'Noto Sans Devanagari', sans-serif;
-    box-sizing: border-box;
-    overflow: hidden;
-    background: transparent;
-    color: var(--color-text-primary);
-    outline: none;
-}
-
-.letter-page-input:focus {
-    outline: none;
-}
-
-/* Quill hosts (letter + diary right) */
-.letter-page-input.ql-container,
-.fir-input.ql-container,
-.bp-ql-container {
-    border: none !important;
-    font-family: 'Noto Sans Devanagari', Arial, sans-serif;
-    background: transparent;
-}
-
-.letter-page .bp-ql-container {
-    height: 912px;
-    max-height: 912px;
-}
-
-.diary-cell .bp-ql-container {
-    height: 100%;
-}
-
-.letter-page .bp-ql-editor,
-.letter-page-input.bp-ql-editor {
-    height: 912px;
-    max-height: 912px;
-    overflow: hidden;
-    padding: 0;
-    font-size: 16px;
-    line-height: 24px;
-    font-family: 'Noto Sans Devanagari', sans-serif;
-    color: var(--color-text-primary);
-}
-
-.diary-cell .bp-ql-editor,
-.fir-input .bp-ql-editor {
-    height: 100%;
-    overflow: hidden;
-    padding: 4px 6px;
-    font-size: 16px;
-    line-height: 24px;
-    font-family: 'Noto Sans Devanagari', Arial, sans-serif;
-    color: var(--color-text-primary);
-}
-
-.bp-ql-editor.ql-blank::before {
-    font-style: normal;
-    color: var(--color-text-muted);
-    left: 0;
-    right: 0;
-}
-
-.diary-cell .bp-ql-editor.ql-blank::before {
-    left: 6px;
-}
-
-.bp-ql-editor img {
-    max-width: 100%;
-    height: auto;
-}
-
-.bp-ql-editor p { margin: 0; }
-.bp-ql-editor ul { margin: 0; padding-left: 1.4em; }
-
-.quill-chrome-toolbar {
-    --quill-tb-bottom: calc(var(--overlay-bottom, 16px) + 20px);
+/* Floating format toolbar (letter + diary) */
+.format-toolbar {
+    --format-tb-bottom: calc(var(--overlay-bottom, 16px) + 20px);
     position: fixed;
     left: 50%;
-    bottom: var(--quill-tb-bottom);
+    bottom: var(--format-tb-bottom);
     transform: translateX(-50%);
     display: flex;
     flex-wrap: nowrap;
@@ -270,16 +186,16 @@ body {
     transition: opacity 0.2s ease, bottom 0.2s ease;
 }
 
-.quill-chrome-toolbar:hover,
-.quill-chrome-toolbar:focus-within {
+.format-toolbar:hover,
+.format-toolbar:focus-within {
     opacity: 1;
 }
 
-.quill-chrome-toolbar[hidden] {
+.format-toolbar[hidden] {
     display: none !important;
 }
 
-.quill-chrome-toolbar button {
+.format-toolbar button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -294,16 +210,26 @@ body {
     font-size: 13px;
 }
 
-.quill-chrome-toolbar button:hover {
+.format-toolbar button:hover {
     background: rgba(26, 54, 93, 0.1);
 }
 
-.quill-chrome-toolbar button.is-active {
+.format-toolbar button:focus-visible {
+    outline: 2px solid var(--brand-primary, #1a365d);
+    outline-offset: 1px;
+}
+
+.format-toolbar button.is-active {
     background: var(--brand-primary, #1a365d);
     color: #fff;
 }
 
-.quill-toolbar-sep {
+.format-toolbar button:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.format-toolbar-sep {
     width: 1px;
     height: 18px;
     margin: 0 4px;
@@ -721,7 +647,8 @@ span.diary-dotted-flow:focus {
     font-family: 'Noto Sans Devanagari', Arial, sans-serif;
     font-size: 16px;
     line-height: 24px;
-    padding: 4px 6px;
+    --cell-pad-y: 4px;
+    padding: var(--cell-pad-y) 6px;
     margin: 0;
     background: transparent;
     color: var(--color-text-primary);
