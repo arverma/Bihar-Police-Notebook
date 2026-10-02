@@ -15,7 +15,7 @@ sequenceDiagram
   User->>Sheet: Type_or_edit
   Sheet->>Main: onChange
   Main->>Main: Debounce_600ms
-  Main->>Store: saveDocument
+  Main->>Store: saveDocumentById
   Store->>IDB: Put_letter_or_diary_record
 ```
 

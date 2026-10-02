@@ -102,9 +102,17 @@ export async function disableTranslit(page) {
   }
 }
 
-/** Switch the visible template via the header segment. */
+/** Switch the visible template via the segment in the History panel. */
 export async function switchTemplate(page, template) {
+  const sidebar = page.locator('#sidebar');
+  const wasOpen = await sidebar.evaluate((el) => el.classList.contains('open'));
+  if (!wasOpen) await page.locator('.switch-btn').click();
   await page.locator(`#templateSegment [data-template="${template}"]`).click();
+  if (!wasOpen) {
+    await page.locator('.switch-btn').click();
+    // Opening/closing History slides the panel and nudges the workspace.
+    await page.waitForFunction(() => document.getAnimations().every((a) => !(a instanceof CSSTransition)));
+  }
   await page.waitForFunction(
     (t) => getComputedStyle(document.querySelector(`.editor-${t}`)).display !== 'none',
     template,

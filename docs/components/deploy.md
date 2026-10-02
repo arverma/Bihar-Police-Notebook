@@ -1,15 +1,15 @@
 # Deploy and local preview
 
-The editor is static files under `editor/`. GitHub Actions publishes that folder to GitHub Pages.
+The editor is static files under `editor/`. GitHub Actions publishes that folder to Cloudflare Pages (see [CI / CD](ci-cd.md)).
 
 ## Publish flow
 
 ```mermaid
 flowchart LR
-  push[Push_to_main]
+  push[Push_v_tag]
   wf[pages.yml_workflow]
-  artifact[Upload_editor_folder]
-  pages[GitHub_Pages]
+  artifact[Wrangler_pages_deploy_editor]
+  pages[Cloudflare_Pages]
   live[bpdiary.arverma.dev]
 
   push --> wf
@@ -18,7 +18,7 @@ flowchart LR
   pages --> live
 ```
 
-Workflow: `.github/workflows/pages.yml` (triggers on changes under `editor/**`).
+Workflow: `.github/workflows/pages.yml` (triggers on a `v*` tag push or manual run; staging deploys come from `deploy-staging.yml`).
 
 ## Local preview
 

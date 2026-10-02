@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { openFresh, setCaret, settle } from './pagination-helpers.js';
+import { openFresh, setCaret, settle, switchTemplate } from './pagination-helpers.js';
 
 /**
  * On load the app reopens the last document; without one it opens the top of
@@ -92,7 +92,7 @@ test.describe('Document opened on load', () => {
   });
 
   test('restores the letter template when a letter was open last', async ({ page }) => {
-    await page.locator('#templateSegment [data-template="letter"]').click();
+    await switchTemplate(page, 'letter');
     await setCaret(page, { page: 0, col: 'main' }, 'letter');
     await page.keyboard.insertText('पत्र का पाठ');
     await page.waitForTimeout(900); // autosave

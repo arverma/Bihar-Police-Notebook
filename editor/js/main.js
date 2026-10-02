@@ -37,6 +37,7 @@ import {
 } from './drive-sync.js';
 import { initPageScale } from './page-scale.js';
 import { initFormatToolbar } from './editor/toolbar.js';
+import { initTableControls } from './editor/table-controls.js';
 import { isSupportedContent } from './editor/doc-format.js';
 import { initUnsupportedDocs } from './unsupported-docs.js';
 import { createTestHooks } from './editor/test-hooks.js';
@@ -1307,7 +1308,11 @@ function initApp() {
 
     if (formatToolbarEl) {
         formatToolbar = initFormatToolbar(formatToolbarEl, () => activeSheet()?.editor ?? null);
-        const syncToolbar = () => formatToolbar?.sync();
+        const tableControls = initTableControls(() => activeSheet()?.editor ?? null);
+        const syncToolbar = () => {
+            formatToolbar?.sync();
+            tableControls.sync();
+        };
         for (const sheet of [letterSheet, diarySheet]) {
             sheet?.editor.on('selectionUpdate', syncToolbar);
             sheet?.editor.on('transaction', syncToolbar);
@@ -1599,7 +1604,7 @@ function initApp() {
         if (target.closest('.history-sidebar')) return false;
         if (target.closest('.dictation-panel') || target.closest('#dictationBar')) return false;
         if (target.closest('.punctuation-panel')) return false;
-        if (target.closest('#formatToolbar')) return true;
+        if (target.closest('#formatToolbar') || target.closest('.table-controls')) return true;
         if (target.closest('.editor-diary') || target.closest('.editor-letter')) return true;
         return false;
     }

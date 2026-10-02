@@ -21,7 +21,7 @@ const FIELDS = [
 
 const CHROME = [
   { name: 'transliteration toggle', selector: '.toggle-slider' },
-  { name: 'punctuation panel tile', selector: '.punctuation-grid div.punctuation-tile' },
+  { name: 'punctuation panel tile', selector: '.punctuation-grid .punctuation-tile' },
 ];
 
 async function gotoDiary(page) {
@@ -36,13 +36,15 @@ test.describe('Focus retention when clicking chrome', () => {
       test(`${field.name} keeps focus when clicking the ${chrome.name}`, async ({ page }) => {
         await gotoDiary(page);
 
-        if (chrome.selector.includes('punctuation')) {
-          await page.locator('#punctuationToggle').click();
-        }
-
         await page.locator(field.click).first().click();
         const target = page.locator(field.focus).first();
         await expect(target).toBeFocused();
+
+        // The panel opens from the toolbar over the page top: open it with focus in the field.
+        if (chrome.selector.includes('punctuation')) {
+          await page.locator('#punctuationToggle').click();
+          await expect(target).toBeFocused();
+        }
 
         await page.locator(chrome.selector).first().click();
 

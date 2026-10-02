@@ -10,7 +10,7 @@
 | `editor/js/editor/pager/ops.js` | Transaction builders: split, spill, absorb, normalize `cont`, collapse, `mapThroughPager` |
 | `editor/js/editor/pager/plugin.js` | Scheduling, suspension, history merge, page-number/overflow decorations |
 | `editor/js/editor/structure.js` | Selection clamp, cross-cell guard, page-edge Backspace/Delete/arrows, Cmd+A |
-| `editor/js/editor/page-views.js` | Page node views: diary header inputs, chrome, box height |
+| `editor/js/editor/page-views.js` | Diary page node view: header inputs, chrome, box height (letter pages have none) |
 | `editor/js/editor/diary-geometry.js` | A4 geometry, header fields, header prefill |
 | `editor/js/editor/doc-sheet.js` | Sheet API used by `main.js` (content, undo, page focus, active field) |
 | `editor/js/editor/text-field.js` | Paragraph-offset text view for transliteration / dictation |

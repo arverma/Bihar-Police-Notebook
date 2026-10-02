@@ -116,7 +116,7 @@ test.describe('Dictation insertion target', () => {
     await expect(flow).toBeFocused();
 
     await page.locator('#punctuationToggle').click();
-    await page.locator('.punctuation-grid div.punctuation-tile').first().click();
+    await page.locator('.punctuation-grid .punctuation-tile').first().click();
 
     // Focus retention only covered the document body/input/textarea before.
     await expect(flow).toBeFocused();

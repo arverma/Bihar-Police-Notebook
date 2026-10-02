@@ -41,14 +41,6 @@
                     </div>
                 </div>
             </div>
-            <div class="header-center">
-                <div class="segmented" id="templateSegment" role="group" aria-label="Document type">
-                    <button type="button" class="segment-btn" data-template="letter" title="Letter layout"
-                        aria-pressed="false">Letter</button>
-                    <button type="button" class="segment-btn is-active" data-template="diary" title="Diary layout"
-                        aria-pressed="true">Diary</button>
-                </div>
-            </div>
             <div class="header-right">
                 <div class="translit-toggle-wrapper" title="Phonetic Translation (Roman -> Devanagari)">
                     <label class="translit-label" for="translitToggle">A:अ</label>
@@ -64,11 +56,60 @@
                 </button>
             </div>
         </div>
+        <div id="formatToolbar" class="format-toolbar screen-only" hidden role="toolbar"
+            aria-label="Text formatting">
+            <button type="button" data-cmd="bold" title="Bold (Ctrl+B)" aria-label="Bold" aria-pressed="false">
+                <i class="fas fa-bold" aria-hidden="true"></i>
+            </button>
+            <button type="button" data-cmd="italic" title="Italic (Ctrl+I)" aria-label="Italic" aria-pressed="false">
+                <i class="fas fa-italic" aria-hidden="true"></i>
+            </button>
+            <button type="button" data-cmd="underline" title="Underline (Ctrl+U)" aria-label="Underline"
+                aria-pressed="false">
+                <i class="fas fa-underline" aria-hidden="true"></i>
+            </button>
+            <span class="format-toolbar-sep" aria-hidden="true"></span>
+            <button type="button" data-cmd="align:center" title="Align center" aria-label="Align center"
+                aria-pressed="false">
+                <i class="fas fa-align-center" aria-hidden="true"></i>
+            </button>
+            <button type="button" data-cmd="align:justify" title="Justify" aria-label="Justify" aria-pressed="false">
+                <i class="fas fa-align-justify" aria-hidden="true"></i>
+            </button>
+            <span class="format-toolbar-sep" aria-hidden="true"></span>
+            <button type="button" data-cmd="list:ordered" title="Numbered list" aria-label="Numbered list"
+                aria-pressed="false">
+                <i class="fas fa-list-ol" aria-hidden="true"></i>
+            </button>
+            <button type="button" data-cmd="list:bullet" title="Bulleted list" aria-label="Bulleted list"
+                aria-pressed="false">
+                <i class="fas fa-list-ul" aria-hidden="true"></i>
+            </button>
+            <span class="format-toolbar-sep" aria-hidden="true"></span>
+            <button type="button" data-cmd="image" title="Insert image" aria-label="Insert image">
+                <i class="fas fa-image" aria-hidden="true"></i>
+            </button>
+            <button type="button" data-cmd="table" title="Insert table" aria-label="Insert table">
+                <i class="fas fa-table" aria-hidden="true"></i>
+            </button>
+            <span class="format-toolbar-sep punctuation-toggle-sep" aria-hidden="true"></span>
+            <button type="button" id="punctuationToggle" class="punctuation-toggle" title="विराम चिह्न (Punctuation)"
+                aria-label="Punctuation marks" aria-expanded="false" aria-controls="punctuationPanel">
+                <i class="fas fa-quote-right" aria-hidden="true"></i>
+            </button>
+            <input type="file" accept="image/*" multiple hidden tabindex="-1" aria-hidden="true">
+        </div>
     </header>
 
     <div class="app-body">
         <aside class="sidebar" id="sidebar" aria-hidden="true">
             <div class="sidebar-content">
+                <div class="segmented sidebar-doc-type" id="templateSegment" role="group" aria-label="Document type">
+                    <button type="button" class="segment-btn" data-template="letter" title="Letter layout"
+                        aria-pressed="false">Letter</button>
+                    <button type="button" class="segment-btn is-active" data-template="diary" title="Diary layout"
+                        aria-pressed="true">Diary</button>
+                </div>
                 <div class="sidebar-header">
                     <div class="sidebar-title-block">
                         <h3>History</h3>
@@ -110,71 +151,6 @@
         </aside>
 
         <main class="main-content">
-            <div id="formatToolbar" class="format-toolbar screen-only" hidden role="toolbar"
-                aria-label="Text formatting">
-                <button type="button" data-cmd="bold" title="Bold (Ctrl+B)" aria-label="Bold" aria-pressed="false">
-                    <i class="fas fa-bold" aria-hidden="true"></i>
-                </button>
-                <button type="button" data-cmd="italic" title="Italic (Ctrl+I)" aria-label="Italic" aria-pressed="false">
-                    <i class="fas fa-italic" aria-hidden="true"></i>
-                </button>
-                <button type="button" data-cmd="underline" title="Underline (Ctrl+U)" aria-label="Underline"
-                    aria-pressed="false">
-                    <i class="fas fa-underline" aria-hidden="true"></i>
-                </button>
-                <span class="format-toolbar-sep" aria-hidden="true"></span>
-                <button type="button" data-cmd="align:center" title="Align center" aria-label="Align center"
-                    aria-pressed="false">
-                    <i class="fas fa-align-center" aria-hidden="true"></i>
-                </button>
-                <button type="button" data-cmd="align:justify" title="Justify" aria-label="Justify" aria-pressed="false">
-                    <i class="fas fa-align-justify" aria-hidden="true"></i>
-                </button>
-                <span class="format-toolbar-sep" aria-hidden="true"></span>
-                <button type="button" data-cmd="list:ordered" title="Numbered list" aria-label="Numbered list"
-                    aria-pressed="false">
-                    <i class="fas fa-list-ol" aria-hidden="true"></i>
-                </button>
-                <button type="button" data-cmd="list:bullet" title="Bulleted list" aria-label="Bulleted list"
-                    aria-pressed="false">
-                    <i class="fas fa-list-ul" aria-hidden="true"></i>
-                </button>
-                <span class="format-toolbar-sep" aria-hidden="true"></span>
-                <button type="button" data-cmd="image" title="Insert image" aria-label="Insert image">
-                    <i class="fas fa-image" aria-hidden="true"></i>
-                </button>
-                <button type="button" data-cmd="table" title="Insert table" aria-label="Insert table">
-                    <i class="fas fa-table" aria-hidden="true"></i>
-                </button>
-                <input type="file" accept="image/*" multiple hidden tabindex="-1" aria-hidden="true">
-                <div class="format-toolbar-table" data-group="table" role="group" aria-label="Table" hidden>
-                    <button type="button" data-cmd="table:rowBefore" title="Insert row above" aria-label="Insert row above">
-                        <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="7.5" width="12" height="7" rx="1"/><path d="M2 11h12M6 7.5v7M10 7.5v7M8 1v5M5.5 3.5h5"/></svg>
-                    </button>
-                    <button type="button" data-cmd="table:rowAfter" title="Insert row below" aria-label="Insert row below">
-                        <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="1.5" width="12" height="7" rx="1"/><path d="M2 5h12M6 1.5v7M10 1.5v7M8 10v5M5.5 12.5h5"/></svg>
-                    </button>
-                    <button type="button" data-cmd="table:colBefore" title="Insert column left" aria-label="Insert column left">
-                        <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="7.5" y="2" width="7" height="12" rx="1"/><path d="M11 2v12M7.5 6h7M7.5 10h7M1 8h5M3.5 5.5v5"/></svg>
-                    </button>
-                    <button type="button" data-cmd="table:colAfter" title="Insert column right" aria-label="Insert column right">
-                        <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="2" width="7" height="12" rx="1"/><path d="M5 2v12M1.5 6h7M1.5 10h7M10 8h5M12.5 5.5v5"/></svg>
-                    </button>
-                    <span class="format-toolbar-sep" aria-hidden="true"></span>
-                    <button type="button" data-cmd="table:deleteRow" title="Delete row" aria-label="Delete row">
-                        <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="1.5" y="5" width="9" height="6" rx="1"/><path d="M4.5 5v6M7.5 5v6M12 8h3.5"/></svg>
-                    </button>
-                    <button type="button" data-cmd="table:deleteCol" title="Delete column" aria-label="Delete column">
-                        <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5" y="1.5" width="6" height="9" rx="1"/><path d="M5 4.5h6M5 7.5h6M6 13.5h4"/></svg>
-                    </button>
-                    <button type="button" data-cmd="table:header" title="Header row" aria-label="Header row" aria-pressed="false">
-                        <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="1"/><rect class="fill" x="2" y="2" width="12" height="4" rx="1"/><path d="M2 10h12M6 6v8M10 6v8"/></svg>
-                    </button>
-                    <button type="button" data-cmd="table:delete" title="Delete table" aria-label="Delete table">
-                        <i class="fas fa-trash-can" aria-hidden="true"></i>
-                    </button>
-                </div>
-            </div>
             <div class="editor-stage" id="editorStage">
                 <button type="button" class="page-fit-chip" id="pageFitChip" hidden title="Fit page to width"
                     aria-label="Fit page to width">
@@ -298,18 +274,16 @@
         <div class="dictation-sheet-body"></div>
     </dialog>
 
-    <aside id="punctuationPanel" class="punctuation-panel">
-        <button id="punctuationToggle" class="punctuation-toggle" title="विराम चिह्न (Punctuation)">
-            <i class="fas fa-quote-right"></i>
-        </button>
+    <aside id="punctuationPanel" class="punctuation-panel" role="dialog" aria-label="Punctuation marks">
         <div class="punctuation-content">
-            <div id="punctuationGrid" class="punctuation-grid"></div>
-            <div class="punctuation-footer">
-                <button id="punctuationClose" class="punctuation-close" title="Close" aria-label="Close">
-                    <i class="fas fa-times"></i>
+            <div class="punctuation-head">
+                <span>विराम चिह्न · Punctuation</span>
+                <button type="button" id="punctuationClose" class="punctuation-close" title="Close (Esc)" aria-label="Close">
+                    <i class="fas fa-xmark" aria-hidden="true"></i>
                 </button>
-                <div id="punctuationTooltip" class="punctuation-tooltip">Hover over a mark</div>
             </div>
+            <div id="punctuationGrid" class="punctuation-grid"></div>
+            <div id="punctuationTooltip" class="punctuation-tooltip" aria-live="polite">Click a mark to insert it at the cursor</div>
         </div>
     </aside>
 

@@ -1,5 +1,5 @@
 /**
- * Floating format toolbar (#formatToolbar).
+ * Format toolbar (#formatToolbar), the row under the app header.
  *
  * Buttons carry `data-cmd`; each maps to one editor command. The toolbar acts
  * on whichever document editor is active (letter or diary) and mirrors the
@@ -7,11 +7,11 @@
  * is prevented so a click never takes focus or the selection away from the
  * text.
  *
- * The table group (`data-group="table"`) is shown only while the caret is in
- * a table. Insert image opens the toolbar's file input (camera on phones).
+ * Insert image opens the toolbar's file input (camera on phones). Editing a
+ * table (rows, columns, header row) lives on the table itself:
+ * ./table-controls.js.
  */
 import { insertImageFiles } from './images.js';
-import { tableHasHeaderRow } from './tables.js';
 
 /**
  * @typedef {{
@@ -39,18 +39,6 @@ const COMMANDS = {
     // Images and tables go between blocks, never inside a table.
     image: { run: (_ed, ui) => ui.pickImage(), enabled: (ed) => !ed.isActive('table') },
     table: { run: (ed) => ed.chain().focus().insertFlowTable().run(), enabled: (ed) => ed.can().insertFlowTable() },
-    'table:rowBefore': { run: (ed) => ed.chain().focus().addRowBefore().run(), enabled: (ed) => ed.can().addRowBefore() },
-    'table:rowAfter': { run: (ed) => ed.chain().focus().addRowAfter().run(), enabled: (ed) => ed.can().addRowAfter() },
-    'table:colBefore': { run: (ed) => ed.chain().focus().addColumnBefore().run(), enabled: (ed) => ed.can().addColumnBefore() },
-    'table:colAfter': { run: (ed) => ed.chain().focus().addColumnAfter().run(), enabled: (ed) => ed.can().addColumnAfter() },
-    'table:deleteRow': { run: (ed) => ed.chain().focus().deleteRow().run(), enabled: (ed) => ed.can().deleteRow() },
-    'table:deleteCol': { run: (ed) => ed.chain().focus().deleteColumn().run(), enabled: (ed) => ed.can().deleteColumn() },
-    'table:header': {
-        run: (ed) => ed.chain().focus().toggleHeaderRow().run(),
-        active: (ed) => tableHasHeaderRow(ed.state),
-        enabled: (ed) => ed.can().toggleHeaderRow(),
-    },
-    'table:delete': { run: (ed) => ed.chain().focus().deleteTable().run(), enabled: (ed) => ed.can().deleteTable() },
 };
 
 function toggleAlign(ed, value) {
@@ -67,7 +55,6 @@ export function initFormatToolbar(el, getEditor) {
     el.hidden = false;
 
     const fileInput = /** @type {HTMLInputElement | null} */ (el.querySelector('input[type="file"]'));
-    const tableGroup = /** @type {HTMLElement | null} */ (el.querySelector('[data-group="table"]'));
     // The editor whose selection the picked files go to (the picker blurs it).
     let pickFor = null;
     const ui = {
@@ -96,8 +83,6 @@ export function initFormatToolbar(el, getEditor) {
     function sync() {
         const ed = getEditor();
         const usable = Boolean(ed?.isFocused || ed?.view.hasFocus());
-        const inTable = Boolean(ed && usable && ed.isActive('table'));
-        if (tableGroup) tableGroup.hidden = !inTable;
         el.querySelectorAll('[data-cmd]').forEach((btn) => {
             const cmd = COMMANDS[btn.getAttribute('data-cmd') || ''];
             if (!cmd) return;
@@ -106,31 +91,10 @@ export function initFormatToolbar(el, getEditor) {
                 btn.classList.toggle('is-active', on);
                 btn.setAttribute('aria-pressed', on ? 'true' : 'false');
             }
-            // Table commands are only checked while their group is visible.
-            const inGroup = tableGroup?.contains(btn);
-            const enabled = Boolean(ed) && (inGroup && !inTable ? true : (cmd.enabled?.(ed) ?? true));
-            /** @type {HTMLButtonElement} */ (btn).disabled = !enabled;
+            /** @type {HTMLButtonElement} */ (btn).disabled = !ed || !(cmd.enabled?.(ed) ?? true);
         });
         el.classList.toggle('is-idle', !usable);
-        updateViewportOffset();
     }
-
-    function updateViewportOffset() {
-        // On narrow viewports lift the toolbar above the soft keyboard.
-        const narrow = window.matchMedia?.('(max-width: 768px)').matches;
-        if (!narrow) {
-            el.style.removeProperty('--format-tb-bottom');
-            return;
-        }
-        const vv = window.visualViewport;
-        const keyboardLift = vv ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0;
-        const bottomPx = Math.max(12, keyboardLift + 8);
-        el.style.setProperty('--format-tb-bottom', `calc(var(--overlay-bottom, 0px) + ${bottomPx}px)`);
-    }
-
-    window.addEventListener('resize', updateViewportOffset);
-    window.visualViewport?.addEventListener('resize', updateViewportOffset);
-    window.visualViewport?.addEventListener('scroll', updateViewportOffset);
 
     sync();
     return { sync };

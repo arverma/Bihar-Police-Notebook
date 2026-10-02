@@ -363,3 +363,169 @@
     border: none;
     padding: 4px 6px;
 }
+
+/* ── Table controls (./js/editor/table-controls.js) ──
+   One fixed layer on <body>; the parts are placed from the cells' rects. */
+.table-controls {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    pointer-events: none;
+}
+
+.table-controls[hidden] {
+    display: none;
+}
+
+.table-controls > button,
+.table-controls .tc-menu {
+    position: fixed;
+    pointer-events: auto;
+}
+
+.tc-grip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 1px solid rgba(26, 54, 93, 0.22);
+    border-radius: 4px;
+    background: var(--brand-white, #fff);
+    color: var(--brand-primary, #1a365d);
+    box-shadow: 0 1px 3px rgba(26, 54, 93, 0.16);
+    cursor: pointer;
+}
+
+.tc-grip-row {
+    width: 16px;
+    height: 24px;
+}
+
+.tc-grip-col {
+    width: 24px;
+    height: 16px;
+}
+
+/* Six-dot grip, drawn with one gradient. */
+.tc-grip span {
+    width: 6px;
+    height: 10px;
+    background: radial-gradient(circle, currentColor 1px, transparent 1.5px) 0 0 / 3px 3.4px;
+    opacity: 0.7;
+}
+
+.tc-grip-col span {
+    width: 10px;
+    height: 6px;
+    background-size: 3.4px 3px;
+}
+
+.tc-grip:hover,
+.tc-grip[aria-expanded='true'] {
+    background: var(--brand-primary, #1a365d);
+    color: #fff;
+}
+
+.tc-add {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 1px dashed rgba(26, 54, 93, 0.3);
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.85);
+    color: var(--brand-primary, #1a365d);
+    font-size: 9px;
+    cursor: pointer;
+    opacity: 0.55;
+    transition: opacity 0.15s ease, background 0.15s ease;
+}
+
+.tc-add-row {
+    height: 14px;
+}
+
+.tc-add-col {
+    width: 14px;
+}
+
+.tc-add:hover {
+    opacity: 1;
+    border-style: solid;
+    background: rgba(26, 54, 93, 0.08);
+}
+
+.tc-menu {
+    min-width: 196px;
+    padding: 4px;
+    border: 1px solid rgba(26, 54, 93, 0.14);
+    border-radius: 8px;
+    background: var(--brand-white, #fff);
+    box-shadow: 0 8px 24px rgba(26, 54, 93, 0.18);
+    font-family: "Roboto", Helvetica, sans-serif;
+}
+
+.tc-menu[hidden] {
+    display: none;
+}
+
+.tc-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 32px;
+    padding: 0 10px;
+    border: none;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--color-text, #1f2937);
+    font: inherit;
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.tc-menu-item i {
+    width: 14px;
+    color: var(--brand-primary, #1a365d);
+    text-align: center;
+}
+
+.tc-menu-item:hover:not(:disabled),
+.tc-menu-item:focus-visible {
+    background: rgba(26, 54, 93, 0.08);
+    outline: none;
+}
+
+.tc-menu-item.is-danger,
+.tc-menu-item.is-danger i {
+    color: #b42318;
+}
+
+.tc-menu-item:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.tc-menu-item[aria-checked='true']::after {
+    content: '\2713';
+    margin-left: auto;
+    color: var(--brand-primary, #1a365d);
+}
+
+.tc-menu-sep {
+    height: 1px;
+    margin: 4px 6px;
+    background: rgba(26, 54, 93, 0.12);
+}
+
+/* Fingers need bigger targets. */
+@media (pointer: coarse) {
+    .tc-grip-row { width: 22px; height: 32px; }
+    .tc-grip-col { width: 32px; height: 22px; }
+    .tc-add-row { height: 22px; }
+    .tc-add-col { width: 22px; }
+    .tc-add { opacity: 0.8; font-size: 11px; }
+    .tc-menu-item { min-height: 40px; font-size: 14px; }
+}

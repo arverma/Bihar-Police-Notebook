@@ -2,7 +2,7 @@
 
 Optional, **manual** sync. Nothing uploads until the user explicitly triggers a backup action.
 
-- **Drive folder:** `Bihar Police Notebook Backup — do not delete` (in My Drive root)
+- **Drive folder:** `Bihar Police Notebook Backup — do not delete` on production (`bpdiary.arverma.dev`); `Bihar Police Notebook Backup - test` on staging and localhost (in My Drive root)
 - **Scope:** `https://www.googleapis.com/auth/drive.file` — can only see/create files that this app itself created; cannot read any other Drive content
 - **File layout:** one JSON file per document named `{uuid}.json`, with `appProperties.uuid` set for reliable lookup
 

@@ -15,6 +15,13 @@ import {
 
 const toolbar = (page) => page.locator('#formatToolbar');
 const cmd = (page, name) => toolbar(page).locator(`[data-cmd="${name}"]`);
+/** A table menu item; opens the caret cell's menu (Shift+F10) first. */
+async function tableItem(page, name) {
+  await page.keyboard.press('Shift+F10');
+  const item = page.locator(`.table-controls [data-table-cmd="${name}"]`);
+  await expect(item).toBeVisible();
+  return item;
+}
 
 /** A table spec: header + `n` body rows. */
 function tableSpec(n, cols = 3) {
@@ -82,11 +89,11 @@ test.describe('Tables', () => {
     expect(stats.capHits).toBe(0);
   });
 
-  test('the toolbar inserts a 3×3 table with a header row; the table bar shows only inside it', async ({ page }) => {
+  test('the toolbar inserts a 3×3 table with a header row; the table controls show only inside it', async ({ page }) => {
     await setDoc(page, [{ right: ['intro'] }]);
     await setCaret(page, { col: 'right' });
-    const group = toolbar(page).locator('[data-group="table"]');
-    await expect(group).toBeHidden();
+    const controls = page.locator('.table-controls');
+    await expect(controls).toBeHidden();
 
     await cmd(page, 'table').click();
     await page.keyboard.type('Item');
@@ -95,18 +102,19 @@ test.describe('Tables', () => {
     await settle(page);
 
     expect((await columnPages(page, 'right'))[0]).toEqual(['intro', 'table:#Item,Qty,/,,/,,', '']);
-    await expect(group).toBeVisible();
+    await expect(controls).toBeVisible();
     await expect(cmd(page, 'table')).toBeDisabled(); // no nested tables
-    await expect(cmd(page, 'table:header')).toHaveAttribute('aria-pressed', 'true');
+    await expect(await tableItem(page, 'header')).toHaveAttribute('aria-checked', 'true');
+    await page.keyboard.press('Escape');
 
-    await cmd(page, 'table:colAfter').click();
-    await cmd(page, 'table:rowAfter').click();
+    await (await tableItem(page, 'colAfter')).click();
+    await (await tableItem(page, 'rowAfter')).click();
     await settle(page);
     expect((await columnPages(page, 'right'))[0][1]).toBe('table:#Item,Qty,,/,,,/,,,/,,,');
 
-    // Leaving the table hides its bar again.
+    // Leaving the table hides its controls again.
     await setCaret(page, { col: 'right', block: 0 });
-    await expect(group).toBeHidden();
+    await expect(controls).toBeHidden();
   });
 
   test('a long table is cut between rows, repeats its header, and never clips', async ({ page }) => {
@@ -180,8 +188,7 @@ test.describe('Tables', () => {
       ed.view.focus();
       ed.commands.setTextSelection(page2 + 10);
     });
-    await expect(cmd(page, 'table:delete')).toBeVisible();
-    await cmd(page, 'table:delete').click();
+    await (await tableItem(page, 'deleteTable')).click();
     await settle(page);
     expect(await columnPages(page, 'right')).toEqual([['intro', 'after']]);
     expect((await caret(page)).page).toBe(0);
@@ -198,7 +205,7 @@ test.describe('Tables', () => {
       ed.view.focus();
       ed.commands.setTextSelection(ed.state.doc.child(0).nodeSize + 10);
     });
-    await cmd(page, 'table:colAfter').click();
+    await (await tableItem(page, 'colAfter')).click();
     await settle(page);
     const rows = await tableRows(page, 'right');
     expect(rows.every((r) => r.split(',').length === 3)).toBe(true);

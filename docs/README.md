@@ -8,7 +8,7 @@ Architecture and how the pieces fit together. For everyday use (opening the app,
 |-----|----------------|
 | [Architecture](architecture.md) | High-level system map and links into each component |
 | [Desktop vs mobile](desktop-vs-mobile.md) | What is available on phone vs computer |
-| [Tests](../tests/README.md) | Vitest (`editor/js/*.test.js`) vs Playwright (`tests/*.spec.js`) |
+| [Tests](../tests/README.md) | Vitest (`editor/js/**/*.test.js`) vs Playwright (`tests/*.spec.js`) |
 
 ## Components
 
@@ -19,7 +19,7 @@ Architecture and how the pieces fit together. For everyday use (opening the app,
 | [Local storage](components/storage.md) | Autosave in IndexedDB |
 | [Drive backup](components/drive-backup.md) | Optional Google Drive sync |
 | [Hinglish typing](components/typing.md) | Transliteration suggestions |
-| Punctuation Panel | Draggable panel with common Hindi/English punctuation |
+| Punctuation Panel | Toolbar dropdown of common Hindi/English punctuation; a click inserts the mark at the cursor (copies it when no field is focused) |
 | [Dictation](components/dictation.md) | In-app microphone (desktop/tablet) |
 | [Page preview](components/page-preview.md) | On-screen fit / pinch zoom |
 | [Diary pagination manual tests](manual-tests/diary-pagination.md) | Manual checklist to run locally after any pager change |
