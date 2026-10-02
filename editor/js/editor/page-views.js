@@ -1,8 +1,10 @@
 /**
  * Node views for pages.
  *
- * A page view owns everything on the page that is not document text: the
- * screen-only chrome, and (diary) the form header with its native inputs.
+ * The diary page view owns everything on the page that is not document
+ * text: the screen-only chrome (header toggle, delete) and the form header
+ * with its native inputs. Page numbers are a screen-only footer drawn from
+ * pager decorations, so no view needs to track them.
  * ProseMirror only manages `contentDOM` — the writing cells — so:
  *
  *  - `stopEvent` hands every event outside contentDOM to the browser, so
@@ -46,37 +48,6 @@ class PageViewBase {
     ignoreMutation(mutation) {
         if (mutation.type === 'selection') return !this.contentDOM.contains(mutation.target);
         return !this.contentDOM.contains(mutation.target);
-    }
-}
-
-/** Letter page: A4 card with a "Page N" label. */
-export class LetterPageView extends PageViewBase {
-    constructor(props) {
-        super(props);
-        this.dom = document.createElement('section');
-        this.dom.className = 'bp-page letter-page';
-        const chrome = document.createElement('div');
-        chrome.className = 'letter-page-chrome screen-only';
-        chrome.contentEditable = 'false';
-        this.label = document.createElement('span');
-        this.label.className = 'letter-page-label';
-        chrome.appendChild(this.label);
-        this.contentDOM = document.createElement('div');
-        this.contentDOM.className = 'letter-page-body';
-        this.dom.append(chrome, this.contentDOM);
-        this.render();
-    }
-
-    update(node) {
-        if (node.type !== this.node.type) return false;
-        this.node = node;
-        this.render();
-        return true;
-    }
-
-    render() {
-        const { index } = pageIndexOf(this.view, this.getPos);
-        this.label.textContent = `Page ${index + 1}`;
     }
 }
 
@@ -124,7 +95,6 @@ export class DiaryPageView extends PageViewBase {
         this.chrome = this.dom.querySelector('.diary-page-chrome');
         this.headerEl = this.dom.querySelector('.diary-page-header');
         this.titlesRow = this.dom.querySelector('.diary-titles-row');
-        this.label = this.dom.querySelector('.diary-page-label');
         this.toggleBtn = this.dom.querySelector('.diary-header-toggle');
         this.deleteBtn = this.dom.querySelector('.diary-page-delete');
 
@@ -244,11 +214,10 @@ export class DiaryPageView extends PageViewBase {
 
     render() {
         const { hasHeader, fields = {} } = this.node.attrs;
-        const { index, count } = pageIndexOf(this.view, this.getPos);
+        const { count } = pageIndexOf(this.view, this.getPos);
         this.dom.dataset.hasHeader = hasHeader ? 'true' : 'false';
         if (this.headerEl) this.headerEl.hidden = !hasHeader;
         if (this.titlesRow) this.titlesRow.hidden = !hasHeader;
-        if (this.label) this.label.textContent = `Page ${index + 1}`;
         if (this.toggleBtn) {
             this.toggleBtn.textContent = hasHeader ? 'Hide header' : 'Show header';
             this.toggleBtn.setAttribute('aria-pressed', hasHeader ? 'true' : 'false');

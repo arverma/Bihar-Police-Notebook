@@ -73,6 +73,7 @@ export default defineConfig({
         '**/editor-spaces.spec.js',
         '**/unsupported-docs.spec.js',
         '**/history.spec.js',
+        '**/startup-document.spec.js',
       ],
     },
     {

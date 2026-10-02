@@ -37,11 +37,6 @@
     width: 100%;
 }
 
-.letter-page-body {
-    flex: 1 1 auto;
-    min-height: 0;
-}
-
 /* ── Writing box shared by every template ── */
 /* Text layout lives on the cell (not the editor root) because print and PDF
    clone pages without the root — wrapping must be identical on paper. */

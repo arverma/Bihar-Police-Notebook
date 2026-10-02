@@ -114,6 +114,7 @@ export const LetterPage = Node.create({
     renderHTML() {
         return ['section', { class: 'bp-page letter-page' }, 0];
     },
+    // No node view: a letter page has no chrome; the footer is CSS.
 });
 
 export const DiaryPage = Node.create({

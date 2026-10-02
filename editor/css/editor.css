@@ -139,25 +139,6 @@ body {
     flex-direction: column;
 }
 
-.letter-page-chrome {
-    position: absolute;
-    top: 6px;
-    right: 10px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    z-index: 3;
-}
-
-.letter-page-label {
-    font-size: 11px;
-    font-weight: 500;
-    color: var(--color-text-muted);
-    background: var(--color-surface-secondary);
-    padding: 2px 8px;
-    border-radius: 999px;
-}
-
 /* Floating format toolbar (letter + diary) */
 .format-toolbar {
     --format-tb-bottom: calc(var(--overlay-bottom, 16px) + 20px);
@@ -304,15 +285,6 @@ body {
     align-items: center;
     gap: 8px;
     z-index: 3;
-}
-
-.diary-page-label {
-    font-size: 11px;
-    font-weight: 500;
-    color: var(--color-text-muted);
-    background: var(--color-background);
-    padding: 2px 8px;
-    border-radius: 999px;
 }
 
 .diary-header-toggle {

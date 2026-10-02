@@ -4,7 +4,6 @@
 import { Editor, EditorState, Extension, Plugin, PluginKey, Decoration, DecorationSet } from './tiptap.js';
 import { collectPages, isBlankCell } from './pager/layout.js';
 import {
-    LetterPage,
     DiaryPage,
     letterExtensions,
     diaryExtensions,
@@ -14,7 +13,7 @@ import {
 import { letterTemplate, diaryTemplate } from './templates.js';
 import { Pager } from './pager/plugin.js';
 import { PageStructure } from './structure.js';
-import { LetterPageView, DiaryPageView } from './page-views.js';
+import { DiaryPageView } from './page-views.js';
 
 /**
  * Placeholder text in empty writing boxes. Computed from the state being
@@ -56,9 +55,7 @@ const TEMPLATES = {
     letter: {
         template: letterTemplate,
         empty: emptyLetterJSON,
-        extensions: () => letterExtensions().map((ext) => (ext === LetterPage
-            ? LetterPage.extend({ addNodeView: () => (props) => new LetterPageView(props) })
-            : ext)),
+        extensions: () => letterExtensions(),
     },
     diary: {
         template: diaryTemplate,

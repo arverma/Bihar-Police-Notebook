@@ -44,7 +44,7 @@ function diaryPageFixture(rightHtml) {
   const page = document.createElement('section');
   page.className = 'diary-page bp-page';
   page.innerHTML = `
-    <div class="diary-page-chrome screen-only" contenteditable="false"><span class="diary-page-label">Page 1</span></div>
+    <div class="diary-page-chrome screen-only" contenteditable="false"><button class="diary-header-toggle">Hide header</button></div>
     <div class="diary-page-header" contenteditable="false">
       <input class="diary-dotted" data-field="thana" value="कोतवाली">
       <span class="diary-dotted diary-dotted-flow" contenteditable="true" data-field="event_date_place">स्थान</span>

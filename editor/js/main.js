@@ -40,6 +40,7 @@ import { initFormatToolbar } from './editor/toolbar.js';
 import { isSupportedContent } from './editor/doc-format.js';
 import { initUnsupportedDocs } from './unsupported-docs.js';
 import { createTestHooks } from './editor/test-hooks.js';
+import { pickStartupDocument, newestFirst, historyDate } from './startup-document.js';
 import { runDocumentExport } from './export/router.js';
 
 const letterPagesEl = document.getElementById('letterPages');
@@ -367,6 +368,29 @@ async function loadDocumentState(doc) {
         localStorage.removeItem('lastActiveDocId');
         localStorage.setItem('lastActiveDocType', currentDoc.type);
     }
+}
+
+/**
+ * On load, reopen the last document; else the top of History; a new document
+ * only when there is nothing to open.
+ */
+async function openStartupDocument() {
+    const lastType = localStorage.getItem('lastActiveDocType') === 'letter' ? 'letter' : 'diary';
+    const lastId = Number.parseInt(localStorage.getItem('lastActiveDocId') || '', 10);
+    try {
+        const [lastDoc, historyDocs] = await Promise.all([
+            Number.isFinite(lastId) ? getDocumentById(lastType, lastId).catch(() => null) : null,
+            getDocuments(lastType),
+        ]);
+        const pick = pickStartupDocument({ lastType, lastDoc, historyDocs, canOpen: canOpenDocument });
+        if ('open' in pick) {
+            await loadDocumentState(pick.open);
+            return;
+        }
+    } catch (err) {
+        console.error('Failed to restore a document on load:', err);
+    }
+    await startNewDocument(lastType);
 }
 
 async function startNewDocument(type = getActiveTemplate()) {
@@ -1075,7 +1099,9 @@ function initApp() {
         return expanded;
     }
 
-    function renderHistory(docs = []) {
+    function renderHistory(unsorted = []) {
+        // Same order the app opens "the top of History" in on load.
+        const docs = newestFirst(unsorted);
         const hadGroups = Boolean(historyList?.querySelector('.history-date-group'));
         const expandedSnapshot = hadGroups ? snapshotExpandedHistoryGroups() : null;
 
@@ -1092,7 +1118,7 @@ function initApp() {
 
         const groups = {};
         docs.forEach(doc => {
-            const dateObj = new Date(doc.created_at || doc.timestamp || doc.date || Date.now());
+            const dateObj = historyDate(doc);
             const dateKey = getDateString(dateObj);
             if (!groups[dateKey]) groups[dateKey] = [];
             groups[dateKey].push({ ...doc, date: dateObj });
@@ -1303,23 +1329,7 @@ function initApp() {
         }
     }
 
-    const lastId = localStorage.getItem('lastActiveDocId');
-    const lastType = localStorage.getItem('lastActiveDocType') || 'diary';
-
-    if (lastId) {
-        getDocumentById(lastType, parseInt(lastId, 10)).then(async doc => {
-            if (doc && canOpenDocument(doc)) {
-                await loadDocumentState(doc);
-            } else {
-                await startNewDocument(lastType);
-            }
-        }).catch(async err => {
-            console.error('Failed to restore last document:', err);
-            await startNewDocument(lastType);
-        });
-    } else {
-        void startNewDocument(lastType);
-    }
+    void openStartupDocument();
 
     void loadHistory();
     void updateDriveChrome();

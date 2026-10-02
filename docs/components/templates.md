@@ -2,6 +2,8 @@
 
 Two print-ready A4 templates share the same shell. Switching templates starts a new document of that type (after saving the current one if needed).
 
+On load the app reopens the document that was open last. If it no longer exists or cannot be opened, it opens the top of that template's History (the newest document this version can open); it starts a new document only when History has nothing to open (`editor/js/startup-document.js`).
+
 | Template | Module | Document |
 |----------|--------|----------|
 | Letter | `editor/js/letter-sheet.js` | `letterPage+` — one writing box per page |
@@ -37,7 +39,7 @@ flowchart TD
 
 ## Screen vs print
 
-- **On screen:** pages may be scaled to fit the window ([Page preview](page-preview.md)). Scaling is visual only. Each page shows a screen-only "Page X of Y" footer and page chrome (label, header toggle, delete); none of it prints.
+- **On screen:** pages may be scaled to fit the window ([Page preview](page-preview.md)). Scaling is visual only. Each page shows a screen-only "Page X of Y" footer; diary pages also have screen-only chrome (Hide/Show header, delete page). None of it prints.
 - **Shared print document:** both export backends use [`editor/js/export/print-document.js`](../../editor/js/export/print-document.js) (`buildPrintDocumentHtml` / `mountPrintDocument`). It clones the live pages and loads the same stylesheets (`editor.css` + `doc-editor.css`), so every line breaks where it does on screen. Text layout (`white-space`, ligatures) lives on `.bp-cell`, not on the editor root, because the clone does not include the root.
 - **Desktop / Android:** native browser print dialog from the hidden iframe (`triggerNativePrint`). Prefer **Save as PDF** with A4 and default margins.
 - **iOS / iPadOS:** WebKit’s print pipeline clips full-bleed A4 cards, so export builds a raster A4 PDF ([`editor/js/export/raster-pdf.js`](../../editor/js/export/raster-pdf.js)) from the same print-document cards (html2canvas + jsPDF). Text in that PDF is not selectable; visual completeness is the goal. Verify on a real iPhone/iPad — desktop Playwright WebKit does not reproduce iOS Quartz print.

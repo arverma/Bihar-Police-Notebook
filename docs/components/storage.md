@@ -30,7 +30,7 @@ sequenceDiagram
 | `driveFileId` / `syncedAt` / `syncError` | Backup metadata |
 | `deletedAt` | Soft-delete (tombstone for Drive) |
 
-History lists live documents for the **active** template only. Delete soft-deletes when a Drive copy may exist; otherwise hard-delete. Deleting an older-format document also clears its `content` in the tombstone, so no unusable payload stays on the device or in Drive.
+History lists live documents for the **active** template only, newest created first. `localStorage` keeps `lastActiveDocId` / `lastActiveDocType` so a reload reopens the same document. Delete soft-deletes when a Drive copy may exist; otherwise hard-delete. Deleting an older-format document also clears its `content` in the tombstone, so no unusable payload stays on the device or in Drive.
 
 Prefs for UI/auth flags use `localStorage` via `prefs.js` (`bpnt.*` keys) — separate from document IndexedDB.
 

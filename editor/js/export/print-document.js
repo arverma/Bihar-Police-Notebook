@@ -51,8 +51,7 @@ export function printDocumentExtraCss() {
       break-after: auto;
     }
     .print-pages .screen-only,
-    .print-pages .diary-page-chrome,
-    .print-pages .letter-page-chrome {
+    .print-pages .diary-page-chrome {
       display: none !important;
     }
     /* Screen-only page footer; raster PDF renders screen media, so drop it here. */
@@ -174,7 +173,7 @@ function flattenEditorCells(pageEl) {
  */
 export function sanitizeExportPage(pageEl) {
   pageEl.querySelectorAll('.screen-only').forEach((el) => el.remove());
-  pageEl.querySelectorAll('.diary-page-chrome, .letter-page-chrome').forEach((el) => el.remove());
+  pageEl.querySelectorAll('.diary-page-chrome').forEach((el) => el.remove());
   flattenEditorCells(pageEl);
 
   // Header / titles controls → static spans
