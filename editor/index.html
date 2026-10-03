@@ -133,11 +133,11 @@
                         aria-pressed="true">Diary</button>
                 </div>
                 <div class="sidebar-header">
-                    <div class="sidebar-title-block">
-                        <h3>History</h3>
-                        <p class="sidebar-subtitle">Grouped by date created</p>
-                    </div>
                     <div class="sidebar-actions">
+                        <button class="add-template-btn" type="button" title="Start a new document">
+                            <span class="plus-icon"><i class="fas fa-plus" aria-hidden="true"></i></span>
+                            <span class="new-doc-label">New diary</span>
+                        </button>
                         <div class="drive-control" id="driveControl">
                             <button type="button" class="action-btn backup-btn" id="backupBtn" data-backup="needs-auth"
                                 title="Connect to back up" aria-label="Connect to back up" aria-haspopup="true"
@@ -160,15 +160,9 @@
                                 </button>
                             </div>
                         </div>
-                        <button class="add-template-btn" type="button" title="Start a new document"
-                            aria-label="Start a new document">
-                            <div class="plus-icon">
-                                <i class="fas fa-plus"></i>
-                            </div>
-                        </button>
                     </div>
                 </div>
-                <div class="history-list"></div>
+                <div class="history-list" role="region" aria-label="Document history"></div>
             </div>
         </aside>
 

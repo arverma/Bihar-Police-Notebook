@@ -16,6 +16,7 @@ Architecture and how the pieces fit together. For everyday use (opening the app,
 |-----------|--------|
 | [Editor shell](components/editor-shell.md) | Header, History, scroll areas |
 | [Letter & Diary](components/templates.md) | Templates and print / PDF |
+| [Word export](components/word-export.md) | Per-row .docx download from History |
 | [Local storage](components/storage.md) | Autosave in IndexedDB |
 | [Drive backup](components/drive-backup.md) | Optional Google Drive sync |
 | [Hinglish typing](components/typing.md) | Transliteration suggestions |
@@ -23,6 +24,7 @@ Architecture and how the pieces fit together. For everyday use (opening the app,
 | [Dictation](components/dictation.md) | In-app microphone (desktop/tablet) |
 | [Page preview](components/page-preview.md) | On-screen fit / pinch zoom |
 | [Diary pagination manual tests](manual-tests/diary-pagination.md) | Manual checklist to run locally after any pager change |
+| [Word export manual tests](manual-tests/word-export.md) | Manual checklist (real Word) after any exporter change |
 | [Deploy](components/deploy.md) | GitHub Pages and local preview |
 
 ## Product name

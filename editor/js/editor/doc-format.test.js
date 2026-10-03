@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
-import { serializeDoc, parseDoc, isSupportedContent, docPlainText, docPages, VERSION } from './doc-format.js';
-import { emptyDiaryJSON } from './schema.js';
+import { serializeDoc, parseDoc, isSupportedContent, docPlainText, docPages, docHasContent, VERSION } from './doc-format.js';
+import { emptyDiaryJSON, emptyLetterJSON } from './schema.js';
 
 describe('saved format', () => {
     test('round-trips a document', () => {
@@ -49,4 +49,37 @@ test('docPages lists header attributes per page', () => {
     const doc = emptyDiaryJSON();
     doc.content[0].attrs.fields.fir_number = '12/26';
     expect(docPages(doc)).toEqual([{ hasHeader: true, fields: expect.objectContaining({ fir_number: '12/26' }) }]);
+});
+
+describe('docHasContent', () => {
+    const withText = (doc, text) => {
+        doc.content[0].content[0].content = [{ type: 'paragraph', content: [{ type: 'text', text }] }];
+        return doc;
+    };
+
+    test('a blank document of either kind is empty', () => {
+        expect(docHasContent(emptyDiaryJSON(), 'diary')).toBe(false);
+        expect(docHasContent(emptyLetterJSON(), 'letter')).toBe(false);
+    });
+
+    test('text, a table or an image counts', () => {
+        expect(docHasContent(withText(emptyLetterJSON(), 'hello'), 'letter')).toBe(true);
+        const withTable = emptyLetterJSON();
+        withTable.content[0].content[0].content.push({ type: 'table', content: [] });
+        expect(docHasContent(withTable, 'letter')).toBe(true);
+    });
+
+    test('a diary header field counts, the pre-filled rule number does not', () => {
+        const diary = emptyDiaryJSON();
+        expect(diary.content[0].attrs.fields.rule_no).toBe('164');
+        expect(docHasContent(diary, 'diary')).toBe(false);
+        diary.content[0].attrs.fields.thana = 'Patna';
+        expect(docHasContent(diary, 'diary')).toBe(true);
+    });
+
+    test('header fields are ignored for a letter', () => {
+        const letter = emptyLetterJSON();
+        letter.content[0].attrs = { fields: { thana: 'Patna' } };
+        expect(docHasContent(letter, 'letter')).toBe(false);
+    });
 });

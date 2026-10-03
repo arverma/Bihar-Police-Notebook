@@ -38,11 +38,12 @@ import {
 import { initPageScale } from './page-scale.js';
 import { initFormatToolbar } from './editor/toolbar.js';
 import { initTableControls } from './editor/table-controls.js';
-import { isSupportedContent } from './editor/doc-format.js';
+import { isSupportedContent, parseDoc, docHasContent } from './editor/doc-format.js';
 import { initUnsupportedDocs } from './unsupported-docs.js';
 import { createTestHooks } from './editor/test-hooks.js';
 import { pickStartupDocument, newestFirst, historyDate } from './startup-document.js';
 import { runDocumentExport } from './export/router.js';
+import { runDocxExport } from './export/docx-export.js';
 
 const letterPagesEl = document.getElementById('letterPages');
 const suggestionsBox = document.getElementById('suggestions');
@@ -210,6 +211,8 @@ function setTemplateSegmentUI(type) {
         btn.classList.toggle('is-active', active);
         btn.setAttribute('aria-pressed', active ? 'true' : 'false');
     });
+    const newLabel = document.querySelector('.add-template-btn .new-doc-label');
+    if (newLabel) newLabel.textContent = type === 'diary' ? 'New diary' : 'New letter';
 }
 
 /** Tooltip on the whole control says what the current state does and what a click does. */
@@ -491,6 +494,31 @@ function getCaretPosition(input, indexOverride) {
 }
 
 let typingTimer;
+
+/**
+ * Bumped whenever the suggestion popup stops being about the word under the
+ * caret. A fetch that was in flight when that happened sees a different value
+ * when it returns and must not open the popup.
+ */
+let suggestionSeq = 0;
+
+/**
+ * Close the suggestion popup and drop any suggestion still being fetched.
+ * Pagination is held while the popup is open (`suggestionsOwnInput`), so a
+ * popup left open after the caret has left its word freezes the page: text
+ * pushed past the bottom edge stays clipped until something else closes it.
+ */
+function dismissSuggestions() {
+    suggestionSeq++;
+    clearTimeout(typingTimer);
+    suggestionsBox.style.display = 'none';
+}
+
+/** Keys that commit or leave the word being typed. */
+const WORD_LEAVING_KEYS = new Set([
+    'Enter', 'Escape', 'Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+    'Home', 'End', 'PageUp', 'PageDown',
+]);
 const doneTypingInterval = 50; // Reduced delay to 50ms for faster response
 
 /** @param {Element|null|undefined} el */
@@ -663,6 +691,7 @@ function attachTransliteration(el) {
             return;
         }
         clearTimeout(typingTimer);
+        const seq = ++suggestionSeq;
         typingTimer = setTimeout(async () => {
             if (!isTransliterationEnabled()) return;
             const value = getEditableText(el);
@@ -672,6 +701,8 @@ function attachTransliteration(el) {
 
             if (currentWord.trim()) {
                 const suggestions = await fetchSuggestions(currentWord);
+                // The caret left the word (Enter, arrows, paste…) while this was in flight.
+                if (seq !== suggestionSeq) return;
                 if (suggestions && suggestions.length > 0) {
                     showSuggestions(suggestions, start, end, el);
                 } else {
@@ -684,6 +715,12 @@ function attachTransliteration(el) {
     });
 
     el.addEventListener('keydown', async function (e) {
+        if (isForDocText(el, e.target) && !e.isComposing
+            && (WORD_LEAVING_KEYS.has(e.key) || ((e.ctrlKey || e.metaKey) && e.key.length === 1))) {
+            // Enter / navigation / paste / cut / undo: the word is no longer being typed.
+            dismissSuggestions();
+            return;
+        }
         if (e.key !== ' ') return;
         if (!isForDocText(el, e.target)) return;
         if (e.isComposing) return;
@@ -709,6 +746,13 @@ function attachTransliteration(el) {
         }
     });
 
+    // Pasting, cutting or dropping replaces the word; a popup for the old one is stale.
+    ['paste', 'cut', 'drop'].forEach((type) => {
+        el.addEventListener(type, (e) => {
+            if (isForDocText(el, e.target)) dismissSuggestions();
+        }, true);
+    });
+
     el.addEventListener('click', async function (e) {
         if (!isForDocText(el, e.target)) return;
         if (!isTransliterationEnabled()) return;
@@ -718,7 +762,9 @@ function attachTransliteration(el) {
         const word = value.slice(start, end);
 
         if (word.trim()) {
+            const seq = ++suggestionSeq;
             const suggestions = await fetchSuggestions(word);
+            if (seq !== suggestionSeq) return;
             if (suggestions && suggestions.length > 0) {
                 showSuggestions(suggestions, start, end, el);
             } else {
@@ -1111,7 +1157,7 @@ function initApp() {
             const empty = document.createElement('div');
             empty.className = 'history-empty';
             const kind = getActiveTemplate() === 'diary' ? 'diaries' : 'letters';
-            empty.innerHTML = `<strong>No ${kind} yet</strong><span>Create one with the + button above.</span>`;
+            empty.innerHTML = `<strong>No ${kind} yet</strong><span>Start one with the New button above.</span>`;
             historyList.appendChild(empty);
             return;
         }
@@ -1196,6 +1242,7 @@ function initApp() {
                         ${previewHtml}
                     </div>
                     <div class="history-item-actions">
+                        ${supported ? `<button class="docx-btn" type="button" title="Download as Word (.docx)" aria-label="Download ${escapeHtml(doc.filename)} as Word (.docx)"><i class="fas fa-file-word" aria-hidden="true"></i></button>` : ''}
                         <button class="delete-btn" type="button" title="Delete this document" aria-label="Delete this document"><i class="fas fa-trash"></i></button>
                     </div>
                 `;
@@ -1208,7 +1255,7 @@ function initApp() {
                     await loadDocumentState(doc);
                 };
                 item.addEventListener('click', async (e) => {
-                    if (e.target.closest('.delete-btn')) return;
+                    if (e.target.closest('.history-item-actions')) return;
                     await openItem();
                 });
                 item.addEventListener('keydown', async (e) => {
@@ -1216,6 +1263,14 @@ function initApp() {
                     e.preventDefault();
                     await openItem();
                 });
+
+                const docxBtn = item.querySelector('.docx-btn');
+                if (docxBtn) {
+                    docxBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        void exportHistoryDocx(doc, docxBtn);
+                    });
+                }
 
                 item.querySelector('.delete-btn').onclick = async (e) => {
                     e.stopPropagation();
@@ -1245,8 +1300,6 @@ function initApp() {
         try {
             const type = getActiveTemplate();
             const docs = await getDocuments(type);
-            const title = document.querySelector('.sidebar-header h3');
-            if (title) title.textContent = type === 'diary' ? 'Diary History' : 'Letter History';
             renderHistory(docs);
         } catch (err) {
             console.error('Failed to load history:', err);
@@ -1496,6 +1549,36 @@ function initApp() {
     }
 
     exportBtn?.addEventListener('click', () => { void handleDocumentExport(); });
+
+    /**
+     * Word export of one History row. The open document is exported from the
+     * live editor (it may be ahead of its last autosave); any other row from
+     * its stored content, without opening it.
+     */
+    async function exportHistoryDocx(doc, btn) {
+        if (btn.getAttribute('aria-busy') === 'true') return;
+        btn.setAttribute('aria-busy', 'true');
+        try {
+            const isOpen = currentDoc.id != null && doc.id === currentDoc.id;
+            const sheet = activeSheet();
+            let json;
+            if (isOpen && sheet) {
+                // Pagination moves blocks between pages; export a settled document.
+                await sheet.settle();
+                json = sheet.getJSON();
+            } else {
+                json = parseDoc(doc.content);
+            }
+            const template = getActiveTemplate();
+            await runDocxExport({
+                getJSON: () => json,
+                hasContent: () => Boolean(json) && docHasContent(json, template),
+                filename: doc.filename,
+            });
+        } finally {
+            btn.removeAttribute('aria-busy');
+        }
+    }
 
     const switchBtn = document.querySelector('.switch-btn');
     const sidebar = document.getElementById('sidebar');

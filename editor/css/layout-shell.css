@@ -91,39 +91,15 @@ body.app-shell {
 
 .sidebar-header {
     display: flex;
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
     margin-bottom: 4px;
 }
 
-.sidebar-header h3 {
-    margin: 0;
-    font-size: 16px;
-    color: var(--brand-primary);
-}
-
-.sidebar-title-block {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    min-width: 0;
-}
-
-.sidebar-subtitle {
-    margin: 0;
-    font-size: 11px;
-    font-weight: 400;
-    color: var(--color-text-muted);
-    line-height: 1.2;
-}
-
+/* [ New document (fills the row) ] [ Drive sync ] */
 .sidebar-actions {
-    display: inline-flex;
+    display: flex;
     align-items: center;
     gap: 8px;
-    flex-shrink: 0;
+    width: 100%;
 }
 
 .sidebar-actions .drive-menu {
@@ -194,24 +170,43 @@ body.app-shell {
     font-size: 16px;
 }
 
-/* Disconnected / error — red */
-.sidebar-actions #backupBtn[data-backup="needs-auth"],
-.sidebar-actions #backupBtn[data-backup="error"] {
-    color: var(--color-error);
-    border-color: var(--color-error);
+/*
+ * The sync state is a dot on the corner, not the border, so the button stays
+ * the same chrome as its neighbours. Every state also changes the button's
+ * title and aria-label (main.js), so colour is never the only signal.
+ */
+.sidebar-actions #backupBtn {
+    position: relative;
 }
+
+.sidebar-actions #backupBtn::after {
+    content: '';
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid var(--brand-white);
+    background: var(--color-error);
+    box-sizing: border-box;
+    pointer-events: none;
+}
+
+/* Disconnected / error — red (the default dot) */
 
 /* Syncing — brand blue + spin */
 .sidebar-actions #backupBtn[data-backup="syncing"] {
-    color: var(--brand-primary);
-    border-color: var(--brand-primary);
     cursor: wait;
 }
 
+.sidebar-actions #backupBtn[data-backup="syncing"]::after {
+    background: var(--brand-primary);
+}
+
 /* Connected & idle — green */
-.sidebar-actions #backupBtn[data-backup="ready"] {
-    color: #2e7d32;
-    border-color: #2e7d32;
+.sidebar-actions #backupBtn[data-backup="ready"]::after {
+    background: #2e7d32;
 }
 
 .sidebar-actions #backupBtn[data-backup="ready"].is-sync-success {
@@ -222,6 +217,29 @@ body.app-shell {
     0% { transform: scale(1); box-shadow: var(--shadow-light); }
     40% { transform: scale(1.08); box-shadow: 0 0 0 4px rgba(46, 125, 50, 0.22); }
     100% { transform: scale(1); box-shadow: var(--shadow-light); }
+}
+
+.sidebar-actions .add-template-btn {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+    gap: 8px;
+    padding: 0 14px;
+    background: var(--brand-primary);
+    border-color: var(--brand-primary);
+    color: var(--brand-white);
+    font: 600 14px/1 "Roboto", Helvetica, sans-serif;
+}
+
+.sidebar-actions .add-template-btn:hover {
+    background: var(--brand-primary);
+    filter: brightness(1.15);
+}
+
+.sidebar-actions .add-template-btn .new-doc-label {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .sidebar-actions .add-template-btn .plus-icon {

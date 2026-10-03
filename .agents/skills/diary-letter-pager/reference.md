@@ -69,6 +69,12 @@ Codex agent shells often set `PLAYWRIGHT_BROWSERS_PATH` to a throwaway sandbox d
 
 The pager waits while `view.composing`, a mouse button is down, or the suggestion box owns the word (`isHeld`). The suggestion box's style observer in `main.js` resumes it.
 
+Every hold needs a guaranteed release, or text pushed past a page edge stays clipped until something unrelated clears it:
+
+- **Suggestion popup:** `dismissSuggestions()` (`main.js`) closes it on Enter, Escape, Tab, arrows, Home/End/PageUp/PageDown, Ctrl/Cmd shortcuts, paste, cut and drop, and bumps `suggestionSeq` so a suggestion still being fetched cannot reopen it for a word the caret has left.
+- **Mouse button:** `mouseDown` is released by `mouseup`, `dragend`, `contextmenu`, window `blur`, or any `mousemove` with no button held — `mouseup` alone is not reliably delivered.
+- A new hold must come with its own release path and an e2e test that loses the "normal" release (`tests/translit-pagination-hold.spec.js`, `tests/pager-suspension.spec.js`).
+
 ## E2E harness
 
 - Read state with `window.__bpTest` (never through DOM internals); wait with `__bpTest.settle()`.

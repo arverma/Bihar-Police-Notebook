@@ -23,7 +23,7 @@ flowchart TB
 | Region | Responsibility |
 |--------|----------------|
 | Header | History toggle, brand, document name, the format toolbar (centre pill, with the dictation mic at its right end), PDF (Hindi Typing toggle on wider screens). On phones (≤768px) the toolbar wraps to its own row under the bar |
-| History sidebar | Letter/Diary switch, document list, Drive backup icon, New document |
+| History sidebar | Letter/Diary switch, a labeled **New diary / New letter** button, Drive backup icon, document list (each row: Word export, Delete) |
 | `main-content` | Desktop vertical scrollport; padding for fixed header |
 | `editor-stage` | Page preview; on mobile also the scroll / pinch viewport |
 
@@ -34,6 +34,8 @@ Orchestration: `editor/js/main.js` (sidebar toggle, template switch, autosave ho
 - Opens/closes only via the panel button (or Ctrl/Cmd+H / B) — not by outside click.
 - On wide screens (≥1025px), opening History nudges the workspace slightly; on smaller screens it is an overlay drawer.
 - Documents are grouped by **date created**; older day groups start collapsed. Each row shows last-updated time.
+- Each row's **Word** and **Delete** buttons are always visible (muted until hover or focus) so touch and keyboard users can reach them. Word export: [Word export](word-export.md).
+- The Drive button keeps the same chrome as its neighbours; the sync state is a corner dot (red = not connected / error, blue = syncing, green = connected) plus the button's title and label.
 - Drive backup menu (sidebar): **Sync all** (pull + push), **Sync new** (push pending only), **Disconnect**.
 
 ## Scroll ownership

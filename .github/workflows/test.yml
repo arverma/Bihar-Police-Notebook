@@ -39,6 +39,8 @@ jobs:
       # it no longer matches the pinned @tiptap/* versions in package-lock.
       - name: Vendored editor bundle is up to date
         run: npm run vendor:tiptap -- --check
+      - name: Check vendored docx bundle
+        run: npm run vendor:docx -- --check
 
       - name: Unit tests (Vitest)
         run: npm test

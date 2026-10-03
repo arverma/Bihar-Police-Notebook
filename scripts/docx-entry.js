@@ -1,0 +1,18 @@
+export {
+    Document,
+    Packer,
+    Paragraph,
+    TextRun,
+    Table,
+    TableRow,
+    TableCell,
+    ImageRun,
+    AlignmentType,
+    WidthType,
+    BorderStyle,
+    PageBreak,
+    LevelFormat,
+    HeightRule,
+    TableLayoutType,
+    VerticalAlign,
+} from 'docx';

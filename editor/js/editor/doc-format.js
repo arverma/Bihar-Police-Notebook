@@ -78,3 +78,18 @@ export function docPages(docJSON) {
         fields: p.attrs?.fields || {},
     }));
 }
+
+/**
+ * Whether a document holds anything worth saving or exporting: text, a photo
+ * or table (even an empty one), or — for a diary — a filled-in header field.
+ * @param {object} docJSON
+ * @param {'letter'|'diary'} template
+ */
+export function docHasContent(docJSON, template) {
+    if (docPlainText(docJSON).trim()) return true;
+    if (docHasObjects(docJSON)) return true;
+    if (template !== 'diary') return false;
+    // rule_no is pre-filled, so it never counts as something the user wrote.
+    return docPages(docJSON).some((p) => Object.entries(p.fields)
+        .some(([k, v]) => k !== 'rule_no' && String(v ?? '').trim()));
+}
