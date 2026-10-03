@@ -12,6 +12,7 @@
     "test:visual": "playwright test --project=visual",
     "test:visual:update": "bash scripts/visual-baselines.sh",
     "vendor:tiptap": "node scripts/vendor-tiptap.mjs",
+    "vendor:docx": "node scripts/vendor-docx.mjs",
     "test:webkit": "playwright test --project=webkit",
     "test:docker": "bash scripts/playwright-docker.sh"
   },
@@ -42,8 +43,10 @@
     "@tiptap/extension-underline": "3.31.4",
     "@tiptap/extensions": "3.31.4",
     "@tiptap/pm": "3.31.4",
+    "docx": "9.8.1",
     "esbuild": "0.28.2",
     "jsdom": "^27.0.1",
+    "jszip": "3.10.2",
     "vitest": "^5.0.3"
   },
   "type": "module"

@@ -23,6 +23,8 @@ Run locally after any pager or editor change, before deploying. Automated covera
 6c. **Pulled lines stay separate** — Fill page 1 with numbered lines; Enter four lines from the bottom; Backspace once. Lines come back one per line — never welded (`29303132`).
 7. **Arrows across pages** — ↑ / ↓ / ← / → at a page edge move to the same column on the neighbouring page, keeping the horizontal position for ↑ / ↓.
 8. **Hinglish suggestion near a page edge** — Translit ON, type a Roman word on the last line until suggestions appear, pick one (or Space), then keep typing. Text spills once the suggestion closes; caret follows the text.
+8b. **Enter with a suggestion popup open** — Translit ON, page full. Type a Roman word on the last line until the popup appears, then press Enter (also try an arrow key, Escape, and pasting). The popup closes and the new line moves to page 2 immediately; no click elsewhere is needed. Repeat on a slow connection: a suggestion that arrives after Enter must not reopen the popup.
+8c. **Lost mouse release** — Press in the text and start a native text drag, or right-click, or Alt-Tab away mid-click, then return and type past the page bottom. Text still spills to the next page without a click.
 9. **Header** — Type in थाना, FIR number, धारा (wraps to two lines). The writing boxes shrink by whole lines and text below spills; the FIR number becomes the document name. Ctrl+Z in a header field undoes the whole word.
 10. **Header toggle** — Hide / Show header on a full page: text spills or pulls back; the caret stays on its line.
 11. **Blank lines** — Press Enter several times on the last page. Blanks survive moving to another page, reload, and PDF.

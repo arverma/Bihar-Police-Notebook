@@ -27,7 +27,7 @@ Steps:
 1. **Checkout** — `actions/checkout@v4`
 2. **Node 20 setup** — `actions/setup-node@v4` with npm cache
 3. **`npm ci`** — clean install from lockfile
-4. **Vendored bundle check** — `npm run vendor:tiptap -- --check` (fails if `editor/vendor/tiptap/` no longer matches the pinned `@tiptap/*` versions)
+4. **Vendored bundle checks** — `npm run vendor:tiptap -- --check` (fails if `editor/vendor/tiptap/` no longer matches the pinned `@tiptap/*` versions) and `npm run vendor:docx -- --check` (same for `editor/vendor/docx/` and the pinned `docx`)
 5. **Unit tests** — `npm test` (Vitest)
 6. **Playwright browser install** — `npx playwright install --with-deps chromium webkit`
 7. **E2E tests** — `npm run test:e2e` (desktop, mobile, tablet viewports)

@@ -53,12 +53,24 @@ class PagerController {
         this.mouseDown = false;
         this.lastDoc = null; // doc at the end of the last pass; null forces a full pass
         this.waiters = [];
-        this.onMouseUp = () => {
+        // `mouseup` is not always delivered: a drag that turns into a native
+        // drag-and-drop, a context menu, or the window losing focus mid-click
+        // all swallow it. Left unreleased the pager would stay suspended and
+        // text pushed past a page edge would stay clipped, so every other way
+        // the press can end releases it too — including a move with no button
+        // held, which proves the press is over.
+        this.releaseMouse = () => {
             if (!this.mouseDown) return;
             this.mouseDown = false;
             this.schedule();
         };
-        window.addEventListener('mouseup', this.onMouseUp, true);
+        this.onMouseMove = (e) => {
+            if (this.mouseDown && e.buttons === 0) this.releaseMouse();
+        };
+        this.releaseEvents = ['mouseup', 'dragend', 'contextmenu'];
+        this.releaseEvents.forEach((t) => window.addEventListener(t, this.releaseMouse, true));
+        window.addEventListener('blur', this.releaseMouse);
+        window.addEventListener('mousemove', this.onMouseMove, { capture: true, passive: true });
         // Layout can change with no document change: a font or an image
         // finishing loading resizes text that was already measured. `load`
         // does not bubble, so listen in the capture phase.
@@ -74,7 +86,9 @@ class PagerController {
 
     destroy() {
         if (this.raf) cancelAnimationFrame(this.raf);
-        window.removeEventListener('mouseup', this.onMouseUp, true);
+        this.releaseEvents.forEach((t) => window.removeEventListener(t, this.releaseMouse, true));
+        window.removeEventListener('blur', this.releaseMouse);
+        window.removeEventListener('mousemove', this.onMouseMove, { capture: true });
         this.view?.dom.removeEventListener('load', this.onMediaLoad, true);
         this.view?.dom.removeEventListener('error', this.onMediaLoad, true);
         this.view = null;
