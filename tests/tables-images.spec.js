@@ -335,3 +335,13 @@ test.describe('Images', () => {
     expect(doc.css).toContain('.print-pages .ProseMirror-selectednode');
   });
 });
+
+test('table cells are never positioned (a filled header row would paint over its own grid lines on paper)', async ({ page }) => {
+  await openFresh(page);
+  await disableTranslit(page);
+  await setDoc(page, [{ right: [tableSpec(2)] }]);
+  const positions = await page.evaluate(() => [...document.querySelectorAll('.bp-table th, .bp-table td')]
+    .map((c) => getComputedStyle(c).position));
+  expect(positions.length).toBeGreaterThan(0);
+  expect(new Set(positions)).toEqual(new Set(['static']));
+});

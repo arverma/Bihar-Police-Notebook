@@ -139,19 +139,21 @@ body {
     flex-direction: column;
 }
 
-/* Format toolbar: a full-width row under the header (letter + diary).
-   It lives inside .header-frame, so --chrome-top already includes it. */
+/* Format toolbar: a rounded pill in the middle of the header row on desktop and
+   tablet (header-responsive.css); a full-width row under it on phones
+   (overlays-responsive.css). It lives inside .header-content. */
 .format-toolbar {
     display: flex;
     flex-wrap: nowrap;
     align-items: center;
     justify-content: center;
     gap: 2px;
-    min-height: 40px;
-    padding: 4px 14px;
+    min-height: 44px;
+    padding: 6px 14px;
     margin: 0;
-    border-top: 1px solid rgba(26, 54, 93, 0.12);
+    border-radius: 999px;
     background: var(--brand-white);
+    box-shadow: var(--shadow-light);
     overflow-x: auto;
     scrollbar-width: none;
 }
@@ -1483,33 +1485,17 @@ span.diary-dotted-flow:focus {
     border-color: var(--brand-primary);
 }
 
-/* ── Voice dictation FAB ── */
+/* ── Voice dictation: the mic sits at the right end of the format toolbar ── */
 .dictation-fab {
-    position: fixed;
-    z-index: var(--z-dictation);
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 8px;
-    touch-action: none;
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;
+    gap: 4px;
     user-select: none;
-}
-
-.dictation-fab[data-edge="left"] {
-    align-items: flex-start;
-}
-
-.dictation-fab[data-edge="right"] {
-    align-items: flex-end;
 }
 
 .dictation-fab[hidden] {
     display: none !important;
-}
-
-.dictation-fab.is-dragging {
-    opacity: 0.92;
-    cursor: grabbing;
 }
 
 .dictation-interim {
@@ -1535,111 +1521,53 @@ span.diary-dotted-flow:focus {
     display: none !important;
 }
 
-/* Mic is the only in-flow size; chips bloom outward via absolute positioning */
-.dictation-cluster {
-    position: relative;
-    width: 52px;
-    height: 52px;
-}
-
-.dictation-lang,
-.dictation-end {
-    position: absolute;
-    top: 50%;
-    z-index: 3;
+.format-toolbar .dictation-lang,
+.format-toolbar .dictation-end {
+    flex: 0 0 auto;
     appearance: none;
+    height: 28px;
     border: 1px solid var(--color-border-medium);
     background: var(--brand-white);
     color: var(--brand-primary);
-    box-shadow: var(--shadow-medium);
     cursor: pointer;
-    opacity: 0;
-    pointer-events: none;
-    transition: transform 0.15s ease, opacity 0.15s ease, background 0.12s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.12s ease;
 }
 
-.dictation-lang {
-    height: 28px;
+.format-toolbar .dictation-lang {
+    width: auto;
     min-width: 36px;
     padding: 0 10px;
     border-radius: 999px;
     font-family: 'Noto Sans Devanagari', 'Roboto', sans-serif;
     font-size: 12px;
     font-weight: 600;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
 }
 
-.dictation-end {
+.format-toolbar .dictation-end {
     width: 28px;
-    height: 28px;
+    padding: 0;
     border-radius: 50%;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
     font-size: 12px;
     color: var(--color-error);
 }
 
-.dictation-end[hidden] {
+.format-toolbar .dictation-end[hidden] {
     display: none !important;
 }
 
-/* Right edge (default): bloom left from mic */
-.dictation-fab[data-edge="right"] .dictation-lang,
-.dictation-fab[data-edge="right"] .dictation-end {
-    right: 60px;
-    left: auto;
-    transform: translateY(-50%) scale(0.75);
-    transform-origin: right center;
-}
-
-.dictation-fab[data-edge="right"] .dictation-cluster:has(.dictation-end:not([hidden])) .dictation-lang {
-    right: 100px;
-}
-
-/* Left edge: bloom right from mic */
-.dictation-fab[data-edge="left"] .dictation-lang,
-.dictation-fab[data-edge="left"] .dictation-end {
-    left: 60px;
-    right: auto;
-    transform: translateY(-50%) scale(0.75);
-    transform-origin: left center;
-}
-
-.dictation-fab[data-edge="left"] .dictation-cluster:has(.dictation-end:not([hidden])) .dictation-lang {
-    left: 100px;
-}
-
-.dictation-fab:hover .dictation-lang,
-.dictation-cluster.is-expanded .dictation-lang,
-.dictation-cluster.is-expanded .dictation-end:not([hidden]) {
-    opacity: 1;
-    pointer-events: auto;
-}
-
-.dictation-fab[data-edge="right"]:hover .dictation-lang,
-.dictation-fab[data-edge="right"] .dictation-cluster.is-expanded .dictation-lang,
-.dictation-fab[data-edge="right"] .dictation-cluster.is-expanded .dictation-end:not([hidden]) {
-    transform: translateY(-50%) scale(1);
-}
-
-.dictation-fab[data-edge="left"]:hover .dictation-lang,
-.dictation-fab[data-edge="left"] .dictation-cluster.is-expanded .dictation-lang,
-.dictation-fab[data-edge="left"] .dictation-cluster.is-expanded .dictation-end:not([hidden]) {
-    transform: translateY(-50%) scale(1);
-}
-
-.dictation-lang:hover,
-.dictation-end:hover {
+.format-toolbar .dictation-lang:hover,
+.format-toolbar .dictation-end:hover {
     background: var(--color-hover-brand);
 }
 
 .dictation-mic-wrap {
     position: relative;
-    width: 52px;
-    height: 52px;
+    flex: 0 0 auto;
+    width: 32px;
+    height: 32px;
 }
 
 .dictation-level {
@@ -1659,16 +1587,15 @@ span.diary-dotted-flow:focus {
 
 .dictation-mode {
     position: absolute;
-    top: 2px;
-    right: 2px;
-    width: 10px;
-    height: 10px;
+    top: -1px;
+    right: -1px;
+    width: 9px;
+    height: 9px;
     border-radius: 50%;
     border: 2px solid var(--brand-white);
     background: var(--color-mic-live);
     z-index: 2;
     pointer-events: none;
-    box-shadow: var(--shadow-light);
     opacity: 0;
 }
 
@@ -1680,33 +1607,23 @@ span.diary-dotted-flow:focus {
     background: var(--color-mic-cloud);
 }
 
-.dictation-mic {
+.format-toolbar .dictation-mic {
     position: relative;
     z-index: 1;
-    appearance: none;
-    width: 52px;
-    height: 52px;
-    border: none;
+    width: 32px;
+    height: 32px;
     border-radius: 50%;
     background: var(--brand-primary);
     color: var(--brand-white);
-    box-shadow: var(--shadow-popup);
-    cursor: grab;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 18px;
+    font-size: 14px;
     transition: background 0.15s ease, transform 0.15s ease;
 }
 
-.dictation-mic:hover {
-    transform: scale(1.04);
+.format-toolbar .dictation-mic:hover {
+    background: var(--brand-primary);
+    transform: scale(1.06);
 }
 
-.dictation-mic:active,
-.dictation-fab.is-dragging .dictation-mic {
-    cursor: grabbing;
-}
 
 .dictation-fab.is-listening .dictation-mic {
     background: var(--color-mic-live);
@@ -1723,11 +1640,11 @@ span.diary-dotted-flow:focus {
     }
     70% {
         opacity: 0;
-        transform: scale(1.55);
+        transform: scale(1.3);
     }
     100% {
         opacity: 0;
-        transform: scale(1.55);
+        transform: scale(1.3);
     }
 }
 
@@ -1735,9 +1652,9 @@ span.diary-dotted-flow:focus {
     .dictation-fab.is-listening .dictation-level {
         animation: none;
     }
-    .dictation-lang,
-    .dictation-end,
-    .dictation-mic {
+    .format-toolbar .dictation-lang,
+    .format-toolbar .dictation-end,
+    .format-toolbar .dictation-mic {
         transition: none;
     }
 }
@@ -2071,20 +1988,31 @@ span.diary-dotted-flow:focus {
 }
 
 /* Consolidated Diary Form Styles — see .diary-* rules near .editor-diary */
-/* Translit Toggle Switch */
+/* Translit toggle: sits in the format toolbar. On = Hinglish (Roman letters
+   become Devanagari as you type); off = text stays exactly as typed. */
 .translit-toggle-wrapper {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    margin-right: 12px;
+    flex: 0 0 auto;
+    gap: 6px;
 }
 .translit-label {
-    font-size: 18px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
     font-weight: 600;
     color: var(--brand-primary);
     user-select: none;
     cursor: pointer;
+    white-space: nowrap;
+}
+.translit-glyph {
     font-family: 'Noto Sans Devanagari', sans-serif;
+    font-size: 13px;
+}
+.translit-toggle-wrapper:not(:has(#translitToggle:checked)) .translit-label {
+    color: var(--color-text-muted);
 }
 .toggle-switch {
     position: relative;

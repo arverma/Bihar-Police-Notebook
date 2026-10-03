@@ -1,8 +1,8 @@
 # Voice dictation (बोलकर लिखें)
 
-In-app microphone for desktop and tablet. On phones (**≤768px**) the FAB is hidden — use the keyboard’s microphone instead.
+In-app microphone for desktop and tablet, at the right end of the format toolbar in the top bar. On phones (**≤768px**) it is hidden — use the keyboard’s microphone instead.
 
-Modules: `editor/js/dictation.js` (engine), `dictation-ui.js` (FAB / sheets).
+Modules: `editor/js/dictation.js` (engine), `dictation-ui.js` (toolbar mic / sheets).
 
 ## Flow
 
@@ -30,7 +30,7 @@ flowchart TD
 
 - Prefers **on-device** recognition in Chrome when the language pack is installed.
 - Cloud path asks for consent first; the app does not store audio.
-- FAB is draggable; Esc ends an active session (desktop).
-- Mobile: CSS + `syncFabVisibility()` keep the control hidden and stop the engine on resize into mobile.
+- The mic sits in the toolbar (language chip, mic, and a stop button while a session is active); Esc ends an active session (desktop).
+- Mobile: `syncFabVisibility()` keeps the control hidden and stop the engine on resize into mobile.
 
 See: [Typing](typing.md), [Desktop vs mobile](../desktop-vs-mobile.md).

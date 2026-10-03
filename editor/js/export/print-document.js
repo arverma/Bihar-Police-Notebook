@@ -66,7 +66,9 @@ export function printDocumentExtraCss() {
     .print-pages .ProseMirror-selectednode {
       outline: none !important;
     }
-    .print-pages .selectedCell::after,
+    .print-pages .selectedCell {
+      box-shadow: none !important;
+    }
     .print-pages .ProseMirror-gapcursor {
       display: none !important;
     }

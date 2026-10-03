@@ -22,7 +22,7 @@ flowchart TB
 
 | Region | Responsibility |
 |--------|----------------|
-| Header | History toggle, brand, document name, PDF (Hindi Typing toggle on wider screens); below it the format toolbar row |
+| Header | History toggle, brand, document name, the format toolbar (centre pill, with the dictation mic at its right end), PDF (Hindi Typing toggle on wider screens). On phones (≤768px) the toolbar wraps to its own row under the bar |
 | History sidebar | Letter/Diary switch, document list, Drive backup icon, New document |
 | `main-content` | Desktop vertical scrollport; padding for fixed header |
 | `editor-stage` | Page preview; on mobile also the scroll / pinch viewport |
