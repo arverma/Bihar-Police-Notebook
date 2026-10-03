@@ -41,6 +41,67 @@
                     </div>
                 </div>
             </div>
+            <div id="formatToolbar" class="format-toolbar screen-only" hidden role="toolbar"
+                aria-label="Text formatting">
+                <button type="button" data-cmd="bold" title="Bold (Ctrl+B)" aria-label="Bold" aria-pressed="false">
+                    <i class="fas fa-bold" aria-hidden="true"></i>
+                </button>
+                <button type="button" data-cmd="italic" title="Italic (Ctrl+I)" aria-label="Italic" aria-pressed="false">
+                    <i class="fas fa-italic" aria-hidden="true"></i>
+                </button>
+                <button type="button" data-cmd="underline" title="Underline (Ctrl+U)" aria-label="Underline"
+                    aria-pressed="false">
+                    <i class="fas fa-underline" aria-hidden="true"></i>
+                </button>
+                <span class="format-toolbar-sep" aria-hidden="true"></span>
+                <button type="button" data-cmd="align:center" title="Align center" aria-label="Align center"
+                    aria-pressed="false">
+                    <i class="fas fa-align-center" aria-hidden="true"></i>
+                </button>
+                <button type="button" data-cmd="align:justify" title="Justify" aria-label="Justify" aria-pressed="false">
+                    <i class="fas fa-align-justify" aria-hidden="true"></i>
+                </button>
+                <span class="format-toolbar-sep" aria-hidden="true"></span>
+                <button type="button" data-cmd="list:ordered" title="Numbered list" aria-label="Numbered list"
+                    aria-pressed="false">
+                    <i class="fas fa-list-ol" aria-hidden="true"></i>
+                </button>
+                <button type="button" data-cmd="list:bullet" title="Bulleted list" aria-label="Bulleted list"
+                    aria-pressed="false">
+                    <i class="fas fa-list-ul" aria-hidden="true"></i>
+                </button>
+                <span class="format-toolbar-sep" aria-hidden="true"></span>
+                <button type="button" data-cmd="image" title="Insert image" aria-label="Insert image">
+                    <i class="fas fa-image" aria-hidden="true"></i>
+                </button>
+                <button type="button" data-cmd="table" title="Insert table" aria-label="Insert table">
+                    <i class="fas fa-table" aria-hidden="true"></i>
+                </button>
+                <span class="format-toolbar-sep punctuation-toggle-sep" aria-hidden="true"></span>
+                <button type="button" id="punctuationToggle" class="punctuation-toggle" title="विराम चिह्न (Punctuation)"
+                    aria-label="Punctuation marks" aria-expanded="false" aria-controls="punctuationPanel">
+                    <i class="fas fa-quote-right" aria-hidden="true"></i>
+                </button>
+                <div id="dictationFab" class="dictation-fab" hidden>
+                    <span class="format-toolbar-sep" aria-hidden="true"></span>
+                    <button type="button" class="dictation-lang" title="Switch to English"
+                        aria-label="Switch to English">हिं</button>
+                    <button type="button" class="dictation-end" hidden title="Stop dictation"
+                        aria-label="Stop dictation">
+                        <i class="fas fa-xmark" aria-hidden="true"></i>
+                    </button>
+                    <div class="dictation-mic-wrap">
+                        <span class="dictation-level" aria-hidden="true"></span>
+                        <span class="dictation-mode" data-mode="device" title="On-device recognition"
+                            aria-hidden="true"></span>
+                        <button type="button" class="dictation-mic" title="Start dictation (Ctrl+Shift+D)"
+                            aria-label="Start dictation">
+                            <i class="fas fa-microphone" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                </div>
+                <input type="file" accept="image/*" multiple hidden tabindex="-1" aria-hidden="true">
+            </div>
             <div class="header-right">
                 <div class="translit-toggle-wrapper" title="Phonetic Translation (Roman -> Devanagari)">
                     <label class="translit-label" for="translitToggle">A:अ</label>
@@ -55,49 +116,6 @@
                     <span>PDF</span>
                 </button>
             </div>
-        </div>
-        <div id="formatToolbar" class="format-toolbar screen-only" hidden role="toolbar"
-            aria-label="Text formatting">
-            <button type="button" data-cmd="bold" title="Bold (Ctrl+B)" aria-label="Bold" aria-pressed="false">
-                <i class="fas fa-bold" aria-hidden="true"></i>
-            </button>
-            <button type="button" data-cmd="italic" title="Italic (Ctrl+I)" aria-label="Italic" aria-pressed="false">
-                <i class="fas fa-italic" aria-hidden="true"></i>
-            </button>
-            <button type="button" data-cmd="underline" title="Underline (Ctrl+U)" aria-label="Underline"
-                aria-pressed="false">
-                <i class="fas fa-underline" aria-hidden="true"></i>
-            </button>
-            <span class="format-toolbar-sep" aria-hidden="true"></span>
-            <button type="button" data-cmd="align:center" title="Align center" aria-label="Align center"
-                aria-pressed="false">
-                <i class="fas fa-align-center" aria-hidden="true"></i>
-            </button>
-            <button type="button" data-cmd="align:justify" title="Justify" aria-label="Justify" aria-pressed="false">
-                <i class="fas fa-align-justify" aria-hidden="true"></i>
-            </button>
-            <span class="format-toolbar-sep" aria-hidden="true"></span>
-            <button type="button" data-cmd="list:ordered" title="Numbered list" aria-label="Numbered list"
-                aria-pressed="false">
-                <i class="fas fa-list-ol" aria-hidden="true"></i>
-            </button>
-            <button type="button" data-cmd="list:bullet" title="Bulleted list" aria-label="Bulleted list"
-                aria-pressed="false">
-                <i class="fas fa-list-ul" aria-hidden="true"></i>
-            </button>
-            <span class="format-toolbar-sep" aria-hidden="true"></span>
-            <button type="button" data-cmd="image" title="Insert image" aria-label="Insert image">
-                <i class="fas fa-image" aria-hidden="true"></i>
-            </button>
-            <button type="button" data-cmd="table" title="Insert table" aria-label="Insert table">
-                <i class="fas fa-table" aria-hidden="true"></i>
-            </button>
-            <span class="format-toolbar-sep punctuation-toggle-sep" aria-hidden="true"></span>
-            <button type="button" id="punctuationToggle" class="punctuation-toggle" title="विराम चिह्न (Punctuation)"
-                aria-label="Punctuation marks" aria-expanded="false" aria-controls="punctuationPanel">
-                <i class="fas fa-quote-right" aria-hidden="true"></i>
-            </button>
-            <input type="file" accept="image/*" multiple hidden tabindex="-1" aria-hidden="true">
         </div>
     </header>
 
@@ -248,23 +266,6 @@
         <span aria-hidden="true">?</span>
     </a>
 
-    <div id="dictationFab" class="dictation-fab" data-edge="right" hidden>
-        <div class="dictation-cluster">
-            <button type="button" class="dictation-lang" title="Switch to English"
-                aria-label="Switch to English">हिं</button>
-            <button type="button" class="dictation-end" hidden title="Stop dictation" aria-label="Stop dictation">
-                <i class="fas fa-xmark" aria-hidden="true"></i>
-            </button>
-            <div class="dictation-mic-wrap">
-                <span class="dictation-level" aria-hidden="true"></span>
-                <span class="dictation-mode" data-mode="device" title="On-device recognition" aria-hidden="true"></span>
-                <button type="button" class="dictation-mic" title="Start dictation (Ctrl+Shift+D)"
-                    aria-label="Start dictation">
-                    <i class="fas fa-microphone" aria-hidden="true"></i>
-                </button>
-            </div>
-        </div>
-    </div>
     <div id="dictationInterim" class="dictation-interim" hidden aria-live="polite"></div>
 
     <dialog id="dictationSheet" class="dictation-sheet">

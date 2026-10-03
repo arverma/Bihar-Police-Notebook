@@ -13,7 +13,7 @@ Canonical breakpoint: **`max-width: 768px`** (phone layout). Wider viewports use
 | Document name in header | Yes | Yes |
 | Hindi Typing toggle | Yes | Hidden |
 | Transliteration suggestions | Yes (Toggle ON) | Off — type with keyboard / OS tools |
-| In-app dictation microphone | Yes (draggable FAB) | Hidden — use keyboard mic |
+| In-app dictation microphone | Yes (mic at the right end of the toolbar) | Hidden — use keyboard mic |
 | Page fit-to-width | Automatic | Automatic + pinch, double-tap, Fit chip |
 | Vertical scrolling | `.main-content` | `#editorStage` |
 | Help (`?`) | Yes | Yes |
@@ -28,7 +28,7 @@ flowchart TB
   end
   subgraph desk [Desktop_tablet]
     hinglish[Hindi_Typing_toggle]
-    dict[Dictation_FAB]
+    dict[Toolbar_mic]
     mainScroll[main-content_scroll]
   end
   subgraph phone [Phone]
@@ -40,7 +40,7 @@ flowchart TB
 
 ## Why these differences
 
-- **Phones already expose a keyboard microphone** — the in-app FAB would duplicate it and crowd the page.
+- **Phones already expose a keyboard microphone** — the in-app mic would duplicate it and crowd the page.
 - **Transliteration suggestions need a stable popup UX** — on narrow screens the app relies on the system keyboard instead.
 - **Pinch-zoom** is natural on touch; desktop mostly needs fit-to-width.
 - **Scrollport split** avoids nested scroll traps (wheel on the page must reach the right container).

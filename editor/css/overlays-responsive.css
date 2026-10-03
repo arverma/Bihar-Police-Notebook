@@ -27,6 +27,9 @@
         justify-content: flex-start;
         min-height: 36px;
         padding: 2px 8px;
+        border-radius: 0;
+        box-shadow: none;
+        border-top: 1px solid rgba(26, 54, 93, 0.12);
     }
 
     .format-toolbar button {

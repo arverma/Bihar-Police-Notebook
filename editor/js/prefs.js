@@ -44,7 +44,6 @@ export function removePref(key) {
 }
 
 export const DICTATION_LANG_KEY = 'dictation.lang';
-export const DICTATION_FAB_POS_KEY = 'dictation.fabPos';
 export const DICTATION_ONBOARDED_KEY = 'dictation.onboarded';
 
 /** @param {string} lang */

@@ -56,6 +56,22 @@
     min-width: 0;
 }
 
+/* The format toolbar is the centre item; left and right split what is left,
+   so it sits in the middle of the bar. It scrolls rather than squeezing the
+   brand and PDF button out. */
+.header-content > .format-toolbar {
+    flex: 0 1 auto;
+    min-width: 0;
+}
+
+.header-left {
+    min-width: 150px;
+}
+
+.header-right {
+    min-width: 96px;
+}
+
 .brand-mark-hindi {
     font-family: 'Noto Sans Devanagari', sans-serif;
     font-size: 16px;
@@ -164,6 +180,18 @@
 }
 
 @media (max-width: 900px) {
+    .header-content > .format-toolbar {
+        padding-inline: 8px;
+    }
+
+    .header-content > .format-toolbar button:not(.dictation-lang):not(.dictation-end) {
+        width: 28px;
+    }
+
+    .header-content > .format-toolbar .dictation-mic {
+        width: 32px;
+    }
+
     .doc-name-cluster {
         max-width: 200px;
     }
@@ -180,13 +208,30 @@
  */
 @media (max-width: 768px) {
     .header-content {
+        --header-pad-x: 10px;
         position: relative;
         display: flex;
-        flex-wrap: nowrap;
+        flex-wrap: wrap;
         justify-content: flex-start;
         align-items: center;
-        padding: 8px 10px;
-        gap: 8px;
+        padding: 0 var(--header-pad-x);
+        gap: 0 8px;
+    }
+
+    /* Top row: keep the 56px bar height now that padding is on the items. */
+    .header-brand,
+    .doc-name-cluster,
+    #exportBtn {
+        margin-block: 8px;
+    }
+
+    /* The toolbar wraps to its own full-width row under the bar. */
+    .header-content > .format-toolbar {
+        order: 10;
+        flex: 0 0 auto;
+        width: calc(100% + 2 * var(--header-pad-x));
+        margin-inline: calc(-1 * var(--header-pad-x));
+        box-sizing: border-box;
     }
 
     .header-left,
@@ -259,8 +304,8 @@
 
 @media (max-width: 420px) {
     .header-content {
-        padding: 8px 8px;
-        gap: 6px;
+        --header-pad-x: 8px;
+        gap: 0 6px;
     }
 
     .doc-name-cluster {

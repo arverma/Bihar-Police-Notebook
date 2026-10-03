@@ -1,11 +1,10 @@
 /**
- * Dictation FAB + onboarding sheet UI.
+ * Dictation mic (right end of the format toolbar) + onboarding sheet UI.
  */
 
 import {
     getPref,
     setPref,
-    DICTATION_FAB_POS_KEY,
     DICTATION_ONBOARDED_KEY,
     DICTATION_LANG_KEY,
 } from './prefs.js';
@@ -19,11 +18,6 @@ import {
     DEFAULT_LANG,
     queryMicPermission,
 } from './dictation.js';
-
-const DRAG_THRESHOLD = 6;
-const FAB_SIZE = 52;
-const EDGE_MARGIN = 24;
-const DEFAULT_BOTTOM = 72;
 
 /**
  * @typedef {object} DictationUiHooks
@@ -54,7 +48,6 @@ export function initDictation(hooks) {
     const modeDot = root.querySelector('.dictation-mode');
     const interimEl = document.getElementById('dictationInterim');
     const levelRing = root.querySelector('.dictation-level');
-    const cluster = root.querySelector('.dictation-cluster');
 
     const sheetBody = sheet.querySelector('.dictation-sheet-body');
     const sheetClose = sheet.querySelector('.dictation-sheet-close');
@@ -142,68 +135,13 @@ export function initDictation(hooks) {
         mobileMq.addListener(syncFabVisibility);
     }
 
-    applyFabPosition(loadFabPos());
     updateLangChip();
     updateFabState('idle');
 
-    // --- Drag ---
-    /** @type {{ pointerId: number, startX: number, startY: number, origLeft: number, origTop: number, dragging: boolean } | null} */
-    let dragState = null;
-
-    function onPointerDown(e) {
-        if (e.button != null && e.button !== 0) return;
-        if (!(e.target instanceof Element)) return;
-        // Only drag from mic button area (not lang / end)
-        if (!e.target.closest('.dictation-mic')) return;
+    micBtn?.addEventListener('click', (e) => {
         e.preventDefault();
-        const rect = root.getBoundingClientRect();
-        dragState = {
-            pointerId: e.pointerId,
-            startX: e.clientX,
-            startY: e.clientY,
-            origLeft: rect.left,
-            origTop: rect.top,
-            dragging: false,
-        };
-        micBtn?.setPointerCapture(e.pointerId);
-    }
-
-    function onPointerMove(e) {
-        if (!dragState || e.pointerId !== dragState.pointerId) return;
-        const dx = e.clientX - dragState.startX;
-        const dy = e.clientY - dragState.startY;
-        if (!dragState.dragging && Math.hypot(dx, dy) > DRAG_THRESHOLD) {
-            dragState.dragging = true;
-            root.classList.add('is-dragging');
-        }
-        if (!dragState.dragging) return;
-        e.preventDefault();
-        placeFab(dragState.origLeft + dx, dragState.origTop + dy);
-    }
-
-    function onPointerUp(e) {
-        if (!dragState || e.pointerId !== dragState.pointerId) return;
-        const wasDragging = dragState.dragging;
-        dragState = null;
-        root.classList.remove('is-dragging');
-        try {
-            micBtn?.releasePointerCapture(e.pointerId);
-        } catch {
-            /* ignore */
-        }
-        if (wasDragging) {
-            const snapped = snapToEdge(root.getBoundingClientRect());
-            placeFab(snapped.left, snapped.top);
-            setPref(DICTATION_FAB_POS_KEY, { left: snapped.left, top: snapped.top });
-            return;
-        }
         void handleMicTap();
-    }
-
-    micBtn?.addEventListener('pointerdown', onPointerDown);
-    micBtn?.addEventListener('pointermove', onPointerMove);
-    micBtn?.addEventListener('pointerup', onPointerUp);
-    micBtn?.addEventListener('pointercancel', onPointerUp);
+    });
 
     langChip?.addEventListener('click', (e) => {
         e.preventDefault();
@@ -226,12 +164,6 @@ export function initDictation(hooks) {
     sheet.addEventListener('cancel', (e) => {
         // Allow Esc to close unless we're mid critical flow — always allow
         void e;
-    });
-
-    window.addEventListener('resize', () => {
-        if (isMobileUi()) return;
-        const rect = root.getBoundingClientRect();
-        placeFab(rect.left, rect.top);
     });
 
     document.addEventListener('keydown', (e) => {
@@ -334,9 +266,6 @@ export function initDictation(hooks) {
             endBtn.title = 'Stop dictation';
             endBtn.setAttribute('aria-label', 'Stop dictation');
         }
-        if (cluster) {
-            cluster.classList.toggle('is-expanded', active);
-        }
         if (status === 'idle' && interimEl) {
             interimEl.hidden = true;
             interimEl.textContent = '';
@@ -367,76 +296,6 @@ export function initDictation(hooks) {
             return text.trimStart();
         }
         return ' ' + text;
-    }
-
-    // --- Position helpers ---
-
-    function loadFabPos() {
-        const saved = getPref(DICTATION_FAB_POS_KEY, null);
-        if (
-            saved &&
-            typeof saved === 'object' &&
-            typeof /** @type {{left?: unknown}} */ (saved).left === 'number' &&
-            typeof /** @type {{top?: unknown}} */ (saved).top === 'number'
-        ) {
-            return /** @type {{left: number, top: number}} */ (saved);
-        }
-        return {
-            left: window.innerWidth - FAB_SIZE - EDGE_MARGIN,
-            top: window.innerHeight - FAB_SIZE - Math.max(
-                DEFAULT_BOTTOM,
-                readCssPx('--chrome-bottom', 0) + EDGE_MARGIN,
-            ),
-        };
-    }
-
-    /** @param {string} name @param {number} fallback */
-    function readCssPx(name, fallback) {
-        const raw = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-        const n = Number.parseFloat(raw);
-        return Number.isFinite(n) ? n : fallback;
-    }
-
-    /** @param {number} left @param {number} top */
-    function placeFab(left, top) {
-        const clamped = clampPos(left, top);
-        root.style.left = `${clamped.left}px`;
-        root.style.top = `${clamped.top}px`;
-        root.style.right = 'auto';
-        root.style.bottom = 'auto';
-        const midX = clamped.left + FAB_SIZE / 2;
-        root.dataset.edge = midX < window.innerWidth / 2 ? 'left' : 'right';
-    }
-
-    function applyFabPosition(pos) {
-        placeFab(pos.left, pos.top);
-    }
-
-    /** @param {number} left @param {number} top */
-    function clampPos(left, top) {
-        const safeBottom = readCssPx('--safe-bottom', 0);
-        const chromeBottom = readCssPx('--chrome-bottom', 0);
-        const bottomBand = Math.max(DEFAULT_BOTTOM, chromeBottom + EDGE_MARGIN);
-        const maxL = Math.max(EDGE_MARGIN, window.innerWidth - FAB_SIZE - EDGE_MARGIN);
-        const maxT = Math.max(
-            EDGE_MARGIN,
-            window.innerHeight - FAB_SIZE - bottomBand - safeBottom,
-        );
-        const minT = Math.max(EDGE_MARGIN, readCssPx('--chrome-top', 56));
-        return {
-            left: Math.min(maxL, Math.max(EDGE_MARGIN, left)),
-            top: Math.min(maxT, Math.max(minT, top)),
-        };
-    }
-
-    /** @param {DOMRect} rect */
-    function snapToEdge(rect) {
-        const mid = rect.left + rect.width / 2;
-        const left =
-            mid < window.innerWidth / 2
-                ? EDGE_MARGIN
-                : window.innerWidth - FAB_SIZE - EDGE_MARGIN;
-        return clampPos(left, rect.top);
     }
 
     // --- Onboarding / sheets ---
