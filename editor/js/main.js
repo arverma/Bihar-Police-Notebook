@@ -212,11 +212,21 @@ function setTemplateSegmentUI(type) {
     });
 }
 
+/** Tooltip on the whole control says what the current state does and what a click does. */
+function syncTranslitHint(on) {
+    const wrap = document.getElementById('translitWrap');
+    if (!wrap) return;
+    wrap.title = on
+        ? 'Hinglish typing is ON: type in English letters (namaste) and they become Devanagari (नमस्ते). Click to type plain text instead.'
+        : 'Hinglish typing is OFF: nothing is converted to Devanagari, text stays exactly as you type it. Click to turn on.';
+}
+
 function setTranslitToggleUI(translitEnabled) {
     const toggle = document.getElementById('translitToggle');
     if (toggle) {
         toggle.checked = translitEnabled;
     }
+    syncTranslitHint(translitEnabled);
     applyEditorPlaceholders();
 }
 
@@ -1535,6 +1545,7 @@ function initApp() {
     if (toggle) {
         toggle.addEventListener('change', (e) => {
             isHindiMode = !e.target.checked;
+            syncTranslitHint(e.target.checked);
             localStorage.setItem('langMode', isHindiMode ? 'hindi' : 'hinglish');
             suggestionsBox.style.display = 'none';
             applyEditorPlaceholders();

@@ -74,3 +74,22 @@ test('clicking the mic still starts the dictation flow', async ({ page }) => {
   // First run: the onboarding sheet opens.
   await expect(page.locator('#dictationSheet')).toHaveJSProperty('open', true);
 });
+
+test('transliteration switch lives in the toolbar and explains each state in its tooltip', async ({ page }) => {
+  await open(page, 1440);
+  const wrap = page.locator('#formatToolbar #translitWrap');
+  await expect(wrap).toBeVisible();
+  const toggle = page.locator('#translitToggle');
+  await expect(toggle).toBeChecked();
+  await expect(wrap.locator('.translit-glyph')).toBeVisible();
+  await expect(wrap).toHaveAttribute('title', /ON.*Devanagari/);
+
+  await page.locator('.toggle-slider').click();
+  await expect(toggle).not.toBeChecked();
+  await expect(wrap).toHaveAttribute('title', /OFF.*exactly as you type/);
+});
+
+test('phones: the Hinglish switch is withdrawn with the rest of the desktop typing aids', async ({ page }) => {
+  await open(page, 700);
+  await expect(page.locator('#translitWrap')).toBeHidden();
+});

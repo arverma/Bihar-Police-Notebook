@@ -152,9 +152,11 @@
     margin: 0;
 }
 
+/* Cells must stay un-positioned: in a collapsed-border table a positioned
+   cell paints its background over the borders the table draws, and a header
+   row (th has a fill) loses its grid lines on paper. */
 .bp-cell .bp-table td,
 .bp-cell .bp-table th {
-    position: relative;
     box-sizing: border-box;
     min-width: 2em;
     height: auto;
@@ -184,13 +186,10 @@
     user-select: none;
 }
 
-/* prosemirror-tables marks a multi-cell selection with .selectedCell. */
-.bp-cell .bp-table .selectedCell::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: rgba(26, 54, 93, 0.14);
-    pointer-events: none;
+/* prosemirror-tables marks a multi-cell selection with .selectedCell. Tinted
+   with an inset shadow rather than an overlay, so cells need no positioning. */
+.bp-cell .bp-table .selectedCell {
+    box-shadow: inset 0 0 0 100vmax rgba(26, 54, 93, 0.14);
 }
 
 /* ── Gap cursor: a caret before/after a table or image at a box edge ── */

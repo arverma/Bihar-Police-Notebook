@@ -65,11 +65,11 @@
 }
 
 .header-left {
-    min-width: 150px;
+    min-width: 196px;
 }
 
 .header-right {
-    min-width: 96px;
+    min-width: 48px;
 }
 
 .brand-mark-hindi {
@@ -181,7 +181,20 @@
 
 @media (max-width: 900px) {
     .header-content > .format-toolbar {
-        padding-inline: 8px;
+        padding-inline: 6px;
+        gap: 0;
+    }
+
+    .header-content > .format-toolbar .format-toolbar-sep {
+        margin-inline: 2px;
+    }
+
+    .header-left {
+        min-width: 176px;
+    }
+
+    .header-content > .format-toolbar button:not(.dictation-lang):not(.dictation-end):not(.dictation-mic) {
+        width: 26px;
     }
 
     .header-content > .format-toolbar button:not(.dictation-lang):not(.dictation-end) {

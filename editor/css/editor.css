@@ -1988,20 +1988,31 @@ span.diary-dotted-flow:focus {
 }
 
 /* Consolidated Diary Form Styles — see .diary-* rules near .editor-diary */
-/* Translit Toggle Switch */
+/* Translit toggle: sits in the format toolbar. On = Hinglish (Roman letters
+   become Devanagari as you type); off = text stays exactly as typed. */
 .translit-toggle-wrapper {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    margin-right: 12px;
+    flex: 0 0 auto;
+    gap: 6px;
 }
 .translit-label {
-    font-size: 18px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
     font-weight: 600;
     color: var(--brand-primary);
     user-select: none;
     cursor: pointer;
+    white-space: nowrap;
+}
+.translit-glyph {
     font-family: 'Noto Sans Devanagari', sans-serif;
+    font-size: 13px;
+}
+.translit-toggle-wrapper:not(:has(#translitToggle:checked)) .translit-label {
+    color: var(--color-text-muted);
 }
 .toggle-switch {
     position: relative;
