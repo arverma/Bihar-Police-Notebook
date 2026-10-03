@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 
 /**
  * The `(max-width: 768px)` breakpoint is not just CSS — dictation-ui,
- * quill-pages, page-scale and main all branch on it at runtime via
+ * the format toolbar, page-scale and main all branch on it at runtime via
  * matchMedia listeners. The per-device projects in tests/responsive/ pin each
  * side; this pins the *transition*, which is what silently rots when a
  * listener is dropped during a refactor.

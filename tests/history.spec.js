@@ -30,7 +30,7 @@ test.describe('History sidebar', () => {
     await firInput.fill(fir);
     await firInput.dispatchEvent('input');
     await firInput.dispatchEvent('change');
-    await page.locator('.diary-page-label').first().click({ force: true }).catch(() => {});
+    await firInput.blur();
     await page.waitForTimeout(900);
   }
 
@@ -74,7 +74,7 @@ test.describe('History sidebar', () => {
     await filenameInput.click();
     await filenameInput.fill(customName);
     await filenameInput.dispatchEvent('change');
-    await page.locator('.diary-page-label').first().click({ force: true }).catch(() => {});
+    await filenameInput.blur();
     await page.waitForTimeout(900);
 
     await fillFirNumber(page, '200/2026');
@@ -93,7 +93,7 @@ test.describe('History sidebar', () => {
     await firInput.dispatchEvent('input');
     await expect(filenameInput).toHaveValue('1234');
 
-    await page.locator('.diary-page-label').first().click({ force: true }).catch(() => {});
+    await firInput.blur();
     await page.waitForTimeout(900);
     await expect(filenameInput).toHaveValue('1234');
 
@@ -102,7 +102,7 @@ test.describe('History sidebar', () => {
     await firInput.dispatchEvent('input');
     await expect(filenameInput).toHaveValue('1234/2026');
 
-    await page.locator('.diary-page-label').first().click({ force: true }).catch(() => {});
+    await firInput.blur();
     await page.waitForTimeout(900);
 
     await openHistorySidebar(page);

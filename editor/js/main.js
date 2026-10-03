@@ -13,9 +13,6 @@ import {
 import { initLetterSheet } from './letter-sheet.js';
 import {
     initDiarySheet,
-    diaryHasMeaningfulContent,
-    emptyModel,
-    diaryFirNumber,
     autoDiaryFilename,
     isAutoDiaryFilename,
     DIARY_NON_TRANSLIT_HEADER_FIELDS,
@@ -39,21 +36,23 @@ import {
     getSyncState,
 } from './drive-sync.js';
 import { initPageScale } from './page-scale.js';
-import {
-    initQuillToolbar,
-    getFieldForEditor,
-    stripHtmlToPlain,
-} from './quill-pages.js';
+import { initFormatToolbar } from './editor/toolbar.js';
+import { initTableControls } from './editor/table-controls.js';
+import { isSupportedContent } from './editor/doc-format.js';
+import { initUnsupportedDocs } from './unsupported-docs.js';
+import { createTestHooks } from './editor/test-hooks.js';
+import { pickStartupDocument, newestFirst, historyDate } from './startup-document.js';
 import { runDocumentExport } from './export/router.js';
 
 const letterPagesEl = document.getElementById('letterPages');
 const suggestionsBox = document.getElementById('suggestions');
-const pageIndicator = document.getElementById('pageIndicator');
 const filenameInput = document.getElementById('filenameInput');
 const exportBtnEl = document.getElementById('exportBtn');
 const filenameWrap = document.querySelector('.filename-resize-wrap');
 const filenameSizer = document.querySelector('.filename-sizer');
-const quillToolbarEl = document.getElementById('quillToolbar');
+const formatToolbarEl = document.getElementById('formatToolbar');
+/** @type {ReturnType<typeof initFormatToolbar> | null} */
+let formatToolbar = null;
 
 /** @type {ReturnType<typeof initPageScale> | null} */
 let pageScale = null;
@@ -128,8 +127,8 @@ let isDictatedInput = false;
 
 /**
  * Last focused editable inside the letter/diary editors (for dictation target).
- * `el` is any editable field type: a Quill root, a contenteditable header field,
- * or an input/textarea.
+ * `el` is any editable field type: a document editor root, a contenteditable
+ * header field, or an input/textarea.
  * @type {{ el: HTMLElement, start: number, end: number, field?: object } | null}
  */
 let dictationTarget = null;
@@ -158,8 +157,7 @@ function setFilenameInputProgrammatic(value) {
 
 function syncDiaryFilenameIfAuto() {
     if (!filenameInput || getActiveTemplate() !== 'diary' || diaryFilenameManual) return;
-    const model = diarySheet?.getModel?.() ?? emptyModel();
-    const fir = diaryFirNumber(model);
+    const fir = diarySheet?.firNumber() ?? '';
     setFilenameInputProgrammatic(autoDiaryFilename(currentDoc.createdAt, fir));
 }
 
@@ -169,7 +167,7 @@ function shouldAttachDiaryTransliteration(el) {
     if (field && DIARY_NON_TRANSLIT_HEADER_FIELDS.has(field)) return false;
     return Boolean(
         el.matches?.('input:not([type="date"]), textarea, [data-field].diary-dotted-flow')
-        || el.classList.contains('ql-editor'),
+        || isDocEditor(el),
     );
 }
 
@@ -222,29 +220,23 @@ function setTranslitToggleUI(translitEnabled) {
     applyEditorPlaceholders();
 }
 
+/** Placeholder for the letter's first page (depends on input language mode). */
+function letterPlaceholder({ pageIndex }) {
+    if (pageIndex !== 0) return '';
+    if (mobileInputMq.matches) return 'यहाँ टाइप करें...';
+    if (isHindiMode) return 'यहाँ हिंदी में टाइप करें...';
+    return 'यहाँ Hinglish में टाइप करें...';
+}
+
+/** Placeholder for every empty diary writing box. */
+function diaryPlaceholder({ col }) {
+    if (mobileInputMq.matches && col === 'left') return 'यहाँ टाइप करें...';
+    return 'यहाँ विवरण लिखें...';
+}
+
 function applyEditorPlaceholders() {
-    let placeholder;
-    if (mobileInputMq.matches) {
-        placeholder = 'यहाँ टाइप करें...';
-    } else if (isHindiMode) {
-        placeholder = 'यहाँ हिंदी में टाइप करें...';
-    } else {
-        placeholder = 'यहाँ Hinglish में टाइप करें...';
-    }
-    document.querySelectorAll('.letter-page-input').forEach((ta, i) => {
-        if (i === 0) ta.placeholder = placeholder;
-        else ta.placeholder = '';
-    });
-    document.querySelectorAll('.editor-diary textarea.fir-input').forEach((ta) => {
-        if (!ta.dataset.defaultPlaceholder) {
-            ta.dataset.defaultPlaceholder = ta.getAttribute('placeholder') || '';
-        }
-        if (mobileInputMq.matches) {
-            ta.placeholder = 'यहाँ टाइप करें...';
-        } else if (ta.dataset.defaultPlaceholder) {
-            ta.placeholder = ta.dataset.defaultPlaceholder;
-        }
-    });
+    letterSheet?.refreshPlaceholders();
+    diarySheet?.refreshPlaceholders();
 }
 
 function updateDocumentTitle() {
@@ -253,25 +245,17 @@ function updateDocumentTitle() {
     document.title = `${name} · ${kind} — Bihar Police Notebook`;
 }
 
+/** The sheet for the visible template. */
+function activeSheet() {
+    return getActiveTemplate() === 'letter' ? letterSheet : diarySheet;
+}
+
 function getActiveContent() {
-    if (getActiveTemplate() === 'letter') return letterSheet?.getText() ?? '';
-    return getDiaryContent();
+    return activeSheet()?.getContent() ?? '';
 }
 
 function hasMeaningfulContent() {
-    const type = getActiveTemplate();
-    if (type === 'letter') {
-        const plain = letterSheet?.getPlainText?.()
-            ?? stripHtmlToPlain(letterSheet?.getText() ?? '');
-        return Boolean(plain.trim());
-    }
-    return diaryHasMeaningfulContent(diarySheet?.getModel() ?? emptyModel());
-}
-
-function updatePageIndicator(current, total) {
-    if (!pageIndicator) return;
-    pageIndicator.hidden = false;
-    pageIndicator.textContent = `Page ${current} of ${total}`;
+    return Boolean(activeSheet()?.hasMeaningfulContent());
 }
 
 async function flushSave() {
@@ -310,7 +294,26 @@ function scheduleSave() {
     saveTimer = setTimeout(() => { void flushSave(); }, AUTOSAVE_DELAY_MS);
 }
 
+/**
+ * Shown instead of opening a document this version cannot open.
+ * @type {((doc: object, opts?: { damaged?: boolean }) => void) | null}
+ */
+let showUnopenableDocument = null;
+
+/**
+ * Whether stored content opens in its template's editor.
+ * @param {{ type: string, content?: string }} doc
+ */
+function canOpenDocument(doc) {
+    const sheet = doc.type === 'letter' ? letterSheet : diarySheet;
+    return Boolean(sheet?.canOpen(doc.content));
+}
+
 async function loadDocumentState(doc) {
+    if (!canOpenDocument(doc)) {
+        showUnopenableDocument?.(doc, { damaged: isSupportedContent(doc.content) });
+        return false;
+    }
     if (saveTimer !== null) {
         clearTimeout(saveTimer);
         saveTimer = null;
@@ -327,9 +330,8 @@ async function loadDocumentState(doc) {
         document.querySelector('.editor-letter').style.display = 'none';
         document.querySelector('.editor-diary').style.display = '';
         setTemplateSegmentUI('diary');
-        setDiaryContent(doc.content);
-        updatePageIndicator(1, diarySheet?.pageCount || 1);
-        const fir = diaryFirNumber(diarySheet?.getModel?.() ?? emptyModel());
+        diarySheet?.setContent(doc.content);
+        const fir = diarySheet?.firNumber() ?? '';
         diaryFilenameManual = !isAutoDiaryFilename(
             doc.filename,
             currentDoc.createdAt,
@@ -340,9 +342,8 @@ async function loadDocumentState(doc) {
         document.querySelector('.editor-letter').style.display = '';
         document.querySelector('.editor-diary').style.display = 'none';
         setTemplateSegmentUI('letter');
-        letterSheet?.setText(doc.content || '');
+        letterSheet?.setContent(doc.content || '');
         letterSheet?.focus();
-        updatePageIndicator(1, letterSheet?.pageCount || 1);
     }
     
     setSaveStatus('saved');
@@ -359,6 +360,29 @@ async function loadDocumentState(doc) {
         localStorage.removeItem('lastActiveDocId');
         localStorage.setItem('lastActiveDocType', currentDoc.type);
     }
+}
+
+/**
+ * On load, reopen the last document; else the top of History; a new document
+ * only when there is nothing to open.
+ */
+async function openStartupDocument() {
+    const lastType = localStorage.getItem('lastActiveDocType') === 'letter' ? 'letter' : 'diary';
+    const lastId = Number.parseInt(localStorage.getItem('lastActiveDocId') || '', 10);
+    try {
+        const [lastDoc, historyDocs] = await Promise.all([
+            Number.isFinite(lastId) ? getDocumentById(lastType, lastId).catch(() => null) : null,
+            getDocuments(lastType),
+        ]);
+        const pick = pickStartupDocument({ lastType, lastDoc, historyDocs, canOpen: canOpenDocument });
+        if ('open' in pick) {
+            await loadDocumentState(pick.open);
+            return;
+        }
+    } catch (err) {
+        console.error('Failed to restore a document on load:', err);
+    }
+    await startNewDocument(lastType);
 }
 
 async function startNewDocument(type = getActiveTemplate()) {
@@ -378,7 +402,6 @@ async function startNewDocument(type = getActiveTemplate()) {
         document.querySelector('.editor-diary').style.display = 'none';
         setTemplateSegmentUI('letter');
         letterSheet?.clear();
-        updatePageIndicator(1, letterSheet?.pageCount || 1);
         letterSheet?.focus();
     } else {
         document.querySelector('.editor-letter').style.display = 'none';
@@ -386,7 +409,6 @@ async function startNewDocument(type = getActiveTemplate()) {
         setTemplateSegmentUI('diary');
         diarySheet?.clear();
         diaryFilenameManual = false;
-        updatePageIndicator(1, diarySheet?.pageCount || 1);
     }
     setSaveStatus('saved');
     updateDocumentTitle();
@@ -461,15 +483,32 @@ function getCaretPosition(input, indexOverride) {
 let typingTimer;
 const doneTypingInterval = 50; // Reduced delay to 50ms for faster response
 
-function notifyLetterChanged(el) {
-    if (!el?.closest?.('.letter-page')) return;
-    // Fires autosave + spill via existing input listeners.
-    el.dispatchEvent(new Event('input', { bubbles: true }));
+/** @param {Element|null|undefined} el */
+function isDocEditor(el) {
+    return Boolean(el?.classList?.contains('bp-doc'));
 }
 
-/** @param {HTMLElement} el */
-function isQuillEditor(el) {
-    return Boolean(el?.classList?.contains('ql-editor'));
+/**
+ * Text field adapter for a document editor root.
+ * @param {Element|null|undefined} el
+ */
+function getFieldForEditor(el) {
+    if (!isDocEditor(el)) return null;
+    if (letterSheet && el === letterSheet.editor.view.dom) return letterSheet.field;
+    if (diarySheet && el === diarySheet.editor.view.dom) return diarySheet.field;
+    return null;
+}
+
+/**
+ * Events on a document editor root also bubble up from the diary header
+ * fields and page buttons inside it; those have their own listeners. Body
+ * text events target the root itself (it is the editing host).
+ * @param {HTMLElement} el editor root
+ * @param {EventTarget|null} target
+ */
+function isForDocText(el, target) {
+    if (!isDocEditor(el)) return true;
+    return !(target instanceof Element && target.closest('[data-bp-header-field], .diary-page-chrome'));
 }
 
 function isEditableTextField(el) {
@@ -477,13 +516,13 @@ function isEditableTextField(el) {
         el
         && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable
             || el.getAttribute?.('contenteditable') === 'true'
-            || isQuillEditor(el)),
+            || isDocEditor(el)),
     );
 }
 
 /** @param {HTMLElement} el */
 function getEditableText(el) {
-    const field = isQuillEditor(el) ? getFieldForEditor(el) : null;
+    const field = getFieldForEditor(el);
     if (field) return field.getText();
     if (el.isContentEditable || el.getAttribute?.('contenteditable') === 'true') {
         return (el.textContent || '').replace(/\u00a0/g, ' ');
@@ -493,11 +532,9 @@ function getEditableText(el) {
 
 /** @param {HTMLElement} el @param {string} text */
 function setEditableText(el, text) {
-    const field = isQuillEditor(el) ? getFieldForEditor(el) : null;
+    const field = getFieldForEditor(el);
     if (field) {
-        // Full replace used only for rare paths; prefer patchWordAtCaret for Quill
-        field.setContent(text);
-        field.quill.root.dispatchEvent(new Event('input', { bubbles: true }));
+        field.replaceRange(0, field.getText().length, text);
         return;
     }
     if (el.isContentEditable || el.getAttribute?.('contenteditable') === 'true') {
@@ -506,22 +543,21 @@ function setEditableText(el, text) {
         return;
     }
     el.value = text;
+    // Diary header inputs commit to the document on `input`.
+    el.dispatchEvent(new Event('input', { bubbles: true }));
 }
 
 /**
- * Replace a word range inside a Quill editor without wiping other formatting.
+ * Replace a word range without wiping the formatting around it.
  * @param {HTMLElement} el
  * @param {number} start
  * @param {number} end
  * @param {string} replacement
  */
 function replaceEditableRange(el, start, end, replacement) {
-    const field = isQuillEditor(el) ? getFieldForEditor(el) : null;
+    const field = getFieldForEditor(el);
     if (field) {
-        const len = Math.max(0, end - start);
-        if (len > 0) field.quill.deleteText(start, len, 'user');
-        field.quill.insertText(start, replacement, 'user');
-        field.quill.setSelection(start + replacement.length, 0, 'user');
+        field.replaceRange(start, end, replacement);
         return;
     }
     const value = getEditableText(el);
@@ -531,11 +567,8 @@ function replaceEditableRange(el, start, end, replacement) {
 
 /** @param {HTMLElement} el */
 function getEditableCaret(el) {
-    const field = isQuillEditor(el) ? getFieldForEditor(el) : null;
-    if (field) {
-        const sel = field.quill.getSelection(true);
-        return sel?.index ?? field.getText().length;
-    }
+    const field = getFieldForEditor(el);
+    if (field) return field.getCaret();
     if (!(el.isContentEditable || el.getAttribute?.('contenteditable') === 'true')) {
         return el.selectionStart ?? getEditableText(el).length;
     }
@@ -552,10 +585,9 @@ function getEditableCaret(el) {
 
 /** @param {HTMLElement} el @param {number} offset */
 function setEditableCaret(el, offset) {
-    const field = isQuillEditor(el) ? getFieldForEditor(el) : null;
+    const field = getFieldForEditor(el);
     if (field) {
-        const max = Math.max(0, field.quill.getLength() - 1);
-        field.quill.setSelection(Math.max(0, Math.min(offset, max)), 0, 'user');
+        field.setCaret(offset);
         return;
     }
     if (!(el.isContentEditable || el.getAttribute?.('contenteditable') === 'true')) {
@@ -583,18 +615,14 @@ function setEditableCaret(el, offset) {
 
 /**
  * Selection range in plain-text offsets for any editable field type
- * (Quill root, contenteditable, input/textarea). Companion to
+ * (document editor, contenteditable, input/textarea). Companion to
  * getEditableCaret, which returns the collapsed caret only.
  * @param {HTMLElement} el
  * @returns {{ start: number, end: number }}
  */
 function getEditableSelection(el) {
-    const field = isQuillEditor(el) ? getFieldForEditor(el) : null;
-    if (field) {
-        const sel = field.quill.getSelection(true);
-        const start = sel?.index ?? Math.max(0, field.quill.getLength() - 1);
-        return { start, end: start + (sel?.length ?? 0) };
-    }
+    const field = getFieldForEditor(el);
+    if (field) return field.getSelection();
     if (el.isContentEditable || el.getAttribute?.('contenteditable') === 'true') {
         const start = getEditableCaret(el);
         const sel = window.getSelection();
@@ -609,7 +637,8 @@ function getEditableSelection(el) {
 
 function attachTransliteration(el) {
     el.addEventListener('input', function (e) {
-        if (el.closest('.letter-page') || el.closest('.editor-diary')) {
+        if (!isForDocText(el, e.target)) return;
+        if (el.closest('.editor-letter') || el.closest('.editor-diary')) {
             scheduleSave();
         }
         if (!e.isTrusted) {
@@ -646,6 +675,8 @@ function attachTransliteration(el) {
 
     el.addEventListener('keydown', async function (e) {
         if (e.key !== ' ') return;
+        if (!isForDocText(el, e.target)) return;
+        if (e.isComposing) return;
         if (!isTransliterationEnabled()) return;
         e.preventDefault();
         const value = getEditableText(el);
@@ -655,7 +686,6 @@ function attachTransliteration(el) {
 
         if (!word.trim()) {
             replaceEditableRange(el, cursor, cursor, ' ');
-            notifyLetterChanged(el);
             return;
         }
 
@@ -667,10 +697,10 @@ function attachTransliteration(el) {
         } else {
             replaceEditableRange(el, cursor, cursor, ' ');
         }
-        notifyLetterChanged(el);
     });
 
-    el.addEventListener('click', async function () {
+    el.addEventListener('click', async function (e) {
+        if (!isForDocText(el, e.target)) return;
         if (!isTransliterationEnabled()) return;
         const value = getEditableText(el);
         const cursor = getEditableCaret(el);
@@ -707,14 +737,20 @@ function showSuggestions(suggestions, wordStart, wordEnd, targetEl) {
     const scale = pageScale?.getScale() || 1;
     const inputRect = targetEl.getBoundingClientRect();
     let boxLeft, boxTop;
-    const field = isQuillEditor(targetEl) ? getFieldForEditor(targetEl) : null;
-    
-    if (field && field.quill) {
-        // Quill has built-in bounds tracking which correctly handles soft-wraps
-        const bounds = field.quill.getBounds(wordEnd);
-        boxLeft = inputRect.left + (bounds.left * scale);
-        // Place it just below the text
-        boxTop = inputRect.top + (bounds.bottom * scale) + 5;
+    /** Top edge of the word's line, for flipping the box above it. */
+    let wordTop = inputRect.top;
+    const field = getFieldForEditor(targetEl);
+
+    if (field) {
+        // Editor coordinates are viewport pixels already (page scale included).
+        const rect = field.coordsAt(wordEnd);
+        if (!rect) {
+            suggestionsBox.style.display = 'none';
+            return;
+        }
+        boxLeft = rect.left;
+        boxTop = rect.bottom + 5;
+        wordTop = rect.top;
     } else if (targetEl.tagName === 'TEXTAREA' || targetEl.tagName === 'INPUT') {
         // Use the hidden div method for textareas to handle soft-wraps
         const pos = getCaretPosition(targetEl, wordEnd);
@@ -722,6 +758,7 @@ function showSuggestions(suggestions, wordStart, wordEnd, targetEl) {
         const lineHeight = parseInt(style.lineHeight) || parseInt(style.fontSize) * 1.2 || 24;
         boxLeft = inputRect.left + (pos.left * scale) - ((targetEl.scrollLeft || 0) * scale);
         boxTop = inputRect.top + (pos.top * scale) + (lineHeight * scale) + 5 - ((targetEl.scrollTop || 0) * scale);
+        wordTop = boxTop - lineHeight * scale - 5;
     } else {
         // Fallback for generic contenteditable (naive approach)
         const style = window.getComputedStyle(targetEl);
@@ -736,6 +773,7 @@ function showSuggestions(suggestions, wordStart, wordEnd, targetEl) {
 
         boxLeft = inputRect.left + paddingLeft + Math.min(textWidth, Math.max(40 * scale, inputRect.width - paddingLeft - 200 * scale));
         boxTop = inputRect.top + paddingTop + (lines + 1) * lineHeight + 5 - ((targetEl.scrollTop || 0) * scale);
+        wordTop = boxTop - lineHeight - 5;
     }
 
     suggestionsBox.style.position = 'fixed';
@@ -750,8 +788,9 @@ function showSuggestions(suggestions, wordStart, wordEnd, targetEl) {
             // Hide first so diary reflow is not skipped by translitOwnsInput().
             suggestionsBox.style.display = 'none';
             replaceEditableRange(targetEl, wordStart, wordEnd, suggestion);
-            notifyLetterChanged(targetEl);
-            targetEl.dispatchEvent(new Event('input', { bubbles: true }));
+            if (!getFieldForEditor(targetEl)) {
+                targetEl.dispatchEvent(new Event('input', { bubbles: true }));
+            }
         };
         div.title = `Insert “${suggestion}”`;
         suggestionsBox.appendChild(div);
@@ -760,12 +799,12 @@ function showSuggestions(suggestions, wordStart, wordEnd, targetEl) {
 
     const boxRect = suggestionsBox.getBoundingClientRect();
     const headerH = chromeHeaderHeight();
-    const scrollTop = targetEl.scrollTop || 0;
     if (boxRect.right > window.innerWidth) {
         suggestionsBox.style.left = (window.innerWidth - boxRect.width - 10) + 'px';
     }
     if (boxRect.bottom > window.innerHeight) {
-        suggestionsBox.style.top = (inputRect.top + paddingTop + lines * lineHeight - boxRect.height - 5 - scrollTop) + 'px';
+        // No room below the word: open above it.
+        suggestionsBox.style.top = (wordTop - boxRect.height - 5) + 'px';
     }
     if (parseInt(suggestionsBox.style.top, 10) < headerH) {
         suggestionsBox.style.top = headerH + 'px';
@@ -824,12 +863,23 @@ const observer = new MutationObserver((mutations) => {
             mutation.type === 'attributes' &&
             mutation.attributeName === 'style') {
             adjustSuggestionsPosition();
+            // Pagination waits while suggestions own the word; resume it.
+            if (!suggestionsOwnInput()) {
+                letterSheet?.resumePagination();
+                diarySheet?.resumePagination();
+            }
         }
     });
 });
 
 if (suggestionsBox) {
     observer.observe(suggestionsBox, { attributes: true });
+}
+
+/** The suggestion box is open, so the word being typed is not final yet. */
+function suggestionsOwnInput() {
+    if (!suggestionsBox || suggestionsBox.hidden || suggestionsBox.style.display === 'none') return false;
+    return suggestionsBox.childElementCount > 0;
 }
 
 function initApp() {
@@ -1001,6 +1051,31 @@ function initApp() {
         return date.toLocaleDateString('en-IN', { year: 'numeric', month: 'long', day: 'numeric' });
     }
 
+    /** @type {ReturnType<typeof initUnsupportedDocs> | null} */
+    let unsupportedDocs = null;
+
+    /**
+     * Delete a document from History: tombstone for Drive sync, or a purge
+     * when it was never backed up.
+     * @param {object} doc
+     * @param {{ purgeContent?: boolean }} [opts]
+     */
+    async function deleteDocumentRow(doc, opts = {}) {
+        const row = doc.id != null
+            ? await softDeleteDocumentById(doc.type, doc.id, opts)
+            : await softDeleteDocument(doc.type, doc.filename);
+        if (!row) return null;
+        if (currentDoc.id != null && currentDoc.id === doc.id) {
+            await startNewDocument(doc.type);
+        }
+        if (!isConnected() && !row.driveFileId) {
+            // Never synced — purge locally; no Drive tombstone needed
+            await hardDeleteById(row.type, row.id);
+        }
+        // Drive tombstones upload on next manual Sync all / backup click
+        return row;
+    }
+
     // Render history in sidebar
     function snapshotExpandedHistoryGroups() {
         const expanded = new Set();
@@ -1014,7 +1089,9 @@ function initApp() {
         return expanded;
     }
 
-    function renderHistory(docs = []) {
+    function renderHistory(unsorted = []) {
+        // Same order the app opens "the top of History" in on load.
+        const docs = newestFirst(unsorted);
         const hadGroups = Boolean(historyList?.querySelector('.history-date-group'));
         const expandedSnapshot = hadGroups ? snapshotExpandedHistoryGroups() : null;
 
@@ -1031,7 +1108,7 @@ function initApp() {
 
         const groups = {};
         docs.forEach(doc => {
-            const dateObj = new Date(doc.created_at || doc.timestamp || doc.date || Date.now());
+            const dateObj = historyDate(doc);
             const dateKey = getDateString(dateObj);
             if (!groups[dateKey]) groups[dateKey] = [];
             groups[dateKey].push({ ...doc, date: dateObj });
@@ -1065,7 +1142,8 @@ function initApp() {
 
             const listType = getActiveTemplate();
             groups[dateKey].sort((a, b) => b.date - a.date).forEach(doc => {
-                const firstLine = listType === 'letter' ? previewText(doc) : '';
+                const supported = isSupportedContent(doc.content);
+                const firstLine = supported && listType === 'letter' ? previewText(doc) : '';
                 const created = new Date(doc.created_at || doc.date || Date.now());
                 const updated = doc.updated_at ? new Date(doc.updated_at) : created;
                 const updatedStr = updated.toLocaleString([], {
@@ -1090,13 +1168,16 @@ function initApp() {
 
                 const item = document.createElement('div');
                 item.className = 'history-item';
-                item.title = 'Open this document';
+                item.tabIndex = 0;
+                item.setAttribute('role', 'button');
+                item.title = supported ? 'Open this document' : 'Older format — cannot be opened';
+                if (!supported) item.dataset.unsupported = 'true';
                 if (currentDoc.id != null && doc.id === currentDoc.id) {
                     item.classList.add('is-active');
                 }
-                const previewHtml = firstLine
-                    ? `<span class="history-item-preview">${escapeHtml(firstLine)}</span>`
-                    : '';
+                const previewHtml = supported
+                    ? (firstLine ? `<span class="history-item-preview">${escapeHtml(firstLine)}</span>` : '')
+                    : '<span class="history-item-badge">Older format</span>';
                 item.innerHTML = `
                     ${leadingIcon}
                     <div class="history-item-details">
@@ -1109,27 +1190,29 @@ function initApp() {
                     </div>
                 `;
 
+                const openItem = async () => {
+                    if (!supported) {
+                        await unsupportedDocs?.open(doc, item);
+                        return;
+                    }
+                    await loadDocumentState(doc);
+                };
                 item.addEventListener('click', async (e) => {
                     if (e.target.closest('.delete-btn')) return;
-                    await loadDocumentState(doc);
+                    await openItem();
+                });
+                item.addEventListener('keydown', async (e) => {
+                    if (e.target !== item || (e.key !== 'Enter' && e.key !== ' ')) return;
+                    e.preventDefault();
+                    await openItem();
                 });
 
                 item.querySelector('.delete-btn').onclick = async (e) => {
                     e.stopPropagation();
                     if (!confirm(`Delete "${doc.filename}" permanently? This cannot be undone.`)) return;
-                    const row = doc.id != null
-                        ? await softDeleteDocumentById(doc.type, doc.id)
-                        : await softDeleteDocument(doc.type, doc.filename);
+                    const row = await deleteDocumentRow(doc, { purgeContent: !supported });
                     if (!row) { alert('Failed to delete document.'); return; }
-                    if (currentDoc.id != null && currentDoc.id === doc.id) {
-                        await startNewDocument(doc.type);
-                    }
                     showNotification('Document deleted.');
-                    if (!isConnected() && !row.driveFileId) {
-                        // Never synced — purge locally; no Drive tombstone needed
-                        await hardDeleteById(row.type, row.id);
-                    }
-                    // Drive tombstones upload on next manual Sync all / backup click
                     await loadHistory();
                 };
 
@@ -1161,18 +1244,24 @@ function initApp() {
     }
     loadHistoryFn = loadHistory;
 
+    showUnopenableDocument = (doc, opts) => { void unsupportedDocs?.open(doc, null, opts); };
+    unsupportedDocs = initUnsupportedDocs({
+        listAll: async () => [...await getDocuments('letter'), ...await getDocuments('diary')],
+        deleteDoc: async (doc) => { await deleteDocumentRow(doc, { purgeContent: true }); },
+        afterChange: loadHistory,
+        notify: showNotification,
+    });
+
     if (letterPagesEl) {
-        letterSheet = initLetterSheet(letterPagesEl, pageIndicator, {
+        letterSheet = initLetterSheet(letterPagesEl, {
             onChange: scheduleSave,
             onAttachField: (el) => {
                 attachTransliteration(el);
             },
-            onPageFocus: (current, total) => {
-                if (getActiveTemplate() === 'letter') {
-                    updatePageIndicator(current, total);
-                }
-                pageScale?.refresh();
-            },
+            isHeld: suggestionsOwnInput,
+            placeholder: letterPlaceholder,
+            // The scaled stage's height follows the number of pages.
+            onPageCountChange: () => pageScale?.refresh(),
             onSpill: ({ toPage }) => {
                 showNotification(`Continued on page ${toPage}`);
             },
@@ -1184,9 +1273,10 @@ function initApp() {
     }
 
     const diaryPagesEl = document.getElementById('diaryPages');
-    const diaryTemplate = document.getElementById('diaryPageTemplate');
-    if (diaryPagesEl && diaryTemplate) {
-        diarySheet = initDiarySheet(diaryPagesEl, diaryTemplate, {
+    if (diaryPagesEl) {
+        diarySheet = initDiarySheet(diaryPagesEl, {
+            isHeld: suggestionsOwnInput,
+            placeholder: diaryPlaceholder,
             onChange: () => {
                 syncDiaryFilenameIfAuto();
                 scheduleSave();
@@ -1199,12 +1289,8 @@ function initApp() {
                     el.addEventListener('change', scheduleSave);
                 }
             },
-            onPageFocus: (current, total) => {
-                if (getActiveTemplate() === 'diary') {
-                    updatePageIndicator(current, total);
-                }
-                pageScale?.refresh();
-            },
+            // The scaled stage's height follows the number of pages.
+            onPageCountChange: () => pageScale?.refresh(),
             onSpill: ({ toPage }) => {
                 showNotification(`Continued on page ${toPage}`);
             },
@@ -1214,28 +1300,32 @@ function initApp() {
         }
     }
 
-    if (quillToolbarEl) initQuillToolbar(quillToolbarEl);
+    // Editor modules report user-facing problems (e.g. an unreadable image) as events.
+    document.addEventListener('bp:notify', (e) => {
+        const message = /** @type {CustomEvent} */ (e).detail?.message;
+        if (message) showNotification(message);
+    });
 
-    const lastId = localStorage.getItem('lastActiveDocId');
-    const lastType = localStorage.getItem('lastActiveDocType') || 'diary';
-
-    if (lastId) {
-        getDocumentById(lastType, parseInt(lastId, 10)).then(async doc => {
-            if (doc) {
-                await loadDocumentState(doc);
-            } else {
-                await startNewDocument(lastType);
-            }
-        }).catch(async err => {
-            console.error('Failed to restore last document:', err);
-            await startNewDocument(lastType);
-        });
-    } else {
-        void startNewDocument(lastType);
+    if (formatToolbarEl) {
+        formatToolbar = initFormatToolbar(formatToolbarEl, () => activeSheet()?.editor ?? null);
+        const tableControls = initTableControls(() => activeSheet()?.editor ?? null);
+        const syncToolbar = () => {
+            formatToolbar?.sync();
+            tableControls.sync();
+        };
+        for (const sheet of [letterSheet, diarySheet]) {
+            sheet?.editor.on('selectionUpdate', syncToolbar);
+            sheet?.editor.on('transaction', syncToolbar);
+            sheet?.editor.on('focus', syncToolbar);
+            sheet?.editor.on('blur', syncToolbar);
+        }
     }
+
+    void openStartupDocument();
 
     void loadHistory();
     void updateDriveChrome();
+    void unsupportedDocs.checkOnLaunch();
 
     void (async () => {
         try {
@@ -1332,12 +1422,6 @@ function initApp() {
         return Boolean(root && target instanceof Node && root.contains(target));
     }
 
-    try {
-        letterSheet?.update();
-    } catch (err) {
-        console.error('letterSheet.update failed:', err);
-    }
-
     filenameInput?.addEventListener('change', () => {
         if (!filenameProgrammatic && getActiveTemplate() === 'diary') {
             diaryFilenameManual = true;
@@ -1349,8 +1433,7 @@ function initApp() {
     filenameInput?.addEventListener('blur', () => {
         if (!(filenameInput.value || '').trim()) {
             if (getActiveTemplate() === 'diary') {
-                const model = diarySheet?.getModel?.() ?? emptyModel();
-                const fir = diaryFirNumber(model);
+                const fir = diarySheet?.firNumber() ?? '';
                 setFilenameInputProgrammatic(autoDiaryFilename(currentDoc.createdAt, fir));
                 diaryFilenameManual = false;
             } else {
@@ -1384,12 +1467,8 @@ function initApp() {
 
     async function handleDocumentExport() {
         const activeTemplate = getActiveTemplate() === 'letter' ? 'letter' : 'diary';
-        // Sync model from live DOM so spill/page state is current before clone.
-        if (activeTemplate === 'letter') {
-            letterSheet?.getPages?.();
-        } else {
-            diarySheet?.getModel?.();
-        }
+        // Print clones the live pages, so let pagination finish first.
+        await activeSheet()?.settle();
 
         const filename = (filenameInput?.value || '').trim()
             || formatDocFilename(new Date(currentDoc.createdAt));
@@ -1514,7 +1593,8 @@ function initApp() {
     }, false);
 
     /**
-     * Document-level undo/redo — capture before Quill/textarea native handlers.
+     * Document-level undo/redo — capture before the editor's and inputs'
+     * native handlers, so header inputs and body text share one history.
      * @param {EventTarget | null} target
      * @returns {boolean}
      */
@@ -1524,7 +1604,7 @@ function initApp() {
         if (target.closest('.history-sidebar')) return false;
         if (target.closest('.dictation-panel') || target.closest('#dictationBar')) return false;
         if (target.closest('.punctuation-panel')) return false;
-        if (target.closest('#quillToolbar')) return true;
+        if (target.closest('#formatToolbar') || target.closest('.table-controls')) return true;
         if (target.closest('.editor-diary') || target.closest('.editor-letter')) return true;
         return false;
     }
@@ -1576,18 +1656,9 @@ function initApp() {
         if (!(el instanceof HTMLElement)) return;
         if (!el.closest('.editor-letter') && !el.closest('.editor-diary')) return;
 
-        if (isQuillEditor(el)) {
-            const field = getFieldForEditor(el);
-            if (!field) return;
-            const sel = field.quill.getSelection(true);
-            const index = sel?.index ?? Math.max(0, field.quill.getLength() - 1);
-            const length = sel?.length ?? 0;
-            dictationTarget = {
-                el,
-                field,
-                start: index,
-                end: index + length,
-            };
+        const field = getFieldForEditor(el);
+        if (field) {
+            dictationTarget = { el, field, ...field.getSelection() };
             return;
         }
 
@@ -1606,14 +1677,9 @@ function initApp() {
     });
     document.addEventListener('selectionchange', () => {
         const el = document.activeElement;
-        if (isQuillEditor(el) && dictationTarget?.el === el) {
-            const field = getFieldForEditor(el);
-            if (!field) return;
-            const sel = field.quill.getSelection();
-            if (!sel) return;
-            dictationTarget.start = sel.index;
-            dictationTarget.end = sel.index + sel.length;
-            dictationTarget.field = field;
+        const docField = getFieldForEditor(el);
+        if (docField && dictationTarget?.el === el) {
+            Object.assign(dictationTarget, docField.getSelection(), { field: docField });
             return;
         }
         if (isDictatableContentEditable(el) && dictationTarget?.el === el) {
@@ -1643,6 +1709,7 @@ function initApp() {
         };
     }
 
+    window.__bpTest = createTestHooks({ letter: letterSheet, diary: diarySheet, active: activeSheet });
     window.__uxInitComplete = true;
 }
 
@@ -1668,40 +1735,30 @@ function showNotification(message) {
 
 /**
  * Plain contenteditable fields (diary header धारा / घटना की तिथि और स्थान).
- * Quill roots are contenteditable too, but they route through their own field.
+ * Document editor roots are contenteditable too, but route through their field.
  * @param {Element|null} el
  */
 function isDictatableContentEditable(el) {
     return Boolean(
         el instanceof HTMLElement
         && el.isContentEditable
-        && !isQuillEditor(el)
+        && !isDocEditor(el)
         && (el.closest('.editor-letter') || el.closest('.editor-diary')),
     );
 }
 
 /**
  * Resolve the current dictation insertion target (caret + element).
- * Falls back to the letter Quill field when nothing is tracked.
+ * Falls back to the letter editor when nothing is tracked.
  * @returns {{ el: HTMLElement, start: number, end: number, field?: object } | null}
  */
 function getDictationTarget() {
     const active = document.activeElement;
 
-    if (isQuillEditor(active) && (active.closest('.editor-letter') || active.closest('.editor-diary'))) {
-        const field = getFieldForEditor(active);
-        if (field) {
-            const sel = field.quill.getSelection(true);
-            const index = sel?.index ?? Math.max(0, field.quill.getLength() - 1);
-            const length = sel?.length ?? 0;
-            dictationTarget = {
-                el: active,
-                field,
-                start: index,
-                end: index + length,
-            };
-            return dictationTarget;
-        }
+    const activeField = getFieldForEditor(active);
+    if (activeField) {
+        dictationTarget = { el: active, field: activeField, ...activeField.getSelection() };
+        return dictationTarget;
     }
 
     if (
@@ -1730,7 +1787,7 @@ function getDictationTarget() {
     if (getActiveTemplate() === 'letter') {
         const fieldInfo = letterSheet?.getActiveField();
         if (fieldInfo?.el) {
-            fieldInfo.el.focus();
+            fieldInfo.field.focus();
             dictationTarget = fieldInfo;
             return dictationTarget;
         }
@@ -1752,18 +1809,13 @@ function insertDictatedText(text) {
     const el = target.el;
     isDictatedInput = true;
     try {
-        if (isQuillEditor(el) || target.field) {
-            const field = target.field || getFieldForEditor(el);
-            if (!field) return;
-            const start = target.start ?? field.quill.getSelection(true)?.index ?? 0;
-            const end = target.end ?? start;
-            const len = Math.max(0, end - start);
-            if (len > 0) field.quill.deleteText(start, len, 'user');
-            field.quill.insertText(start, text, 'user');
-            const caret = start + text.length;
-            field.quill.setSelection(caret, 0, 'user');
-            field.quill.focus();
-            dictationTarget = { el: field.quill.root, field, start: caret, end: caret };
+        const docField = target.field || getFieldForEditor(el);
+        if (docField) {
+            // The editor keeps its selection while the dictation UI has focus,
+            // so insert there (it also follows any reflow since tracking).
+            docField.focus();
+            docField.insertAtCaret(text);
+            dictationTarget = { el: docField.el, field: docField, ...docField.getSelection() };
             return;
         }
 
@@ -1794,20 +1846,11 @@ function insertDictatedText(text) {
         isDictatedInput = false;
     }
 
-    // Diary spill may move focus — adopt the active Quill/textarea
+    // Inserting may move focus — adopt the now-active field.
     const active = document.activeElement;
-    if (isQuillEditor(active)) {
-        const field = getFieldForEditor(active);
-        if (field) {
-            const sel = field.quill.getSelection(true);
-            const index = sel?.index ?? 0;
-            dictationTarget = {
-                el: active,
-                field,
-                start: index,
-                end: index + (sel?.length ?? 0),
-            };
-        }
+    const activeField = getFieldForEditor(active);
+    if (activeField) {
+        dictationTarget = { el: active, field: activeField, ...activeField.getSelection() };
     } else if (
         (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) &&
         (active.closest('.editor-letter') || active.closest('.editor-diary'))
@@ -1818,16 +1861,6 @@ function insertDictatedText(text) {
             end: active.selectionEnd ?? active.value.length,
         };
     }
-}
-
-// Serialize diary model as JSON
-function getDiaryContent() {
-    return JSON.stringify(diarySheet?.getModel() ?? emptyModel());
-}
-
-// Restore diary model from JSON (legacy flat format handled in normalizeDiaryModel)
-function setDiaryContent(content) {
-    diarySheet?.setModel(content);
 }
 
 // Retain focus on editor when clicking header or sidebar controls
@@ -1845,7 +1878,7 @@ document.addEventListener('mousedown', (e) => {
         const isEditorFocused = Boolean(
             active
             && isEditableTextField(active)
-            && (isQuillEditor(active) || active.closest('.app-body')),
+            && (isDocEditor(active) || active.closest('.app-body')),
         );
 
         if (isEditorFocused) {

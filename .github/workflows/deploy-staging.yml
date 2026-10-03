@@ -17,6 +17,7 @@ on:
 permissions:
   contents: read
   deployments: write
+  pull-requests: read
 
 concurrency:
   # One staging deploy per branch at a time; newer push cancels older.
@@ -24,13 +25,31 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Run the full suite before staging gets the build too — catches breakage
-  # early before a PR is even opened.
+  # An open PR for this branch already runs the suite (test.yml on
+  # pull_request), so staging only runs it itself when there is none.
+  open-pr:
+    runs-on: ubuntu-latest
+    outputs:
+      exists: ${{ steps.find.outputs.exists }}
+    steps:
+      - id: find
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          count=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$GITHUB_REF_NAME" --state open --json number --jq length)
+          echo "exists=$([ "$count" -gt 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+  # No PR yet: run the full suite before staging gets the build — catches
+  # breakage early before a PR is even opened.
   test:
+    needs: open-pr
+    if: needs.open-pr.outputs.exists != 'true'
     uses: ./.github/workflows/test.yml
 
+  # With a PR open this deploys without waiting for the PR's test run.
   deploy:
-    needs: test
+    needs: [open-pr, test]
+    if: ${{ !cancelled() && needs.open-pr.result == 'success' && (needs.test.result == 'success' || needs.test.result == 'skipped') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

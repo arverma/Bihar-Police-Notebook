@@ -2,7 +2,7 @@
 
 Optional, **manual** sync. Nothing uploads until the user explicitly triggers a backup action.
 
-- **Drive folder:** `Bihar Police Notebook Backup — do not delete` (in My Drive root)
+- **Drive folder:** `Bihar Police Notebook Backup — do not delete` on production (`bpdiary.arverma.dev`); `Bihar Police Notebook Backup - test` on staging and localhost (in My Drive root)
 - **Scope:** `https://www.googleapis.com/auth/drive.file` — can only see/create files that this app itself created; cannot read any other Drive content
 - **File layout:** one JSON file per document named `{uuid}.json`, with `appProperties.uuid` set for reliable lookup
 
@@ -100,6 +100,17 @@ Every document row (both `letter` and `diary` stores) carries these fields along
 4. Next push: all docs are treated as "never uploaded" and re-created in the new folder.
 
 ---
+
+## Backup file format and app versions
+
+Each backup is `<uuid>.json` holding `{ uuid, type, filename, content, created_at, updated_at, deleted }`. `type` depends on the content's format (`editor/js/drive-format.js`):
+
+| Content | `type` on Drive |
+|---------|-----------------|
+| Current format (`{ format: "bp-doc", v, doc }`) | `letter-doc` / `diary-doc` |
+| Earlier format, and tombstones of deleted earlier-format documents (content purged) | `letter` / `diary` |
+
+Earlier app versions only pull backups typed `letter` / `diary` and read content in their own format. Typing current-format backups differently keeps a device that has not updated yet from showing a current document as blank and syncing that blank copy back over it. Pulling maps both spellings to the local `letter` / `diary` store. Tombstones of earlier-format documents keep the plain type, so devices still on an earlier version also learn about the deletion. A future format change follows the same rule: give its backups a type earlier versions skip.
 
 ## Push flow (`pushPending`)
 

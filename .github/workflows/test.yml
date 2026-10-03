@@ -20,7 +20,7 @@ jobs:
   test:
     name: Unit + E2E
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -35,16 +35,25 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # The editor bundle is committed (static hosting, no build step); fail if
+      # it no longer matches the pinned @tiptap/* versions in package-lock.
+      - name: Vendored editor bundle is up to date
+        run: npm run vendor:tiptap -- --check
+
       - name: Unit tests (Vitest)
         run: npm test
 
-      # Chromium only — playwright.config.js defines a single chromium project.
-      - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
+      - name: Install Playwright browsers (Chromium, WebKit)
+        run: npx playwright install --with-deps chromium webkit
 
-      # playwright.config.js starts its own python3 http.server on :8080.
+      # playwright.config.js starts its own static server (scripts/serve.py) on :8080.
       - name: E2E tests (Playwright — desktop, mobile, tablet)
         run: npm run test:e2e
+
+      # Safari's engine — what iOS / iPadOS users run — on the editing,
+      # pagination and export specs.
+      - name: E2E tests (Playwright — WebKit)
+        run: npm run test:webkit
 
       # Baselines are Linux PNGs and this runner is Linux, so they are compared
       # natively here. Locally, regenerate with `npm run test:visual:update`,

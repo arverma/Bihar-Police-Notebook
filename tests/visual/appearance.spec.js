@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { installDiaryQuillHelper, clippedDiaryBoxes } from '../pagination-helpers.js';
+import { setDoc, clippedBoxes, switchTemplate } from '../pagination-helpers.js';
 
 /**
  * Pixel baselines for the states users actually look at.
@@ -68,9 +68,9 @@ async function settle(page) {
 async function freezeFrame(page) {
   await page.addStyleTag({
     content: `
-      #quillToolbar, #dictationFab, #dictationInterim, .restore-message,
+      #formatToolbar, #dictationFab, #dictationInterim, .restore-message,
       .punctuation-panel, .punctuation-toggle, .header-frame,
-      .diary-header-toggle, .page-badge, #pageIndicator, .page-fit-chip,
+      .diary-header-toggle, .page-fit-chip,
       .diary-page-delete, .help-fab { visibility: hidden !important; }
       .editor-stage {
         height: auto !important; max-height: none !important;
@@ -130,18 +130,11 @@ test.describe('Appearance', () => {
 
   test('diary, spilled onto a second page', async ({ page }) => {
     await ready(page);
-    await installDiaryQuillHelper(page);
+    await setDoc(page, [{ right: Array.from({ length: 20 }, () => 'यह एक लंबा वाक्य है जो पृष्ठ को भर देता है। '.repeat(6)) }]);
 
-    await page.evaluate((text) => {
-      const quill = window.__q(0);
-      if (!quill) throw new Error('page 1 quill missing');
-      quill.setText(text);
-    }, `${'यह एक लंबा वाक्य है जो पृष्ठ को भर देता है। '.repeat(6)}\n`.repeat(20));
-
-    await expect.poll(async () => page.locator('.diary-page').count(), { timeout: 15000 })
-      .toBeGreaterThan(1);
+    expect(await page.locator('.diary-page').count()).toBeGreaterThan(1);
     // The suite's own invariant: no page box is clipped, i.e. reflow has settled.
-    await expect.poll(async () => clippedDiaryBoxes(page), { timeout: 10000 }).toEqual([]);
+    expect(await clippedBoxes(page)).toEqual([]);
     await settle(page);
     await freezeFrame(page);
     await shotDocument(page, 'diary-spilled-two-pages.png');
@@ -149,7 +142,7 @@ test.describe('Appearance', () => {
 
   test('letter template', async ({ page }) => {
     await ready(page);
-    await page.locator('[data-template="letter"]').click();
+    await switchTemplate(page, 'letter');
     await expect(page.locator('.letter-page').first()).toBeVisible();
     await settle(page);
     await freezeFrame(page);

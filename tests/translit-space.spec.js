@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { openFresh, setCaret } from './pagination-helpers.js';
 
 test.describe('Transliteration Space Insertion', () => {
   test('should insert space correctly in the middle of a Hindi word', async ({ page }) => {
@@ -12,6 +13,7 @@ test.describe('Transliteration Space Insertion', () => {
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
+          headers: { 'Access-Control-Allow-Origin': '*' },
           body: JSON.stringify([
             'SUCCESS',
             [[text, [text], [], { candidate_type: [0] }]]
@@ -21,6 +23,7 @@ test.describe('Transliteration Space Insertion', () => {
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
+          headers: { 'Access-Control-Allow-Origin': '*' },
           body: JSON.stringify([
             'SUCCESS',
             [[text, [text], [], { candidate_type: [0] }]]
@@ -29,26 +32,16 @@ test.describe('Transliteration Space Insertion', () => {
       }
     });
 
-    await page.goto('/');
+    await openFresh(page);
 
-    // Get the visible textarea editor element in the diary layout
-    const editor = page.locator('.editor-diary textarea.fir-input').first();
+    // Type into the diary's left column, then put the caret between 'न' and 'ज'.
+    await setCaret(page, { page: 0, col: 'left' });
+    await page.keyboard.insertText('जीवनजीना');
+    await setCaret(page, { page: 0, col: 'left', offset: 4 });
 
-    // Type text directly into the editor
-    await editor.click();
-    await editor.fill('जीवनजीना');
-    
-    // Position cursor in the middle between 'न' (index 3) and 'ज' (index 4)
-    await editor.evaluate((el) => {
-      el.focus();
-      el.selectionStart = 4;
-      el.selectionEnd = 4;
-    });
+    await page.keyboard.press('Space');
 
-    // Press Space
-    await editor.press('Space');
-
-    // Verify that the space was inserted in the middle, not at the end
-    await expect(editor).toHaveValue('जीवन जीना');
+    // The space goes in the middle, not at the end
+    await expect.poll(() => page.evaluate(() => window.__bpTest.cellText(0, 'left'))).toBe('जीवन जीना');
   });
 });

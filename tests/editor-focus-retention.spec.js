@@ -5,22 +5,23 @@ import { test, expect } from '@playwright/test';
  * main.js preventDefaults the mousedown and restores focus after the click.
  *
  * The editor mixes three field types and the handler has silently missed one
- * before, so every type is asserted here rather than just the Quill body.
+ * before, so every type is asserted here rather than just the document body.
  *
  * Replaces five earlier specs that rebuilt this behaviour in a `setContent`
  * fixture — they exercised Chromium's event model, not this app, and four of
  * them carried no assertions at all.
  */
 
+/** `click` is where the user clicks; `focus` is the element that takes focus. */
 const FIELDS = [
-  { name: 'Quill body', selector: '.editor-diary .ql-editor:visible' },
-  { name: 'header input (थाना)', selector: '[data-field="thana"]' },
-  { name: 'header contenteditable (धारा)', selector: '[data-field="sections"]' },
+  { name: 'document body', click: '.editor-diary .bp-cell[data-col="right"]', focus: '.editor-diary .bp-doc' },
+  { name: 'header input (थाना)', click: '[data-field="thana"]', focus: '[data-field="thana"]' },
+  { name: 'header contenteditable (धारा)', click: '[data-field="sections"]', focus: '[data-field="sections"]' },
 ];
 
 const CHROME = [
   { name: 'transliteration toggle', selector: '.toggle-slider' },
-  { name: 'punctuation panel tile', selector: '.punctuation-grid div.punctuation-tile' },
+  { name: 'punctuation panel tile', selector: '.punctuation-grid .punctuation-tile' },
 ];
 
 async function gotoDiary(page) {
@@ -35,13 +36,15 @@ test.describe('Focus retention when clicking chrome', () => {
       test(`${field.name} keeps focus when clicking the ${chrome.name}`, async ({ page }) => {
         await gotoDiary(page);
 
+        await page.locator(field.click).first().click();
+        const target = page.locator(field.focus).first();
+        await expect(target).toBeFocused();
+
+        // The panel opens from the toolbar over the page top: open it with focus in the field.
         if (chrome.selector.includes('punctuation')) {
           await page.locator('#punctuationToggle').click();
+          await expect(target).toBeFocused();
         }
-
-        const target = page.locator(field.selector).first();
-        await target.click();
-        await expect(target).toBeFocused();
 
         await page.locator(chrome.selector).first().click();
 
@@ -53,8 +56,8 @@ test.describe('Focus retention when clicking chrome', () => {
   test('the transliteration toggle still flips while focus is preserved', async ({ page }) => {
     await gotoDiary(page);
 
-    const editor = page.locator('.editor-diary .ql-editor:visible').first();
-    await editor.click();
+    await page.locator('.editor-diary .bp-cell[data-col="right"]').first().click();
+    const editor = page.locator('.editor-diary .bp-doc');
     await editor.pressSequentially('Hello');
 
     const toggle = page.locator('#translitToggle');

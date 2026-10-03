@@ -17,7 +17,7 @@
     <link rel="stylesheet" href="css/header-responsive.css">
     <link rel="stylesheet" href="css/page-preview.css">
     <link rel="stylesheet" href="css/overlays-responsive.css">
-    <link href="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css" rel="stylesheet">
+    <link rel="stylesheet" href="css/doc-editor.css">
 </head>
 
 <body class="app-shell">
@@ -41,14 +41,6 @@
                     </div>
                 </div>
             </div>
-            <div class="header-center">
-                <div class="segmented" id="templateSegment" role="group" aria-label="Document type">
-                    <button type="button" class="segment-btn" data-template="letter" title="Letter layout"
-                        aria-pressed="false">Letter</button>
-                    <button type="button" class="segment-btn is-active" data-template="diary" title="Diary layout"
-                        aria-pressed="true">Diary</button>
-                </div>
-            </div>
             <div class="header-right">
                 <div class="translit-toggle-wrapper" title="Phonetic Translation (Roman -> Devanagari)">
                     <label class="translit-label" for="translitToggle">A:अ</label>
@@ -64,11 +56,60 @@
                 </button>
             </div>
         </div>
+        <div id="formatToolbar" class="format-toolbar screen-only" hidden role="toolbar"
+            aria-label="Text formatting">
+            <button type="button" data-cmd="bold" title="Bold (Ctrl+B)" aria-label="Bold" aria-pressed="false">
+                <i class="fas fa-bold" aria-hidden="true"></i>
+            </button>
+            <button type="button" data-cmd="italic" title="Italic (Ctrl+I)" aria-label="Italic" aria-pressed="false">
+                <i class="fas fa-italic" aria-hidden="true"></i>
+            </button>
+            <button type="button" data-cmd="underline" title="Underline (Ctrl+U)" aria-label="Underline"
+                aria-pressed="false">
+                <i class="fas fa-underline" aria-hidden="true"></i>
+            </button>
+            <span class="format-toolbar-sep" aria-hidden="true"></span>
+            <button type="button" data-cmd="align:center" title="Align center" aria-label="Align center"
+                aria-pressed="false">
+                <i class="fas fa-align-center" aria-hidden="true"></i>
+            </button>
+            <button type="button" data-cmd="align:justify" title="Justify" aria-label="Justify" aria-pressed="false">
+                <i class="fas fa-align-justify" aria-hidden="true"></i>
+            </button>
+            <span class="format-toolbar-sep" aria-hidden="true"></span>
+            <button type="button" data-cmd="list:ordered" title="Numbered list" aria-label="Numbered list"
+                aria-pressed="false">
+                <i class="fas fa-list-ol" aria-hidden="true"></i>
+            </button>
+            <button type="button" data-cmd="list:bullet" title="Bulleted list" aria-label="Bulleted list"
+                aria-pressed="false">
+                <i class="fas fa-list-ul" aria-hidden="true"></i>
+            </button>
+            <span class="format-toolbar-sep" aria-hidden="true"></span>
+            <button type="button" data-cmd="image" title="Insert image" aria-label="Insert image">
+                <i class="fas fa-image" aria-hidden="true"></i>
+            </button>
+            <button type="button" data-cmd="table" title="Insert table" aria-label="Insert table">
+                <i class="fas fa-table" aria-hidden="true"></i>
+            </button>
+            <span class="format-toolbar-sep punctuation-toggle-sep" aria-hidden="true"></span>
+            <button type="button" id="punctuationToggle" class="punctuation-toggle" title="विराम चिह्न (Punctuation)"
+                aria-label="Punctuation marks" aria-expanded="false" aria-controls="punctuationPanel">
+                <i class="fas fa-quote-right" aria-hidden="true"></i>
+            </button>
+            <input type="file" accept="image/*" multiple hidden tabindex="-1" aria-hidden="true">
+        </div>
     </header>
 
     <div class="app-body">
         <aside class="sidebar" id="sidebar" aria-hidden="true">
             <div class="sidebar-content">
+                <div class="segmented sidebar-doc-type" id="templateSegment" role="group" aria-label="Document type">
+                    <button type="button" class="segment-btn" data-template="letter" title="Letter layout"
+                        aria-pressed="false">Letter</button>
+                    <button type="button" class="segment-btn is-active" data-template="diary" title="Diary layout"
+                        aria-pressed="true">Diary</button>
+                </div>
                 <div class="sidebar-header">
                     <div class="sidebar-title-block">
                         <h3>History</h3>
@@ -110,31 +151,6 @@
         </aside>
 
         <main class="main-content">
-            <div id="quillToolbar" class="quill-chrome-toolbar screen-only" hidden role="toolbar"
-                aria-label="Text formatting">
-                <button type="button" data-ql="bold" title="Bold" aria-label="Bold" aria-pressed="false">
-                    <i class="fas fa-bold" aria-hidden="true"></i>
-                </button>
-                <button type="button" data-ql="italic" title="Italic" aria-label="Italic" aria-pressed="false">
-                    <i class="fas fa-italic" aria-hidden="true"></i>
-                </button>
-                <button type="button" data-ql="underline" title="Underline" aria-label="Underline" aria-pressed="false">
-                    <i class="fas fa-underline" aria-hidden="true"></i>
-                </button>
-                <span class="quill-toolbar-sep" aria-hidden="true"></span>
-                <button type="button" data-ql="align:center" title="Align center" aria-label="Align center"
-                    aria-pressed="false">
-                    <i class="fas fa-align-center" aria-hidden="true"></i>
-                </button>
-                <button type="button" data-ql="align:justify" title="Justify" aria-label="Justify" aria-pressed="false">
-                    <i class="fas fa-align-justify" aria-hidden="true"></i>
-                </button>
-                <span class="quill-toolbar-sep" aria-hidden="true"></span>
-                <button type="button" data-ql="list" title="Numbered list" aria-label="Numbered list"
-                    aria-pressed="false">
-                    <i class="fas fa-list-ol" aria-hidden="true"></i>
-                </button>
-            </div>
             <div class="editor-stage" id="editorStage">
                 <button type="button" class="page-fit-chip" id="pageFitChip" hidden title="Fit page to width"
                     aria-label="Fit page to width">
@@ -151,14 +167,12 @@
                     </div>
                 </div>
             </div>
-            <div id="pageIndicator" class="page-indicator">Page 1 of 1</div>
         </main>
     </div>
 
     <template id="diaryPageTemplate">
         <div class="diary-page">
             <div class="diary-page-chrome screen-only">
-                <span class="diary-page-label">Page 1</span>
                 <button type="button" class="diary-header-toggle" aria-pressed="true" title="Hide page header">Hide
                     header</button>
                 <button type="button" class="diary-page-delete" title="Delete this page" aria-label="Delete this page">
@@ -222,21 +236,9 @@
                         <input data-field="investigation_record" placeholder="1">
                     </th>
                 </tr>
-                <tr class="diary-body-row">
-                    <td class="left-column">
-                        <div class="diary-cell">
-                            <textarea class="fir-input hinglish-input" data-col="left" placeholder="यहाँ विवरण लिखें..."
-                                autocomplete="off"></textarea>
-                        </div>
-                    </td>
-                    <td class="right-column">
-                        <div class="diary-cell">
-                            <div class="fir-input hinglish-input" data-col="right"
-                                data-placeholder="यहाँ विवरण लिखें..." role="textbox" aria-label="अन्वेषण का अभिलेख">
-                            </div>
-                        </div>
-                    </td>
-                </tr>
+                <!-- Writing cells (left: time/places visited, right: investigation record)
+                     are rendered here by the document editor. -->
+                <tr class="diary-body-row"></tr>
             </table>
         </div>
     </template>
@@ -272,23 +274,31 @@
         <div class="dictation-sheet-body"></div>
     </dialog>
 
-    <aside id="punctuationPanel" class="punctuation-panel">
-        <button id="punctuationToggle" class="punctuation-toggle" title="विराम चिह्न (Punctuation)">
-            <i class="fas fa-quote-right"></i>
-        </button>
+    <aside id="punctuationPanel" class="punctuation-panel" role="dialog" aria-label="Punctuation marks">
         <div class="punctuation-content">
-            <div id="punctuationGrid" class="punctuation-grid"></div>
-            <div class="punctuation-footer">
-                <button id="punctuationClose" class="punctuation-close" title="Close" aria-label="Close">
-                    <i class="fas fa-times"></i>
+            <div class="punctuation-head">
+                <span>विराम चिह्न · Punctuation</span>
+                <button type="button" id="punctuationClose" class="punctuation-close" title="Close (Esc)" aria-label="Close">
+                    <i class="fas fa-xmark" aria-hidden="true"></i>
                 </button>
-                <div id="punctuationTooltip" class="punctuation-tooltip">Hover over a mark</div>
             </div>
+            <div id="punctuationGrid" class="punctuation-grid"></div>
+            <div id="punctuationTooltip" class="punctuation-tooltip" aria-live="polite">Click a mark to insert it at the cursor</div>
         </div>
     </aside>
 
     <div id="suggestions" class="suggestions-box"></div>
-    <script src="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js"></script>
+
+    <dialog id="unsupportedDocDialog" class="unsupported-dialog" aria-labelledby="unsupportedDocTitle">
+        <h2 id="unsupportedDocTitle">Older document format</h2>
+        <p data-role="name"></p>
+        <p class="unsupported-dialog-hint">Deleting removes it from this device and from Drive backup.</p>
+        <div class="unsupported-dialog-actions">
+            <button type="button" class="unsupported-dialog-keep" data-action="keep">Keep</button>
+            <button type="button" class="unsupported-dialog-danger" data-action="delete-all" hidden></button>
+            <button type="button" class="unsupported-dialog-danger" data-action="delete">Delete document</button>
+        </div>
+    </dialog>
     <script type="module" src="js/main.js"></script>
 </body>
 

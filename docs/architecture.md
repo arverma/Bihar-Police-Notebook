@@ -56,7 +56,7 @@ flowchart TB
 | Module area | Files | Detail page |
 |-------------|-------|-------------|
 | Shell / History / save | `editor/js/main.js` | [Editor shell](components/editor-shell.md) |
-| Letter / Diary | `letter-sheet.js`, `diary-sheet.js`, `quill-pages.js` | [Templates](components/templates.md) |
+| Letter / Diary | `letter-sheet.js`, `diary-sheet.js`, `editor/` (Tiptap document editor + pager) | [Templates](components/templates.md) |
 | Document export | `export/router.js`, `export/print-document.js`, `export/raster-pdf.js` | [Templates](components/templates.md) |
 | Screen scale | `page-scale.js` | [Page preview](components/page-preview.md) |
 | Local DB | `document-store.js` | [Storage](components/storage.md) |

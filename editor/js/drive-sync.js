@@ -25,6 +25,7 @@ import {
     needsBackup,
     upsertFromRemote,
 } from './document-store.js';
+import { remoteTypeFor, localTypeFrom } from './drive-format.js';
 
 const FOLDER_ID_KEY = 'drive.folderId';
 const FOLDER_MIME = 'application/vnd.google-apps.folder';
@@ -173,7 +174,7 @@ export async function ensureFolder() {
 function remotePayload(doc) {
     return {
         uuid: doc.uuid,
-        type: doc.type,
+        type: remoteTypeFor(doc),
         filename: doc.filename,
         content: doc.content ?? '',
         created_at: doc.created_at,
@@ -207,7 +208,7 @@ async function uploadDocFile(doc, folderId, fileId) {
         mimeType: JSON_MIME,
         appProperties: {
             uuid: doc.uuid,
-            type: doc.type,
+            type: remoteTypeFor(doc),
         },
     };
 
@@ -363,9 +364,11 @@ export async function pullAndMerge() {
                 } catch {
                     continue;
                 }
-                if (!remote?.uuid || (remote.type !== 'letter' && remote.type !== 'diary')) {
+                const type = localTypeFrom(remote?.type);
+                if (!remote?.uuid || !type) {
                     continue;
                 }
+                remote = { ...remote, type };
 
                 const local = await getDocumentByUuid(remote.uuid, remote.type);
                 const remoteUpdated = remote.updated_at || file.modifiedTime || '';

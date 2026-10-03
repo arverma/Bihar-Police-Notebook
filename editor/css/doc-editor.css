@@ -1,0 +1,531 @@
+/*
+ * Paged document editor (Tiptap / ProseMirror).
+ * Loaded by the app and by the print document, so screen and paper share
+ * the exact same text layout — pagination depends on it.
+ */
+
+/* ── ProseMirror base (injectCSS is off so print clones get these too) ── */
+.bp-doc {
+    position: relative;
+    outline: none;
+    /* ProseMirror needs this on its root; cells repeat it for the print clone. */
+    white-space: pre-wrap;
+    white-space: break-spaces;
+}
+
+.bp-doc [contenteditable='false'] {
+    white-space: normal;
+}
+
+.bp-doc img.ProseMirror-separator {
+    display: inline !important;
+    border: none !important;
+    margin: 0 !important;
+}
+
+.ProseMirror-hideselection *::selection { background: transparent; }
+.ProseMirror-hideselection { caret-color: transparent; }
+.bp-doc .ProseMirror-selectednode { outline: 2px solid var(--brand-primary, #1a365d); }
+
+/* ── The editor root is the column of A4 pages ── */
+.bp-doc-letter,
+.bp-doc-diary {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 28px;
+    width: 100%;
+}
+
+/* ── Writing box shared by every template ── */
+/* Text layout lives on the cell (not the editor root) because print and PDF
+   clone pages without the root — wrapping must be identical on paper. */
+.bp-cell {
+    box-sizing: border-box;
+    overflow: clip;
+    outline: none;
+    word-wrap: break-word;
+    white-space: pre-wrap;
+    white-space: break-spaces;
+    /* ProseMirror disables ligatures by default; Devanagari needs them. */
+    font-variant-ligatures: normal;
+    font-family: 'Noto Sans Devanagari', Arial, sans-serif;
+    font-size: 16px;
+    line-height: 24px;
+    color: var(--color-text-primary);
+}
+
+/* --cell-content-h: the writing area inside a cell (box minus padding). */
+.letter-page .bp-cell {
+    height: 912px;
+    --cell-content-h: 912px;
+}
+
+.diary-cell .bp-cell {
+    --cell-content-h: calc(var(--diary-box-h, 806px) - 2 * var(--cell-pad-y, 4px));
+}
+
+/* The register's investigation-record column has always been inset further
+   than the narrow time/place column; keep the printed form unchanged. */
+.diary-cell .bp-cell[data-col='right'] {
+    --cell-pad-y: 8px;
+    padding: var(--cell-pad-y) 12px;
+}
+
+.bp-cell p { margin: 0; }
+.bp-cell ol,
+.bp-cell ul { margin: 0; padding-left: 1.4em; }
+.bp-cell li > p { margin: 0; }
+/* ── Images (./js/editor/images.js) ──
+   Width is a share of the column (inline style); the aspect ratio caps it so
+   the height never exceeds one writing area, and the pager can always place
+   the image on a page of its own. An explicit length (not a percentage)
+   because WebKit does not resolve a percentage max-height here. */
+.bp-cell .bp-image {
+    position: relative;
+    display: block;
+    width: fit-content;
+    max-width: min(100%, calc(var(--cell-content-h, 912px) * var(--bp-img-ratio, 1000)));
+    margin: 0 auto;
+    line-height: 0;
+    white-space: normal;
+}
+
+.bp-cell .bp-image img {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    max-height: var(--cell-content-h, 912px);
+    -webkit-user-drag: none;
+}
+
+/* Images pasted into a list keep the same cap. */
+.bp-cell img {
+    max-width: 100%;
+    max-height: var(--cell-content-h, 912px);
+}
+
+.bp-image-handle {
+    display: none;
+    position: absolute;
+    right: -6px;
+    bottom: -6px;
+    width: 12px;
+    height: 12px;
+    border: 2px solid #fff;
+    border-radius: 3px;
+    background: var(--brand-primary, #1a365d);
+    box-shadow: 0 0 0 1px rgba(26, 54, 93, 0.4);
+    cursor: nwse-resize;
+    touch-action: none;
+}
+
+.bp-image.ProseMirror-selectednode .bp-image-handle,
+.bp-image.is-resizing .bp-image-handle {
+    display: block;
+}
+
+/* A finger needs a bigger target than a mouse. */
+@media (pointer: coarse) {
+    .bp-image-handle {
+        right: -11px;
+        bottom: -11px;
+        width: 22px;
+        height: 22px;
+    }
+}
+
+/* ── Tables (./js/editor/tables.js) ──
+   Diary cells sit inside the form's own table, so every property its
+   `.fir-table th/td` rules set is reset here. */
+.bp-cell .bp-table {
+    margin: 4px 0;
+    white-space: normal;
+}
+
+.bp-cell .bp-table table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    border: 1px solid #333;
+    margin: 0;
+}
+
+.bp-cell .bp-table td,
+.bp-cell .bp-table th {
+    position: relative;
+    box-sizing: border-box;
+    min-width: 2em;
+    height: auto;
+    min-height: 0;
+    padding: 2px 6px;
+    border: 1px solid #333;
+    vertical-align: top;
+    text-align: left;
+    font: inherit;
+    color: inherit;
+    background: transparent;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+    white-space: break-spaces;
+}
+
+.bp-cell .bp-table th {
+    font-weight: 700;
+    background: #edf2f7;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}
+
+/* The header row repeated on a continuation page is not editable. */
+.bp-cell .bp-table-repeat {
+    pointer-events: none;
+    user-select: none;
+}
+
+/* prosemirror-tables marks a multi-cell selection with .selectedCell. */
+.bp-cell .bp-table .selectedCell::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(26, 54, 93, 0.14);
+    pointer-events: none;
+}
+
+/* ── Gap cursor: a caret before/after a table or image at a box edge ── */
+.bp-doc .ProseMirror-gapcursor {
+    display: none;
+    position: absolute;
+    pointer-events: none;
+}
+
+.bp-doc .ProseMirror-gapcursor::after {
+    content: '';
+    display: block;
+    position: absolute;
+    top: -2px;
+    width: 20px;
+    border-top: 1px solid var(--color-text-primary, #000);
+    animation: bp-gapcursor-blink 1.1s steps(2, start) infinite;
+}
+
+@keyframes bp-gapcursor-blink {
+    to { visibility: hidden; }
+}
+
+.bp-doc.ProseMirror-focused .ProseMirror-gapcursor {
+    display: block;
+}
+
+/* Placeholder on an empty writing box. */
+.bp-cell p.is-empty:only-child::before {
+    content: attr(data-placeholder);
+    float: left;
+    height: 0;
+    color: var(--color-text-muted);
+    pointer-events: none;
+}
+
+/* While IME composition holds the pager, show the line being typed. */
+.bp-doc[data-bp-suspended] .bp-cell { overflow: visible; }
+
+/* A unit taller than a whole box (e.g. a huge image) cannot be paginated. */
+.bp-cell[data-overflow='true'] {
+    outline: 2px solid var(--color-error, #c53030);
+    outline-offset: -1px;
+}
+
+/* ── Screen-only "Page X of Y" footer from pager decorations ── */
+.bp-page::after {
+    content: 'Page ' attr(data-page-no) ' of ' attr(data-page-count);
+    position: absolute;
+    bottom: 4px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font: 400 10px/1 'Roboto', sans-serif;
+    color: var(--color-text-muted);
+    pointer-events: none;
+    user-select: none;
+}
+
+@media print {
+    .bp-page::after { content: none; }
+}
+
+/* ── History: documents in a format this version cannot open ── */
+.history-item[data-unsupported='true'] .history-item-name {
+    color: var(--color-text-muted);
+}
+
+.history-item-badge {
+    display: inline-block;
+    margin-top: 2px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-size: 11px;
+    color: var(--color-text-muted);
+    background: var(--color-surface-secondary, #edf2f7);
+}
+
+.history-item:focus-visible {
+    outline: 2px solid var(--brand-primary, #1a365d);
+    outline-offset: -2px;
+}
+
+.unsupported-dialog {
+    max-width: min(420px, calc(100vw - 32px));
+    padding: 20px 22px;
+    border: none;
+    border-radius: 12px;
+    box-shadow: var(--shadow-strong, 0 12px 40px rgba(0, 0, 0, 0.25));
+    color: var(--color-text-primary);
+    font-family: 'Roboto', sans-serif;
+}
+
+.unsupported-dialog::backdrop {
+    background: rgba(15, 23, 42, 0.4);
+}
+
+.unsupported-dialog h2 {
+    margin: 0 0 8px;
+    font-size: 17px;
+}
+
+.unsupported-dialog p {
+    margin: 0 0 8px;
+    font-size: 14px;
+    line-height: 1.45;
+}
+
+.unsupported-dialog-hint {
+    color: var(--color-text-muted);
+}
+
+.unsupported-dialog-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 16px;
+}
+
+.unsupported-dialog-actions button {
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+    border: 1px solid var(--color-border-light, #cbd5e0);
+    background: var(--brand-white, #fff);
+    color: var(--brand-primary, #1a365d);
+}
+
+.unsupported-dialog-actions .unsupported-dialog-danger {
+    border-color: var(--color-error, #c53030);
+    background: var(--color-error, #c53030);
+    color: #fff;
+}
+
+.unsupported-dialog-actions button:focus-visible {
+    outline: 2px solid var(--brand-primary, #1a365d);
+    outline-offset: 2px;
+}
+
+.unsupported-notice {
+    position: fixed;
+    left: 50%;
+    top: calc(var(--chrome-top, 56px) + 12px);
+    transform: translateX(-50%);
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: calc(100vw - 32px);
+    padding: 8px 10px 8px 14px;
+    border-radius: 10px;
+    background: var(--brand-primary, #1a365d);
+    color: #fff;
+    font: 14px/1.4 'Roboto', sans-serif;
+    box-shadow: var(--shadow-medium, 0 4px 16px rgba(26, 54, 93, 0.2));
+}
+
+.unsupported-notice button {
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    border-radius: 6px;
+    background: transparent;
+    color: #fff;
+    padding: 4px 10px;
+    cursor: pointer;
+}
+
+.unsupported-notice .unsupported-notice-dismiss {
+    border: none;
+    padding: 4px 6px;
+}
+
+/* ── Table controls (./js/editor/table-controls.js) ──
+   One fixed layer on <body>; the parts are placed from the cells' rects. */
+.table-controls {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    pointer-events: none;
+}
+
+.table-controls[hidden] {
+    display: none;
+}
+
+.table-controls > button,
+.table-controls .tc-menu {
+    position: fixed;
+    pointer-events: auto;
+}
+
+.tc-grip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 1px solid rgba(26, 54, 93, 0.22);
+    border-radius: 4px;
+    background: var(--brand-white, #fff);
+    color: var(--brand-primary, #1a365d);
+    box-shadow: 0 1px 3px rgba(26, 54, 93, 0.16);
+    cursor: pointer;
+}
+
+.tc-grip-row {
+    width: 16px;
+    height: 24px;
+}
+
+.tc-grip-col {
+    width: 24px;
+    height: 16px;
+}
+
+/* Six-dot grip, drawn with one gradient. */
+.tc-grip span {
+    width: 6px;
+    height: 10px;
+    background: radial-gradient(circle, currentColor 1px, transparent 1.5px) 0 0 / 3px 3.4px;
+    opacity: 0.7;
+}
+
+.tc-grip-col span {
+    width: 10px;
+    height: 6px;
+    background-size: 3.4px 3px;
+}
+
+.tc-grip:hover,
+.tc-grip[aria-expanded='true'] {
+    background: var(--brand-primary, #1a365d);
+    color: #fff;
+}
+
+.tc-add {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 1px dashed rgba(26, 54, 93, 0.3);
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.85);
+    color: var(--brand-primary, #1a365d);
+    font-size: 9px;
+    cursor: pointer;
+    opacity: 0.55;
+    transition: opacity 0.15s ease, background 0.15s ease;
+}
+
+.tc-add-row {
+    height: 14px;
+}
+
+.tc-add-col {
+    width: 14px;
+}
+
+.tc-add:hover {
+    opacity: 1;
+    border-style: solid;
+    background: rgba(26, 54, 93, 0.08);
+}
+
+.tc-menu {
+    min-width: 196px;
+    padding: 4px;
+    border: 1px solid rgba(26, 54, 93, 0.14);
+    border-radius: 8px;
+    background: var(--brand-white, #fff);
+    box-shadow: 0 8px 24px rgba(26, 54, 93, 0.18);
+    font-family: "Roboto", Helvetica, sans-serif;
+}
+
+.tc-menu[hidden] {
+    display: none;
+}
+
+.tc-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 32px;
+    padding: 0 10px;
+    border: none;
+    border-radius: 5px;
+    background: transparent;
+    color: var(--color-text, #1f2937);
+    font: inherit;
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.tc-menu-item i {
+    width: 14px;
+    color: var(--brand-primary, #1a365d);
+    text-align: center;
+}
+
+.tc-menu-item:hover:not(:disabled),
+.tc-menu-item:focus-visible {
+    background: rgba(26, 54, 93, 0.08);
+    outline: none;
+}
+
+.tc-menu-item.is-danger,
+.tc-menu-item.is-danger i {
+    color: #b42318;
+}
+
+.tc-menu-item:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.tc-menu-item[aria-checked='true']::after {
+    content: '\2713';
+    margin-left: auto;
+    color: var(--brand-primary, #1a365d);
+}
+
+.tc-menu-sep {
+    height: 1px;
+    margin: 4px 6px;
+    background: rgba(26, 54, 93, 0.12);
+}
+
+/* Fingers need bigger targets. */
+@media (pointer: coarse) {
+    .tc-grip-row { width: 22px; height: 32px; }
+    .tc-grip-col { width: 32px; height: 22px; }
+    .tc-add-row { height: 22px; }
+    .tc-add-col { width: 22px; }
+    .tc-add { opacity: 0.8; font-size: 11px; }
+    .tc-menu-item { min-height: 40px; font-size: 14px; }
+}

@@ -139,147 +139,32 @@ body {
     flex-direction: column;
 }
 
-.letter-page-chrome {
-    position: absolute;
-    top: 6px;
-    right: 10px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    z-index: 3;
-}
-
-.letter-page-label {
-    font-size: 11px;
-    font-weight: 500;
-    color: var(--color-text-muted);
-    background: var(--color-surface-secondary);
-    padding: 2px 8px;
-    border-radius: 999px;
-}
-
-.letter-page-input {
-    display: block;
-    width: 100%;
-    flex: 1 1 auto;
-    height: 912px;
-    max-height: 912px;
-    padding: 0;
-    margin: 0;
-    border: none;
-    border-radius: 0;
-    font-size: 16px;
-    line-height: 24px;
-    resize: none;
-    font-family: 'Noto Sans Devanagari', sans-serif;
-    box-sizing: border-box;
-    overflow: hidden;
-    background: transparent;
-    color: var(--color-text-primary);
-    outline: none;
-}
-
-.letter-page-input:focus {
-    outline: none;
-}
-
-/* Quill hosts (letter + diary right) */
-.letter-page-input.ql-container,
-.fir-input.ql-container,
-.bp-ql-container {
-    border: none !important;
-    font-family: 'Noto Sans Devanagari', Arial, sans-serif;
-    background: transparent;
-}
-
-.letter-page .bp-ql-container {
-    height: 912px;
-    max-height: 912px;
-}
-
-.diary-cell .bp-ql-container {
-    height: 100%;
-}
-
-.letter-page .bp-ql-editor,
-.letter-page-input.bp-ql-editor {
-    height: 912px;
-    max-height: 912px;
-    overflow: hidden;
-    padding: 0;
-    font-size: 16px;
-    line-height: 24px;
-    font-family: 'Noto Sans Devanagari', sans-serif;
-    color: var(--color-text-primary);
-}
-
-.diary-cell .bp-ql-editor,
-.fir-input .bp-ql-editor {
-    height: 100%;
-    overflow: hidden;
-    padding: 4px 6px;
-    font-size: 16px;
-    line-height: 24px;
-    font-family: 'Noto Sans Devanagari', Arial, sans-serif;
-    color: var(--color-text-primary);
-}
-
-.bp-ql-editor.ql-blank::before {
-    font-style: normal;
-    color: var(--color-text-muted);
-    left: 0;
-    right: 0;
-}
-
-.diary-cell .bp-ql-editor.ql-blank::before {
-    left: 6px;
-}
-
-.bp-ql-editor img {
-    max-width: 100%;
-    height: auto;
-}
-
-.bp-ql-editor p { margin: 0; }
-.bp-ql-editor ul { margin: 0; padding-left: 1.4em; }
-
-.quill-chrome-toolbar {
-    --quill-tb-bottom: calc(var(--overlay-bottom, 16px) + 20px);
-    position: fixed;
-    left: 50%;
-    bottom: var(--quill-tb-bottom);
-    transform: translateX(-50%);
+/* Format toolbar: a full-width row under the header (letter + diary).
+   It lives inside .header-frame, so --chrome-top already includes it. */
+.format-toolbar {
     display: flex;
     flex-wrap: nowrap;
     align-items: center;
     justify-content: center;
     gap: 2px;
-    width: fit-content;
-    max-width: calc(100vw - 32px - var(--safe-left, 0px) - var(--safe-right, 0px));
-    padding: 6px 10px;
+    min-height: 40px;
+    padding: 4px 14px;
     margin: 0;
-    border: 1px solid rgba(255, 255, 255, 0.45);
-    border-radius: 999px;
-    background: rgba(173, 205, 224, 0.72);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    box-shadow: var(--shadow-medium, 0 4px 16px rgba(26, 54, 93, 0.14));
-    z-index: 22;
-    pointer-events: auto;
-    opacity: 0.9;
-    transition: opacity 0.2s ease, bottom 0.2s ease;
+    border-top: 1px solid rgba(26, 54, 93, 0.12);
+    background: var(--brand-white);
+    overflow-x: auto;
+    scrollbar-width: none;
 }
 
-.quill-chrome-toolbar:hover,
-.quill-chrome-toolbar:focus-within {
-    opacity: 1;
+.format-toolbar::-webkit-scrollbar {
+    display: none;
 }
 
-.quill-chrome-toolbar[hidden] {
+.format-toolbar[hidden] {
     display: none !important;
 }
 
-.quill-chrome-toolbar button {
+.format-toolbar button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -287,51 +172,40 @@ body {
     width: 32px;
     height: 32px;
     border: none;
-    border-radius: 999px;
+    border-radius: 6px;
     background: transparent;
     color: var(--brand-primary, #1a365d);
     cursor: pointer;
     font-size: 13px;
 }
 
-.quill-chrome-toolbar button:hover {
-    background: rgba(26, 54, 93, 0.1);
+.format-toolbar button:hover {
+    background: rgba(26, 54, 93, 0.08);
 }
 
-.quill-chrome-toolbar button.is-active {
-    background: var(--brand-primary, #1a365d);
-    color: #fff;
+.format-toolbar button:focus-visible {
+    outline: 2px solid var(--brand-primary, #1a365d);
+    outline-offset: 1px;
 }
 
-.quill-toolbar-sep {
+.format-toolbar button.is-active {
+    background: rgba(26, 54, 93, 0.16);
+}
+
+.format-toolbar button:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.format-toolbar-sep {
     width: 1px;
-    height: 18px;
-    margin: 0 4px;
+    height: 20px;
+    margin: 0 6px;
     flex: 0 0 auto;
-    background: rgba(26, 54, 93, 0.22);
+    background: rgba(26, 54, 93, 0.18);
 }
 
 /* Legacy dashed markers removed — letter now uses diary-style page cards */
-
-.page-indicator {
-    position: fixed;
-    bottom: 24px;
-    right: 24px;
-    padding: 6px 12px;
-    background: var(--brand-primary);
-    color: var(--brand-white);
-    border-radius: 999px;
-    font-size: 12px;
-    font-weight: 500;
-    box-shadow: var(--shadow-medium);
-    z-index: 20;
-    pointer-events: none;
-    width: fit-content;
-}
-
-.page-indicator[hidden] {
-    display: none !important;
-}
 
 .editor-wrapper.editor-diary {
     background: transparent;
@@ -378,15 +252,6 @@ body {
     align-items: center;
     gap: 8px;
     z-index: 3;
-}
-
-.diary-page-label {
-    font-size: 11px;
-    font-weight: 500;
-    color: var(--color-text-muted);
-    background: var(--color-background);
-    padding: 2px 8px;
-    border-radius: 999px;
 }
 
 .diary-header-toggle {
@@ -721,7 +586,8 @@ span.diary-dotted-flow:focus {
     font-family: 'Noto Sans Devanagari', Arial, sans-serif;
     font-size: 16px;
     line-height: 24px;
-    padding: 4px 6px;
+    --cell-pad-y: 4px;
+    padding: var(--cell-pad-y) 6px;
     margin: 0;
     background: transparent;
     color: var(--color-text-primary);
@@ -1081,6 +947,22 @@ span.diary-dotted-flow:focus {
     color: var(--brand-white);
 }
 
+/* Letter | Diary at the top of the History panel */
+.sidebar-doc-type {
+    display: flex;
+    width: 100%;
+    margin-bottom: 16px;
+    box-sizing: border-box;
+    background: var(--color-surface-muted, #f1f4f8);
+    box-shadow: none;
+}
+
+.sidebar-doc-type .segment-btn {
+    flex: 1 1 0;
+    height: 34px;
+    font-size: 14px;
+}
+
 .add-template-btn {
     background: var(--brand-white);
     border: 1px solid var(--color-border-light);
@@ -1169,7 +1051,7 @@ span.diary-dotted-flow:focus {
     gap: 12px;
 }
 
-.header-left, .header-center, .header-right {
+.header-left, .header-right {
     display: flex;
     align-items: center;
 }
@@ -1178,11 +1060,6 @@ span.diary-dotted-flow:focus {
     flex: 1 1 0;
     min-width: 0;
     gap: 8px;
-}
-
-.header-center {
-    flex: 0 0 auto;
-    justify-content: center;
 }
 
 .header-right {
@@ -2042,151 +1919,122 @@ span.diary-dotted-flow:focus {
     }
 }
 
-/* ── Punctuation Panel ── */
+/* ── Punctuation: a dropdown under its toolbar button (punctuation.js) ── */
 .punctuation-panel {
     position: fixed;
-    right: 16px;
-    top: 50%;
-    transform: translateY(-50%) translateX(calc(100% + 16px));
-    transition: transform 0.3s cubic-bezier(.4, 0, .2, 1);
+    top: calc(var(--chrome-top, 96px) + 8px);
     z-index: 1050;
-    display: flex;
-    align-items: center;
+    width: 248px;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-6px);
+    transition: opacity 0.16s ease, transform 0.16s ease, visibility 0s linear 0.16s;
 }
 
 .punctuation-panel.is-open {
-    transform: translateY(-50%) translateX(0);
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+    transition: opacity 0.16s ease, transform 0.16s ease;
 }
 
-.punctuation-toggle {
+/* Arrow pointing at the button; --arrow-x is set from JS. */
+.punctuation-panel::before {
+    content: '';
     position: absolute;
-    left: -48px;
-    width: 40px;
-    height: 40px;
+    top: -6px;
+    left: calc(var(--arrow-x, 50%) - 6px);
+    width: 12px;
+    height: 12px;
     background: var(--brand-white);
-    border: 1px solid var(--color-border-light);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    box-shadow: var(--shadow-medium);
-    color: var(--color-text-secondary);
-    font-size: 1rem;
-    transition: opacity 0.2s, color 0.2s, background 0.2s;
-}
-
-.punctuation-toggle:hover {
-    color: var(--brand-primary);
-    background: var(--color-background-soft);
-}
-
-.punctuation-panel.is-open .punctuation-toggle {
-    opacity: 0;
-    pointer-events: none;
-    transform: scale(0.9);
+    border-left: 1px solid var(--color-border-light);
+    border-top: 1px solid var(--color-border-light);
+    transform: rotate(45deg);
 }
 
 .punctuation-content {
+    position: relative;
     background: var(--brand-white);
     border: 1px solid var(--color-border-light);
-    border-radius: 12px;
-    padding: 12px;
+    border-radius: 10px;
     box-shadow: var(--shadow-popup);
-    width: fit-content;
-    max-width: 260px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+    overflow: hidden;
+    font-family: "Roboto", "Noto Sans Devanagari", sans-serif;
 }
 
-.punctuation-footer {
+.punctuation-head {
     display: flex;
     align-items: center;
-    gap: 10px;
-    min-height: 24px;
-    padding-top: 8px;
-    border-top: 1px solid var(--color-border-light);
+    justify-content: space-between;
+    padding: 8px 8px 8px 12px;
+    border-bottom: 1px solid var(--color-border-light);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--brand-primary);
 }
 
 .punctuation-close {
-    background: var(--brand-white);
-    border: 1px solid var(--color-border-medium);
-    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-    cursor: pointer;
-    color: var(--color-text-primary);
-    font-size: 0.85rem;
-    padding: 4px 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: none;
     border-radius: 6px;
-    flex: 0 0 auto;
-    line-height: 1;
-    transition: all 0.15s ease;
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
 }
 
 .punctuation-close:hover {
-    color: var(--color-error);
-    border-color: rgba(220, 53, 69, 0.4);
-    background: #fffafa;
-    box-shadow: 0 2px 4px rgba(220, 53, 69, 0.1);
-}
-
-.punctuation-close:active {
-    transform: translateY(1px);
-    box-shadow: none;
+    background: rgba(26, 54, 93, 0.08);
+    color: var(--brand-primary);
 }
 
 .punctuation-grid {
     display: grid;
-    grid-template-columns: repeat(3, 44px);
-    grid-auto-rows: 44px;
+    grid-template-columns: repeat(3, 1fr);
     gap: 6px;
-    justify-content: center;
+    padding: 10px;
 }
 
 .punctuation-tile {
     display: flex;
     align-items: center;
     justify-content: center;
-    border: none;
+    height: 44px;
+    padding: 0;
+    border: 1px solid var(--color-border-light);
     border-radius: 8px;
-    background: transparent;
+    background: var(--color-background-soft, #f7f9fc);
+    color: var(--color-text-primary, #1f2937);
+    font-family: "Noto Sans Devanagari", sans-serif;
+    font-size: 18px;
     cursor: pointer;
-    font-size: 1.25rem;
-    color: var(--color-text-primary);
-    transition: background 0.15s, color 0.15s, transform 0.1s;
-    user-select: none;
-    overflow: hidden;
-    white-space: nowrap;
+    transition: background 0.12s ease, border-color 0.12s ease;
 }
 
-.punctuation-tile:hover {
-    background: #e9ecef;
-    color: var(--color-text-primary);
-    transform: translateY(-2px) scale(1.05);
-    box-shadow: 0 2px 5px rgba(0,0,0,0.06);
-}
-
-.punctuation-tile:active {
-    background: #dee2e6;
-    transform: translateY(0) scale(0.95);
-    box-shadow: none;
+.punctuation-tile:hover,
+.punctuation-tile:focus-visible {
+    border-color: var(--brand-primary);
+    background: rgba(26, 54, 93, 0.06);
+    outline: none;
 }
 
 .punctuation-tile.is-copied {
-    background: var(--brand-primary);
-    color: var(--brand-white);
+    border-color: #2f855a;
+    background: #f0fff4;
 }
 
 .punctuation-tooltip {
-    flex: 1 1 auto;
-    text-align: left;
-    font-size: 0.75rem;
-    line-height: 1.25;
+    min-height: 34px;
+    padding: 8px 12px;
+    border-top: 1px solid var(--color-border-light);
+    font-size: 12px;
+    line-height: 1.3;
     color: var(--color-text-secondary);
-    min-height: 0;
-    display: flex;
-    align-items: center;
-    justify-content: flex-start;
+    box-sizing: border-box;
 }
 
 @media print {
@@ -2207,7 +2055,6 @@ span.diary-dotted-flow:focus {
     .sidebar,
     .switch-btn,
     .help-fab,
-    .page-indicator,
     .dictation-fab,
     .dictation-interim,
     .dictation-sheet,

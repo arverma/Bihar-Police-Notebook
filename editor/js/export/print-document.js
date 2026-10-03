@@ -1,14 +1,13 @@
 /**
- * Build a sanitized A4 print document from live page cards so PDF wrapping matches the editor.
- * Screen chrome is stripped; header controls become static spans; left column
- * stays a textarea (same wrap engine); Quill bodies keep live HTML (real spaces).
+ * Build a sanitized A4 print document from live page cards so PDF wrapping
+ * matches the editor. Screen chrome is stripped, header controls become
+ * static spans, and the writing cells keep their live HTML — the same
+ * stylesheets lay them out, so every line breaks where it does on screen.
  */
 
 export const PRINT_IFRAME_ID = 'bp-print-iframe';
 const FONT_LINK =
   'https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;500;700&display=swap';
-const QUILL_SNOW =
-  'https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css';
 
 /**
  * Extra CSS for the print popup (live page cards already include page padding).
@@ -52,26 +51,24 @@ export function printDocumentExtraCss() {
       break-after: auto;
     }
     .print-pages .screen-only,
-    .print-pages .diary-page-chrome,
-    .print-pages .letter-page-chrome,
-    .print-pages .ql-toolbar {
+    .print-pages .diary-page-chrome {
       display: none !important;
     }
-    .print-pages .diary-box-overflow {
+    /* Screen-only page footer; raster PDF renders screen media, so drop it here. */
+    .print-pages .bp-page::after {
+      content: none !important;
+    }
+    .print-pages .bp-cell {
+      color: #000;
+    }
+    /* Editing state cloned from the live page: a selected image or table
+       cells, and the gap cursor, never reach paper. */
+    .print-pages .ProseMirror-selectednode {
       outline: none !important;
     }
-    .print-pages .bp-ql-editor.ql-blank::before,
-    .print-pages .ql-editor.ql-blank::before {
-      content: none !important;
+    .print-pages .selectedCell::after,
+    .print-pages .ProseMirror-gapcursor {
       display: none !important;
-    }
-    .print-pages textarea.fir-input {
-      border: none;
-      outline: none;
-      resize: none;
-      background: transparent;
-      color: #000;
-      -webkit-text-fill-color: #000;
     }
     /* Static replacement for the titles-row input keeps its own line (the live
        rule targets input, which no longer matches after flattening). */
@@ -93,46 +90,6 @@ export function printDocumentExtraCss() {
       vertical-align: baseline;
       box-sizing: content-box;
     }
-    .print-pages .print-static-quill,
-    .print-pages .bp-ql-editor.print-static-quill {
-      white-space: pre-wrap;
-      tab-size: 4;
-      -moz-tab-size: 4;
-      overflow-wrap: break-word;
-      word-break: normal;
-      overflow: hidden;
-      box-sizing: border-box;
-      color: #000;
-    }
-    .print-pages .print-static-quill-host {
-      border: none !important;
-      background: transparent;
-    }
-    .print-pages .diary-cell .print-static-quill-host {
-      width: 100%;
-      height: 100%;
-    }
-    .print-pages .diary-cell .print-static-quill {
-      padding: 4px 6px;
-      font-family: 'Noto Sans Devanagari', Arial, sans-serif;
-      font-size: 16px;
-      line-height: 24px;
-      height: 100%;
-      max-height: none;
-      box-sizing: border-box;
-    }
-    .print-pages .letter-page .print-static-quill-host {
-      width: 100%;
-      height: 912px;
-      max-height: 912px;
-    }
-    .print-pages .letter-page .print-static-quill {
-      padding: 0;
-      font-family: 'Noto Sans Devanagari', sans-serif;
-      font-size: 16px;
-      line-height: 24px;
-      box-sizing: border-box;
-    }
   `;
 }
 
@@ -149,12 +106,12 @@ function absUrl(relativePath) {
  * @returns {string}
  */
 export function printDocumentStylesheetLinks() {
-  // Match editor/index.html order: app CSS first, Quill snow last.
+  // Same stylesheets that lay out the live pages.
   return [
     `<link rel="stylesheet" href="${FONT_LINK}">`,
     `<link rel="stylesheet" href="${absUrl('css/tokens.css')}">`,
     `<link rel="stylesheet" href="${absUrl('css/editor.css')}">`,
-    `<link rel="stylesheet" href="${QUILL_SNOW}">`,
+    `<link rel="stylesheet" href="${absUrl('css/doc-editor.css')}">`,
   ].join('\n');
 }
 
@@ -201,38 +158,21 @@ function replaceControlWithSpan(el) {
 }
 
 /**
- * Flatten Quill host to a static editor tree (container + editor) without Quill JS.
- * Keeps the same nesting as the live page so column width matches.
+ * Turn cloned writing cells into static text: no editing affordances, no
+ * placeholder or pager state. Blank lines keep their <br> so they print.
  * @param {HTMLElement} pageEl
  */
-function flattenQuillHosts(pageEl) {
-  pageEl.querySelectorAll('.ql-container, .bp-ql-container').forEach((host) => {
-    if (!(host instanceof HTMLElement)) return;
-    const editor = host.querySelector('.ql-editor, .bp-ql-editor');
-    if (!(editor instanceof HTMLElement)) return;
-
-    const liveWidth = Number(editor.dataset.printW) || editor.clientWidth;
-    const liveHeight = Number(editor.dataset.printH) || editor.clientHeight;
-
-    const staticEditor = document.createElement('div');
-    staticEditor.className = editor.className;
-    staticEditor.classList.remove('ql-blank');
-    staticEditor.classList.add('bp-ql-editor', 'ql-editor', 'print-static-quill');
-    staticEditor.innerHTML = editor.innerHTML;
-    staticEditor.querySelectorAll('.ql-cursor, .ql-ui').forEach((n) => n.remove());
-    if (liveWidth > 0) staticEditor.style.width = `${liveWidth}px`;
-    if (liveHeight > 0) {
-      staticEditor.style.height = `${liveHeight}px`;
-      staticEditor.style.maxHeight = `${liveHeight}px`;
-    }
-
-    // Replace host contents with static editor; drop Quill snow chrome classes that add borders
-    host.classList.remove('ql-snow', 'ql-disabled');
-    host.classList.add('print-static-quill-host');
-    host.innerHTML = '';
-    host.appendChild(staticEditor);
+function flattenEditorCells(pageEl) {
+  pageEl.querySelectorAll('.bp-cell').forEach((cell) => {
+    cell.removeAttribute('data-overflow');
+    cell.querySelectorAll('.is-empty').forEach((p) => {
+      p.classList.remove('is-empty');
+      p.removeAttribute('data-placeholder');
+    });
   });
-  pageEl.querySelectorAll('.ql-toolbar').forEach((tb) => tb.remove());
+  pageEl.querySelectorAll('[contenteditable]').forEach((el) => {
+    if (!el.matches('[data-field]')) el.removeAttribute('contenteditable');
+  });
 }
 
 /**
@@ -242,37 +182,15 @@ function flattenQuillHosts(pageEl) {
  */
 export function sanitizeExportPage(pageEl) {
   pageEl.querySelectorAll('.screen-only').forEach((el) => el.remove());
-  pageEl.querySelectorAll('.diary-page-chrome, .letter-page-chrome').forEach((el) => el.remove());
-  pageEl.classList.remove('diary-box-overflow');
-  pageEl.querySelectorAll('.diary-box-overflow').forEach((el) => {
-    el.classList.remove('diary-box-overflow');
-  });
+  pageEl.querySelectorAll('.diary-page-chrome').forEach((el) => el.remove());
+  flattenEditorCells(pageEl);
 
-  // Flatten Quill first so the body is no longer contenteditable and cannot be
-  // mistaken for a header flow field by the control-replacement selector.
-  flattenQuillHosts(pageEl);
-
-  // Header / titles controls → static spans (never Quill .ql-editor)
+  // Header / titles controls → static spans
   pageEl.querySelectorAll(
-    'input[data-field], textarea[data-field], [data-field].diary-dotted-flow, [data-field][contenteditable="true"]:not(.ql-editor):not(.bp-ql-editor)',
+    'input[data-field], textarea[data-field], [data-field].diary-dotted-flow, [data-field][contenteditable="true"]',
   ).forEach((el) => {
     if (el instanceof HTMLElement) replaceControlWithSpan(el);
   });
-
-  // Left column: keep textarea, lock for print
-  pageEl.querySelectorAll('textarea[data-col="left"], textarea.fir-input').forEach((ta) => {
-    if (!(ta instanceof HTMLTextAreaElement)) return;
-    ta.readOnly = true;
-    ta.removeAttribute('placeholder');
-    ta.setAttribute('tabindex', '-1');
-    ta.spellcheck = false;
-    const w = Number(ta.dataset.printW) || ta.clientWidth;
-    const h = Number(ta.dataset.printH) || ta.clientHeight;
-    if (w > 0) ta.style.width = `${w}px`;
-    if (h > 0) ta.style.height = `${h}px`;
-  });
-
-  // Copy CSS variables from live page (box height, left col %)
   return pageEl;
 }
 
@@ -293,10 +211,10 @@ export function buildPrintDocumentHtml(template) {
   const mount = document.createElement('div');
   mount.className = 'print-pages';
 
-  // Carry diary column ratio if set on #diaryPages
+  // Carry the diary column ratio from the live pages
   const diaryPages = document.getElementById('diaryPages');
   if (diaryPages && template === 'diary') {
-    const leftCol = diaryPages.style.getPropertyValue('--diary-left-col');
+    const leftCol = getComputedStyle(diaryPages).getPropertyValue('--diary-left-col').trim();
     if (leftCol) mount.style.setProperty('--diary-left-col', leftCol);
   }
 
@@ -306,29 +224,7 @@ export function buildPrintDocumentHtml(template) {
     const boxH = live.style.getPropertyValue('--diary-box-h');
     if (boxH) clone.style.setProperty('--diary-box-h', boxH);
 
-    // Measure live Quill editors before sanitize (clone is off-DOM → clientWidth 0)
-    const liveEditors = live.querySelectorAll('.ql-editor, .bp-ql-editor');
-    const cloneEditors = clone.querySelectorAll('.ql-editor, .bp-ql-editor');
-    liveEditors.forEach((src, i) => {
-      const dest = cloneEditors[i];
-      if (src instanceof HTMLElement && dest instanceof HTMLElement) {
-        if (src.clientWidth > 0) dest.dataset.printW = String(src.clientWidth);
-        if (src.clientHeight > 0) dest.dataset.printH = String(src.clientHeight);
-      }
-    });
-
-    // Textarea values / sizes — copy from live (cloneNode may drop .value)
-    const liveTextareas = live.querySelectorAll('textarea');
-    const cloneTextareas = clone.querySelectorAll('textarea');
-    liveTextareas.forEach((src, i) => {
-      const dest = cloneTextareas[i];
-      if (src instanceof HTMLTextAreaElement && dest instanceof HTMLTextAreaElement) {
-        dest.value = src.value;
-        if (src.clientWidth > 0) dest.dataset.printW = String(src.clientWidth);
-        if (src.clientHeight > 0) dest.dataset.printH = String(src.clientHeight);
-      }
-    });
-    // Input values also need explicit copy before sanitize replaces them
+    // Input values are not cloned by cloneNode — copy before sanitize replaces them
     const liveInputs = live.querySelectorAll('input');
     const cloneInputs = clone.querySelectorAll('input');
     liveInputs.forEach((src, i) => {
@@ -342,18 +238,6 @@ export function buildPrintDocumentHtml(template) {
     });
 
     sanitizeExportPage(clone);
-    // Textarea .value is not serialized by outerHTML — put it in text content.
-    clone.querySelectorAll('textarea').forEach((ta) => {
-      if (ta instanceof HTMLTextAreaElement) {
-        ta.textContent = ta.value;
-        const w = ta.dataset.printW;
-        const h = ta.dataset.printH;
-        if (w) ta.style.width = `${w}px`;
-        if (h) ta.style.height = `${h}px`;
-        delete ta.dataset.printW;
-        delete ta.dataset.printH;
-      }
-    });
     mount.appendChild(clone);
   });
 

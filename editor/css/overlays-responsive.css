@@ -1,21 +1,5 @@
 /* Floating controls + bottom chrome offsets */
 
-.page-indicator {
-    position: fixed;
-    bottom: calc(var(--overlay-bottom) + 8px);
-    right: calc(24px + var(--safe-right));
-    padding: 6px 12px;
-    background: var(--brand-primary);
-    color: var(--brand-white);
-    border-radius: 999px;
-    font-size: 12px;
-    font-weight: 500;
-    box-shadow: var(--shadow-medium);
-    z-index: 20;
-    pointer-events: none;
-    width: fit-content;
-}
-
 .help-fab {
     left: calc(16px + var(--safe-left));
     bottom: var(--overlay-bottom);
@@ -29,46 +13,25 @@
     bottom: calc(var(--overlay-bottom) + 48px);
 }
 
-/* Tablet: raise toolbar above raised page-indicator */
-@media (max-width: 1024px) {
-    .page-indicator {
-        right: calc(16px + var(--safe-right));
-        bottom: calc(var(--overlay-bottom) + 56px);
-        font-size: 11px;
-        padding: 5px 10px;
-    }
-
-    .quill-chrome-toolbar {
-        --quill-tb-bottom: calc(var(--overlay-bottom) + 64px);
-    }
-}
-
 /* Mobile keyboards already expose a mic — hide in-app dictation chrome */
 @media (max-width: 768px) {
     .dictation-fab,
     .dictation-interim,
-    .punctuation-panel {
+    .punctuation-panel,
+    .punctuation-toggle,
+    .punctuation-toggle-sep {
         display: none !important;
     }
 
-    .quill-chrome-toolbar {
-        --quill-tb-bottom: calc(var(--overlay-bottom) + 12px);
-        bottom: auto;
-        top: calc(56px + env(safe-area-inset-top, 0px) + 12px);
-        gap: 1px;
-        padding: 5px 8px;
-        max-width: calc(100vw - 24px - var(--safe-left) - var(--safe-right));
+    .format-toolbar {
+        justify-content: flex-start;
+        min-height: 36px;
+        padding: 2px 8px;
     }
 
-    .quill-chrome-toolbar button {
-        width: 28px;
-        height: 28px;
-        font-size: 12px;
-    }
-
-    .quill-toolbar-sep {
-        height: 14px;
-        margin: 0 2px;
+    .format-toolbar button {
+        width: 34px;
+        height: 32px;
     }
 }
 

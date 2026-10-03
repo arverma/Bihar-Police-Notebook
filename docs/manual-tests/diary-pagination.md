@@ -1,43 +1,46 @@
 # Diary / letter pagination — manual test checklist
 
-Run locally after any pager change, before deploying. Continuous-right (one live Quill on the focused diary page) and static fit + live peel are always on. Storage stays `pages[]`. Left column stays a plain textarea.
+Run locally after any pager or editor change, before deploying. Automated coverage is in `tests/diary-pagination.spec.js`, `diary-navigation`, `diary-undo` and `print-parity`; this list covers what only a person (or a real device) can judge.
 
 ## Setup
 
 - Desktop Chrome, transliteration toggle **OFF** for clip/caret cases; **ON** for the Hinglish case.
 - Diary template, new document.
 - Confirm page preview scale is default (fit).
+- Real devices for the last section: an Android phone with Gboard and an iPhone/iPad.
 
 ## Cases
 
 1. **Pipe after backspace** — Type a Hindi word (or Latin with translit off), Backspace once, type `|`, Space. The `|` must remain.
-2. **Justified end-of-line** — Format a paragraph Justify. Click near the end of a wrapped line under scaled preview. Caret should land on the intended character (not a neighboring line).
-3. **Paste large block** — Paste ~2 pages of Hindi into the right column. No page may clip (top lines hidden / `scrollTop > 0`). Extra pages appear as needed.
-3b. **Paste fills remaining lines** — With page 1 nearly full (~1 line of slack), paste one long Hindi paragraph. The start of that paragraph must stay on page 1 (fill remaining lines); only the overflow continues on page 2. No clip.
-3c. **Aligned paste / format-then-spill** — Paste (or type) a long paragraph, apply **Justify** or **Center**, and let it overflow onto page 2. Page 2 must wrap as a normal paragraph (same alignment) — not one word per line. Unformatted spill should still look the same as before.
-3d. **Format then type past the edge** — On a nearly full page, Justify (or Center) the last paragraph, then type until text spills. Page 2 continuation stays one multi-word paragraph with that alignment; no clip.
-3e. **Enter on aligned paragraph** — With an aligned (justify / center / right) paragraph filling toward the page edge, press Enter near the bottom so blanks and text move to page 2. Leading blank lines on page 2 are OK; there must be **no empty line between continuation text lines** (no sparse / gappy column).
-4. **Enter at bottom of full page** — Fill page 1, caret on last line, press Enter several times. New blank lines move to the next page; page 1 must not clip from the top. The stage (`main.main-content`) must not jump — only manual scroll moves it.
-5. **Enter at start of last line (right)** — Fill until the last visible line is a short sentence. Caret at the start of that sentence, Enter. Content spills to the next page; no top clip.
-5b. **Enter after absorb to-and-fro** — Fill 2+ pages, delete near the end of page 1 so text absorbs back from page 2, then Enter mid-page (or at an empty line). Bottom text must spill to the next page — not hide under the clip. Repeat a couple of times.
-6. **Backspace at start of page 2** — With a short line on page 2 right column, caret at start, Backspace. Line merges into page 1; caret stays at the start of that merged line and stays visible.
-6b. **Backspace pulls mid-paragraph** — After 3b (spilled long paragraph), caret at start of page 2, Backspace. Text pulls back onto page 1 when slack exists; page 1’s ending is **not** eaten while page 2 stays unchanged. If page 1 is truly full, delete-on-prev still applies.
-6c. **Pulled lines stay separate lines** — Fill page 1 with short numbered lines (`1`…`n`). Caret at the start of the 4th line from the bottom, Enter four times so the last four lines move to page 2, then Backspace once. Those lines come back one per line — never welded onto one line (`29303132`).
-7. **Left Enter then Backspace** — Fill left column past one page. Enter at the start of a known line so it spills; Backspace once. That line returns to page 1; no clip.
-8. **Hinglish suggestion + Enter** — Translit ON, type a Roman word until suggestions appear, pick one (or Space), then Enter near a page boundary. No clip; caret follows the text.
-9. **Click another page’s right column** — With multi-page content, click a static (non-focused) right column. Live Quill moves there; caret is usable.
-10. **Blank lines survive page switch + PDF** — On the last right page, type some text then press Enter several times so blank lines are visible. Click another page’s right column. The now-static last page must still show those blank lines (not collapse). Export PDF / print preview must match what you see — blanks are not trimmed.
-11. **Undo after page switch** — Type on page 1 right column, then click page 2’s right column. Ctrl+Z (Cmd+Z on Mac) must restore page 1’s text and move the live Quill/caret back. Undo is document-scoped, not tied to the focused page’s Quill instance.
-12. **Undo/redo paste spill** — Paste enough into a nearly-full page to create page 2. Ctrl+Z collapses back to one page (paste gone). Ctrl+Shift+Z (Cmd+Shift+Z) restores the two-page state. No clip after either step.
-13. **Paste mid-page then ArrowDown** — With a full page of lines, paste a long Hindi paragraph after line ~22. Overflow must spill to page 2. Pressing ↓ must not scroll the right box (`scrollTop` stays 0) — no jump in visible line numbers / clipped top.
+2. **Justified end-of-line** — Format a paragraph Justify. Click near the end of a wrapped line under scaled preview. Caret lands on the intended character.
+3. **Paste large block** — Paste ~2 pages of Hindi into the right column. No box clips; extra pages appear; "Page X of Y" updates.
+3b. **Paste fills remaining lines** — With page 1 nearly full, paste one long Hindi paragraph. It starts on page 1 (filling the free lines) and only the overflow continues on page 2.
+3c. **Aligned spill** — Justify or Center a long paragraph and let it overflow. Page 2 continues it as one paragraph with the same alignment.
+3e. **Enter on aligned paragraph** — Enter near the bottom of an aligned paragraph so text moves to page 2. Leading blank lines on page 2 are fine; no empty lines between continuation lines.
+4. **Enter at bottom of full page** — Enter several times on the last line. Blank lines move to the next page; the caret follows; the stage does not jump.
+5. **Both columns** — Fill the left column past one page while the right stays short (and the reverse). Each column continues on its own; the other column is untouched.
+6. **Backspace at start of page 2** — On a separate paragraph: it joins onto page 1's last line, caret at the junction. On a cut paragraph: the character before the page edge is deleted.
+6c. **Pulled lines stay separate** — Fill page 1 with numbered lines; Enter four lines from the bottom; Backspace once. Lines come back one per line — never welded (`29303132`).
+7. **Arrows across pages** — ↑ / ↓ / ← / → at a page edge move to the same column on the neighbouring page, keeping the horizontal position for ↑ / ↓.
+8. **Hinglish suggestion near a page edge** — Translit ON, type a Roman word on the last line until suggestions appear, pick one (or Space), then keep typing. Text spills once the suggestion closes; caret follows the text.
+9. **Header** — Type in थाना, FIR number, धारा (wraps to two lines). The writing boxes shrink by whole lines and text below spills; the FIR number becomes the document name. Ctrl+Z in a header field undoes the whole word.
+10. **Header toggle** — Hide / Show header on a full page: text spills or pulls back; the caret stays on its line.
+11. **Blank lines** — Press Enter several times on the last page. Blanks survive moving to another page, reload, and PDF.
+12. **Undo/redo across pages** — Type on page 1, click page 2, Ctrl+Z: page 1's edit is undone and the caret returns there. Paste that creates page 2: one Ctrl+Z per step returns to one page; Ctrl+Shift+Z restores.
+13. **Lists** — A numbered list that crosses a page edge keeps counting on the next page.
+13b. **Tables** — Insert a table (toolbar), type with Tab between cells, keep pressing Tab in the last cell until it crosses the page. It is cut between rows, page 2 repeats the header row, nothing clips. Add a column from page 2 (column grip → Insert column right): page 1 gets it too. Turn the header row off (row grip → Header row): the repeat disappears. Delete table from page 2: every piece goes; Ctrl+Z brings it back. PDF shows the repeated header.
+13c. **Images** — Insert a phone photo (toolbar → camera / gallery on a phone). It appears at the caret, scaled to the column. Select it, drag the corner handle, and Alt+←/→: the width changes and survives reload and PDF; Ctrl+Z undoes one resize at a time. Paste a screenshot; drop a file from the desktop. A very tall image never exceeds one box.
+14. **Older-format documents** — With an old document in History: it shows "Older format"; clicking it offers Delete / Keep; Escape keeps it.
+
+## Real devices
+
+- **Android (Gboard):** type Hindi and English words at a page bottom. Composition is never interrupted (no doubled or lost characters); the page spills when the word is committed. Backspace at the top of page 2 behaves as case 6.
+- **iOS / iPadOS:** PDF export produces every page (raster path); Hindi text and header fields render; no "Page X of Y" footer in the PDF.
 
 ## Pass criteria
 
-- No clipped column boxes after any case.
-- Caret always visible where typing happens.
-- Reload the document: healthy multi-page docs keep the same page count; previously overflowing single-page blobs get an extra page (open repair).
-- Absorb pulls line / block / **in-paragraph text fragment** units into slack (including when slack appears on an earlier page); it does not wholesale re-cut the whole column, and it never joins two of the user’s lines into one.
-- Boundary Backspace on the right column tries **absorb-first**; only if nothing moves does it delete the previous page’s last character.
-- Blank lines typed by the user remain after blur/page switch and in PDF (WYSIWYG).
-- Session undo/redo (Ctrl/Cmd+Z / Shift+Z) survives page switches and paste-spill; it is not cleared by continuous-right remounts.
-- Fixed diary boxes never use `scrollTop > 0` to reveal the caret — overflow spills instead.
+- No clipped writing box after any case; red outlines (`data-overflow`) appear only for a single item taller than a whole box.
+- The caret is always visible where typing happens, and the stage never scrolls by itself.
+- Reloading a document keeps its pages exactly as saved.
+- Moving text between pages never changes the text: no lost, doubled or welded characters or lines.
+- What you see on screen (blank lines, alignment, line breaks) is what print / PDF shows.

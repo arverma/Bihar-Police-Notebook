@@ -21,7 +21,7 @@ install:
 	npm install
 
 serve: stop
-	cd editor && python3 -m http.server $(PORT)
+	python3 scripts/serve.py $(PORT)
 
 stop:
 	@pids=$$(lsof -ti tcp:$(PORT) -sTCP:LISTEN); \

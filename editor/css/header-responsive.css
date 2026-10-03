@@ -31,7 +31,6 @@
 }
 
 .header-left,
-.header-center,
 .header-right {
     display: flex;
     align-items: center;
@@ -48,11 +47,6 @@
     align-items: center;
     gap: 8px;
     flex-shrink: 0;
-}
-
-.header-center {
-    flex: 0 0 auto;
-    justify-content: center;
 }
 
 .header-right {
@@ -153,11 +147,6 @@
         max-width: 280px;
     }
 
-    .segment-btn {
-        padding: 0 10px;
-        font-size: 12px;
-    }
-
     #exportBtn span:not(.btn-icon) {
         display: none;
     }
@@ -179,10 +168,6 @@
         max-width: 200px;
     }
 
-    .segment-btn {
-        padding: 0 8px;
-    }
-
     .header-content {
         gap: 6px;
     }
@@ -190,7 +175,7 @@
 
 /*
  * Mobile only (≤768px):
- *  [panel+logo LEFT] [spacer] [filename | Letter/Diary] [spacer] [PDF RIGHT]
+ *  [panel+logo LEFT] [spacer] [filename] [spacer] [PDF RIGHT]
  * Spacers share free width; PDF stays flush right like desktop header-right.
  */
 @media (max-width: 768px) {
@@ -205,7 +190,6 @@
     }
 
     .header-left,
-    .header-center,
     .header-right {
         display: contents;
     }
@@ -240,11 +224,6 @@
         max-width: min(160px, 32vw);
     }
 
-    #templateSegment {
-        order: 4;
-        flex: 0 0 auto;
-    }
-
     #langSegment {
         display: none !important;
     }
@@ -276,10 +255,6 @@
         display: none;
     }
 
-    .segment-btn {
-        padding: 0 10px;
-        font-size: 12px;
-    }
 }
 
 @media (max-width: 420px) {
@@ -292,8 +267,4 @@
         max-width: min(120px, 28vw);
     }
 
-    #templateSegment .segment-btn {
-        padding: 0 8px;
-        font-size: 11px;
-    }
 }

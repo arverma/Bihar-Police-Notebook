@@ -27,32 +27,6 @@ test('normalizePdfFilename appends .pdf once and strips unsafe chars', () => {
   expect(normalizePdfFilename('   ')).toBe('Document.pdf');
 });
 
-test('prepareCloneForRaster swaps textareas for wrapping static boxes', () => {
-  const host = document.createElement('div');
-  host.innerHTML = `
-    <table class="fir-table"><tbody><tr>
-      <td class="left-column"><textarea class="fir-input" data-col="left"></textarea></td>
-    </tr></tbody></table>
-  `;
-  document.body.appendChild(host);
-  const ta = host.querySelector('textarea');
-  ta.value = 'पहली पंक्ति\nदूसरी पंक्ति';
-
-  try {
-    prepareCloneForRaster(document);
-
-    expect(host.querySelector('textarea')).toBeNull();
-    const box = host.querySelector('.fir-input');
-    expect(box.tagName).toBe('DIV');
-    expect(box.textContent).toBe('पहली पंक्ति\nदूसरी पंक्ति');
-    expect(box.style.whiteSpace).toBe('pre-wrap');
-    expect(box.style.overflow).toBe('hidden');
-    expect(box.dataset.col).toBe('left');
-  } finally {
-    host.remove();
-  }
-});
-
 test('prepareCloneForRaster gives each table edge a single owner', () => {
   const host = document.createElement('div');
   host.innerHTML = `

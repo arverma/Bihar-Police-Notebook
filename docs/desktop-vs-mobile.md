@@ -45,7 +45,7 @@ flowchart TB
 - **Pinch-zoom** is natural on touch; desktop mostly needs fit-to-width.
 - **Scrollport split** avoids nested scroll traps (wheel on the page must reach the right container).
 - **iOS/iPadOS PDF export** uses a raster A4 PDF from the same print-document cards because WebKit print applies forced margins and a 0.8 shrink that clips diary/letter pages. Desktop keeps native print. See [Templates](components/templates.md).
-- **Rasterizer compensations** live in `prepareCloneForRaster()` and apply to the raster PDF path only: textareas become static wrapping boxes (html2canvas cannot lay out textarea text) and every table line is drawn by exactly one cell edge (html2canvas ignores `border-collapse`, so shared edges would print double, and a border on the table itself is partly hidden under the opaque cell backgrounds).
+- **Rasterizer compensations** live in `prepareCloneForRaster()` and apply to the raster PDF path only: every table line is drawn by exactly one cell edge (html2canvas ignores `border-collapse`, so shared edges would print double, and a border on the table itself is partly hidden under the opaque cell backgrounds).
 - **Font boosting is disabled** in the print document (`text-size-adjust: 100%`): the document is a fixed 210mm sheet, and WebKit otherwise inflates text in blocks wider than the phone viewport.
 
 ## Related code
