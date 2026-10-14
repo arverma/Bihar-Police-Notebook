@@ -37,6 +37,9 @@ import {
     TextAlign,
     UndoRedo,
     Gapcursor,
+    Plugin,
+    PluginKey,
+    Fragment,
 } from './tiptap.js';
 import { HEADER_FIELDS, emptyHeader } from './diary-geometry.js';
 import { FlowImage } from './images.js';
@@ -71,6 +74,49 @@ const FlowBulletList = BulletList.extend({
     },
 });
 
+const PAGE_CHROME = new Set(['diaryPage', 'letterPage', 'flowCell']);
+
+/**
+ * Page, cell and header chrome of a copied selection, dropped: only the
+ * writing inside the cells is pasted. A multi-block copy carries these
+ * wrappers (and the diary form's table) on the clipboard; pasting them would
+ * nest the copied page into the one being edited.
+ */
+export function unwrapPageChrome(fragment) {
+    const out = [];
+    fragment.forEach((node) => {
+        if (PAGE_CHROME.has(node.type.name)) unwrapPageChrome(node.content).forEach((n) => out.push(n));
+        else out.push(node);
+    });
+    return Fragment.from(out);
+}
+
+export function stripPastedChrome(slice) {
+    let touched = false;
+    slice.content.descendants((node) => {
+        if (PAGE_CHROME.has(node.type.name)) touched = true;
+        return !touched;
+    });
+    if (!touched) return slice;
+    const content = unwrapPageChrome(slice.content);
+    const open = (n) => (n && n.isTextblock ? 1 : 0);
+    return new slice.constructor(content, open(content.firstChild), open(content.lastChild));
+}
+
+/**
+ * The same, for the HTML of a copy made in the editor. A cell copied out of
+ * the diary arrives as `table > tr > td.bp-cell-host`, which the table schema
+ * would claim as a real table, so the wrappers are removed before parsing:
+ * only the content of the `.bp-cell` boxes is kept.
+ */
+export function stripPastedChromeHtml(html) {
+    if (!html.includes('bp-cell')) return html;
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const boxes = [...doc.querySelectorAll('.bp-cell')].filter((el) => !el.parentElement.closest('.bp-cell'));
+    if (!boxes.length) return html;
+    return boxes.map((el) => el.innerHTML).join('');
+}
+
 export const FlowCell = Node.create({
     name: 'flowCell',
     // Images are never cut; tables are cut between rows (see ./tables.js).
@@ -85,6 +131,14 @@ export const FlowCell = Node.create({
                 renderHTML: (attrs) => ({ 'data-col': attrs.col }),
             },
         };
+    },
+    addProseMirrorPlugins() {
+        return [
+            new Plugin({
+                key: new PluginKey('bpPasteChrome'),
+                props: { transformPastedHTML: stripPastedChromeHtml, transformPasted: stripPastedChrome },
+            }),
+        ];
     },
     parseHTML() {
         return [
