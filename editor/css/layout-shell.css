@@ -135,16 +135,44 @@ body.app-shell {
     text-decoration: none;
 }
 
-.seo-intro-content .seo-site-link {
+.seo-links {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.seo-intro-content .seo-site-link,
+.seo-intro-content .seo-github-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 28px;
     color: var(--color-text-muted);
     font-size: 0.8rem;
     font-weight: 400;
     text-decoration: none;
 }
 
-.seo-intro-content .seo-site-link:hover {
+.seo-intro-content .seo-site-link {
+    padding: 0 2px;
+}
+
+.seo-intro-content .seo-site-link:hover,
+.seo-intro-content .seo-github-link:hover {
     color: var(--brand-primary);
     text-decoration: underline;
+}
+
+.seo-intro-content .seo-github-link {
+    padding: 0 9px;
+    border: 1px solid var(--color-border-light);
+    border-radius: 999px;
+}
+
+.seo-intro-content .seo-github-link i {
+    font-size: 1rem;
 }
 
 .sidebar {
