@@ -180,6 +180,11 @@ export async function saveDocumentById(type, doc) {
         const now = new Date().toISOString();
         const filename = (doc.filename || '').trim() || 'Untitled';
         const content = doc.content ?? '';
+        let resultId;
+
+        tx.oncomplete = () => resolve(resultId);
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error || new Error('Document save transaction aborted.'));
 
         if (doc.id != null) {
             const getReq = store.get(doc.id);
@@ -199,7 +204,7 @@ export async function saveDocumentById(type, doc) {
                         syncError: null,
                         deletedAt: null,
                     });
-                    addReq.onsuccess = () => resolve(addReq.result);
+                    addReq.onsuccess = () => { resultId = addReq.result; };
                     addReq.onerror = () => reject(addReq.error);
                     return;
                 }
@@ -211,7 +216,7 @@ export async function saveDocumentById(type, doc) {
                 // Content change invalidates sync until next push
                 existing.syncError = null;
                 const putReq = store.put(existing);
-                putReq.onsuccess = () => resolve(existing.id);
+                putReq.onsuccess = () => { resultId = existing.id; };
                 putReq.onerror = () => reject(putReq.error);
             };
             getReq.onerror = () => reject(getReq.error);
@@ -230,7 +235,7 @@ export async function saveDocumentById(type, doc) {
             syncError: null,
             deletedAt: null,
         });
-        addReq.onsuccess = () => resolve(addReq.result);
+        addReq.onsuccess = () => { resultId = addReq.result; };
         addReq.onerror = () => reject(addReq.error);
     });
 }
