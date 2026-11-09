@@ -4,8 +4,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bihar Police Notebook</title>
+    <title>BP Diary — Hindi Case Diary &amp; Letter Writing Tool</title>
+    <meta name="description"
+        content="BP Diary is a browser-based Hindi writing tool for Bihar Police case diaries and official letters, with A4 printing, PDF export, and optional Google Drive backup.">
     <link rel="canonical" href="https://bpdiary.arverma.dev/">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://bpdiary.arverma.dev/">
+    <meta property="og:title" content="BP Diary — Hindi Case Diary &amp; Letter Writing Tool">
+    <meta property="og:description"
+        content="Write Bihar Police case diaries and official letters in Hindi, then print or save them as A4 PDFs.">
+    <meta property="og:site_name" content="BP Diary">
+    <meta property="og:image" content="https://bpdiary.arverma.dev/images/icon128.png">
+    <script type="application/ld+json">
+        {
+            "@context": "https://schema.org",
+            "@type": "SoftwareApplication",
+            "name": "BP Diary",
+            "description": "A browser-based Hindi writing tool for Bihar Police case diaries and official letters.",
+            "applicationCategory": "BusinessApplication",
+            "operatingSystem": "Web browser",
+            "url": "https://bpdiary.arverma.dev/"
+        }
+    </script>
     <link rel="icon" type="image/png" sizes="32x32" href="images/favicon.png">
     <link rel="apple-touch-icon" sizes="128x128" href="images/icon128.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
@@ -184,6 +204,25 @@
                     </div>
                 </div>
             </div>
+            <details class="seo-intro">
+                <summary aria-label="About BP Diary" title="About BP Diary">
+                    <i class="fas fa-info" aria-hidden="true"></i>
+                </summary>
+                <div class="seo-intro-content">
+                    <h1>BP Diary: Hindi case diary and letter writing</h1>
+                    <p>
+                        BP Diary is a browser-based writing tool for Bihar Police case diaries and official letters.
+                        Write in Hindi using Romanized Hindi or your device keyboard, format your document, and keep
+                        your work saved on your device.
+                    </p>
+                    <p>
+                        Prepare A4-ready documents, print them or save them as PDFs, and optionally back up copies to
+                        your own Google Drive. Click on <a class="seo-help-link" href="help.html"
+                            aria-label="Open BP Diary help">?</a> to know more details.
+                    </p>
+                    <a class="seo-site-link" href="https://arverma.dev/">https://arverma.dev</a>
+                </div>
+            </details>
         </main>
     </div>
 
@@ -259,11 +298,6 @@
             </table>
         </div>
     </template>
-
-    <a id="help-fab" class="help-fab" href="help.html" title="Help — privacy, shortcuts &amp; about"
-        aria-label="Help — privacy, shortcuts and about">
-        <span aria-hidden="true">?</span>
-    </a>
 
     <div id="dictationInterim" class="dictation-interim" hidden aria-live="polite"></div>
 

@@ -1448,36 +1448,6 @@ span.diary-dotted-flow:focus {
     flex-shrink: 0;
 }
 
-/* Help FAB — bottom-left so it clears the page pill */
-.help-fab {
-    position: fixed;
-    left: 16px;
-    bottom: 16px;
-    z-index: 25;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    padding: 0;
-    border-radius: 999px;
-    border: 1px solid var(--color-border-medium);
-    background: var(--brand-white);
-    color: var(--color-text-muted);
-    box-shadow: var(--shadow-medium);
-    text-decoration: none;
-    font-size: 1rem;
-    font-weight: 700;
-    line-height: 1;
-    transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
-}
-
-.help-fab:hover {
-    background: var(--color-hover-brand);
-    color: var(--brand-primary);
-    border-color: var(--brand-primary);
-}
-
 /* ── Voice dictation: the mic sits at the right end of the format toolbar ── */
 .dictation-fab {
     display: inline-flex;
@@ -1964,7 +1934,6 @@ span.diary-dotted-flow:focus {
     .header-frame,
     .sidebar,
     .switch-btn,
-    .help-fab,
     .dictation-fab,
     .dictation-interim,
     .dictation-sheet,

@@ -1,8 +1,7 @@
 /* Floating controls + bottom chrome offsets */
 
-.help-fab {
-    left: calc(16px + var(--safe-left));
-    bottom: var(--overlay-bottom);
+.seo-intro {
+    right: calc(16px + var(--safe-right));
 }
 
 .dictation-interim {
@@ -35,12 +34,5 @@
     .format-toolbar button {
         width: 34px;
         height: 32px;
-    }
-}
-
-@media (max-width: 640px) {
-    .help-fab {
-        width: 36px;
-        height: 36px;
     }
 }
