@@ -1,6 +1,6 @@
 # Technical docs — Bihar Police Notebook
 
-Architecture and how the pieces fit together. For everyday use (opening the app, writing, privacy), see the [product README](../README.md) and the in-app [Help](https://bpdiary.arverma.dev/help.html) page.
+Architecture and how the pieces fit together. For everyday use (opening the app, writing, privacy), see the [product README](../README.md) and the in-app [Help](https://bpdiary.arverma.dev/help) page.
 
 ## Start here
 

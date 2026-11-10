@@ -29,7 +29,7 @@
 
 - नोट्स **आपके डिवाइस** के ब्राउज़र में रहते हैं।
 - **Drive बैकअप वैकल्पिक है।** History से साइन-इन और सिंक करने तक Google पर कुछ नहीं जाता। कॉपी **आपके** Drive फ़ोल्डर *Bihar Police Notebook Backup — do not delete* में जाती है।
-- और गोपनीयता व शॉर्टकट: ऐप में **Help** (`?`), या [help.html](https://bpdiary.arverma.dev/help.html)।
+- और गोपनीयता व शॉर्टकट: ऐप में **Help** (`?`), या [bpdiary.arverma.dev/help](https://bpdiary.arverma.dev/help)।
 
 ## डेवलपर्स के लिए
 
