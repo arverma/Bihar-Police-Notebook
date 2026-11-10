@@ -29,7 +29,7 @@ The same website works on both. On a **phone**, some computer-only controls are 
 
 - Notes are stored **on your device** in the browser.
 - **Drive backup is optional.** Nothing goes to Google until you sign in from History and sync. Copies go to **your** Drive folder named *Bihar Police Notebook Backup — do not delete*.
-- More privacy and shortcuts: open **Help** (`?`) in the app, or [help.html](https://bpdiary.arverma.dev/help.html).
+- More privacy and shortcuts: open **Help** (`?`) in the app, or [bpdiary.arverma.dev/help](https://bpdiary.arverma.dev/help).
 
 ## For developers
 
