@@ -60,6 +60,9 @@ test('Enter at the bottom of a full page moves the new line to page 2 without a 
   await fullPageCaretAtEnd(page);
   await page.keyboard.type('aman', { delay: 30 });
   await expect.poll(() => popupOpen(page)).toBe(true);
+  // Enter would accept the highlighted suggestion; Escape first keeps the word and
+  // lets Enter break the line.
+  await page.keyboard.press('Escape');
   await page.keyboard.press('Enter');
   await page.evaluate(() => window.__bpTest.settle());
   expect(await page.evaluate(() => window.__bpTest.pages('right', 'diary').length)).toBe(2);

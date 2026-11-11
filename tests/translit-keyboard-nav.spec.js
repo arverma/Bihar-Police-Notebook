@@ -69,12 +69,22 @@ test.describe('Suggestion popup keyboard navigation', () => {
     });
   }
 
-  test('Enter/Tab without touching the arrows keep their normal job', async ({ page }) => {
+  for (const key of ['Enter', 'Tab']) {
+    test(`${key} with the arrows untouched accepts the highlighted first option`, async ({ page }) => {
+      await typeWordAndOpenPopup(page, 'abd');
+      const before = await paragraphCount(page);
+      await page.keyboard.press(key);
+      await expect(page.locator('#suggestions')).toBeHidden();
+      expect(await cellText(page)).toBe(`${OPTIONS[0]} `);
+      expect(await paragraphCount(page)).toBe(before);
+    });
+  }
+
+  test('Escape then Enter keeps the English word and breaks the line', async ({ page }) => {
     await typeWordAndOpenPopup(page, 'abd');
     const before = await paragraphCount(page);
+    await page.keyboard.press('Escape');
     await page.keyboard.press('Enter');
-    await expect(page.locator('#suggestions')).toBeHidden();
-    // The word is left as typed and the line breaks.
     expect(await cellText(page)).toContain('abd');
     expect(await paragraphCount(page)).toBe(before + 1);
   });

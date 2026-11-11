@@ -544,7 +544,7 @@ function dismissSuggestions() {
 /**
  * Keyboard state of the open popup: the highlighted row and how to accept it.
  * Null whenever the popup is closed.
- * @type {{ items: HTMLElement[], index: number, navigated: boolean, accept: (i: number) => void } | null}
+ * @type {{ items: HTMLElement[], index: number, accept: (i: number) => void } | null}
  */
 let suggestionNav = null;
 
@@ -772,11 +772,11 @@ function attachTransliteration(el) {
         if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
             e.preventDefault();
             e.stopPropagation();
-            suggestionNav.navigated = true;
             setActiveSuggestion(suggestionNav.index + (e.key === 'ArrowDown' ? 1 : -1));
-        } else if ((e.key === 'Enter' || e.key === 'Tab') && suggestionNav.navigated) {
-            // Only an explicit arrow choice is accepted. Untouched, Enter still ends
-            // the word and breaks the line (the bubble-phase handler closes the popup).
+        } else if (e.key === 'Enter' || e.key === 'Tab') {
+            // Like Space: commit the highlighted option (the first one unless the
+            // arrows moved it) instead of breaking the line. Escape dismisses the
+            // popup first when the English word should stay.
             e.preventDefault();
             e.stopPropagation();
             suggestionNav.accept(suggestionNav.index);
@@ -941,7 +941,7 @@ function showSuggestions(suggestions, wordStart, wordEnd, targetEl) {
         suggestionsBox.appendChild(div);
         rows.push(div);
     });
-    suggestionNav = { items: rows, index: 0, navigated: false, accept };
+    suggestionNav = { items: rows, index: 0, accept };
     setActiveSuggestion(0);
     suggestionsBox.style.display = 'block';
 
