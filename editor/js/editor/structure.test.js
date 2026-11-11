@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { stepsStayInCells, backspaceAcrossPage, deleteAcrossPage } from './structure.js';
+import { TextSelection, ReplaceStep } from './tiptap.js';
 import { collectPages } from './pager/layout.js';
 import { letterDoc, diaryDoc, stateFor, posOf, columnPages } from './test-helpers.js';
 
@@ -27,6 +28,51 @@ describe('stepsStayInCells', () => {
         const doc = diaryDoc([{ left: ['left'], right: ['right'] }]);
         const tr = stateFor(doc).tr.delete(posOf(doc, 'left'), posOf(doc, 'right'));
         expect(stepsStayInCells(tr)).toBe(false);
+    });
+});
+
+describe('clearing a whole cell (select all, then delete)', () => {
+    /** Selection covering every line of the right-hand cell: first text to last text. */
+    function selectCellText(doc, first, last) {
+        const from = posOf(doc, first);
+        const to = posOf(doc, last, last.length);
+        return stateFor(doc).tr.setSelection(TextSelection.create(doc, from, to));
+    }
+
+    test('deleting a multi-line selection of one cell is allowed', () => {
+        const doc = diaryDoc([{ left: ['L'], right: ['first', 'second'] }]);
+        const tr = selectCellText(doc, 'first', 'second').deleteSelection();
+        expect(stepsStayInCells(tr)).toBe(true);
+    });
+
+    test('...including when the last line is empty (the reported case)', () => {
+        const doc = diaryDoc([{ left: ['L'], right: ['first', ''] }]);
+        const state = stateFor(doc);
+        const cell = collectPages(doc)[0].cells.right;
+        const from = posOf(doc, 'first');
+        const to = cell.pos + 1 + cell.node.content.size - 1; // inside the empty last paragraph
+        const tr = state.tr.setSelection(TextSelection.create(doc, from, to)).deleteSelection();
+        expect(stepsStayInCells(tr)).toBe(true);
+        expect(columnPages(state.apply(tr).doc, 'right')).toEqual([['']]);
+    });
+
+    test('the cell survives, emptied, and the other column is untouched', () => {
+        const doc = diaryDoc([{ left: ['L'], right: ['first', 'second'] }]);
+        const state = stateFor(doc);
+        const tr = selectCellText(doc, 'first', 'second').deleteSelection();
+        const next = state.apply(tr);
+        expect(columnPages(next.doc, 'right')).toEqual([['']]);
+        expect(columnPages(next.doc, 'left')).toEqual([['L']]);
+    });
+
+    test('still rejects removing the cell itself (empty replacement)', () => {
+        const doc = diaryDoc([{ left: ['L'], right: ['only'] }]);
+        const $in = doc.resolve(posOf(doc, 'only'));
+        let d = $in.depth;
+        while ($in.node(d).type.name !== 'flowCell') d--;
+        const step = new ReplaceStep($in.before(d), $in.after(d), doc.slice(0, 0));
+        // The guard only reads `steps` and `docs`; skip validity checks on purpose.
+        expect(stepsStayInCells({ steps: [step], docs: [doc] })).toBe(false);
     });
 });
 

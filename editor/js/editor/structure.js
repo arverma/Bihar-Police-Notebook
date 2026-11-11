@@ -35,14 +35,35 @@ function isExempt(tr) {
     return tr.getMeta(PAGER_META) || tr.getMeta(STRUCTURE_META) || tr.getMeta(HISTORY_META);
 }
 
+/**
+ * The cell a replace step touches at one end. A position inside a cell is that
+ * cell. A position on a cell's outer edge (`edge` 1 = the step starts there,
+ * -1 = it ends there) counts as that cell too, but only for a step that puts a
+ * cell back: that is how ProseMirror deletes everything in a cell, as
+ * "replace the cell with an emptied copy". Removing the cell outright is not.
+ */
+function cellTouched($pos, edge, replacesCell) {
+    const inside = cellStart($pos);
+    if (inside !== null) return inside;
+    if (!replacesCell) return null;
+    const node = edge > 0 ? $pos.nodeAfter : $pos.nodeBefore;
+    if (node?.type.name !== 'flowCell') return null;
+    return edge > 0 ? $pos.pos : $pos.pos - node.nodeSize;
+}
+
 /** Whether every replace step stays inside one cell. */
 export function stepsStayInCells(tr) {
     for (let i = 0; i < tr.steps.length; i++) {
         const step = tr.steps[i];
         if (!(step instanceof ReplaceStep) && !(step instanceof ReplaceAroundStep)) continue;
         const doc = tr.docs[i];
-        const a = cellStart(doc.resolve(step.from));
-        const b = cellStart(doc.resolve(step.to));
+        const slice = step.slice;
+        const replacesCell = step instanceof ReplaceStep
+            && slice.size > 0
+            && slice.content.firstChild?.type.name === 'flowCell'
+            && slice.content.lastChild?.type.name === 'flowCell';
+        const a = cellTouched(doc.resolve(step.from), 1, replacesCell);
+        const b = cellTouched(doc.resolve(step.to), -1, replacesCell);
         if (a === null || a !== b) return false;
     }
     return true;
