@@ -34,13 +34,48 @@ function toAsciiDigits(s) {
     return String(s).replace(/[०-९]/g, (ch) => String(DEV_DIGITS.indexOf(ch)));
 }
 
+const LEADING_PUNCT_RE = /^[^\p{L}\p{M}\p{N}]+/u;
+const TRAILING_PUNCT_RE = /[^\p{L}\p{M}\p{N}]+$/u;
+const DEVANAGARI_RE = /[\u0900-\u097F]/;
+const LATIN_RE = /[A-Za-z]/;
+
 /**
- * Fetch up to 5 Devanagari suggestions for a Hinglish word.
+ * Split a whitespace-delimited token into surrounding punctuation and the
+ * word itself: `"(jeevan,"` -> `{ lead: '(', core: 'jeevan', trail: ',' }`.
+ * Inner punctuation (`ma'am`, `1,000`) stays in the core.
+ * @param {string} token
+ * @returns {{ lead: string, core: string, trail: string }}
+ */
+export function splitWordPunctuation(token) {
+    const s = String(token ?? '');
+    const lead = s.match(LEADING_PUNCT_RE)?.[0] ?? '';
+    const rest = s.slice(lead.length);
+    const trail = rest.match(TRAILING_PUNCT_RE)?.[0] ?? '';
+    return { lead, core: rest.slice(0, rest.length - trail.length), trail };
+}
+
+/**
+ * Fetch up to 5 Devanagari suggestions for a Hinglish word. Punctuation around
+ * the word is not transliterated: it is kept and re-attached to every
+ * suggestion, so accepting one never drops it. Text that is already Devanagari
+ * has nothing to convert and yields no suggestions.
  * @param {string} word
  * @returns {Promise<string[]>}
  */
 export async function fetchSuggestions(word) {
     if (!word || !word.trim()) return [];
+    const { lead, core, trail } = splitWordPunctuation(word.trim());
+    if (!core) return [];
+    if (DEVANAGARI_RE.test(core) && !LATIN_RE.test(core)) return [];
+    const suggestions = await fetchCoreSuggestions(core);
+    return lead || trail ? suggestions.map((s) => lead + s + trail) : suggestions;
+}
+
+/**
+ * @param {string} word punctuation-free word
+ * @returns {Promise<string[]>}
+ */
+async function fetchCoreSuggestions(word) {
     const key = word.trim();
     if (shouldSkipTransliteration(key)) return [];
     if (cache[key]) return cache[key];
