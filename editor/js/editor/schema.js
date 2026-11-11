@@ -211,7 +211,10 @@ function sharedExtensions() {
         FlowOrderedList,
         ListItem,
         ListKeymap,
-        TextAlign.configure({ types: ['paragraph'], alignments: ['left', 'center', 'right', 'justify'] }),
+        // Alignment is toolbar-only: the built-in Cmd+Shift+L/E/R/J shortcuts would
+        // swallow the browser's own Cmd+Shift+R (hard reload) while typing.
+        TextAlign.extend({ addKeyboardShortcuts: () => ({}) })
+            .configure({ types: ['paragraph'], alignments: ['left', 'center', 'right', 'justify'] }),
         UndoRedo.configure({ depth: 100, newGroupDelay: 1000 }),
         // A caret before/after a table or image that starts or ends a box.
         Gapcursor,
