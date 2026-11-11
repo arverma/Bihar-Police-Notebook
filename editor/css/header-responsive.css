@@ -147,8 +147,20 @@
     text-overflow: ellipsis;
 }
 
-/* Narrow desktop / tablet: stay single-line, tighten chrome */
-@media (max-width: 1100px) {
+/* The left column (brand + filename box, 100px minimum) must fit beside the
+   centred toolbar; left and right each get (width - toolbar) / 2. With the
+   Hindi wordmark that needs ~1190px, so drop the wordmark below that rather
+   than let the filename overflow under the toolbar. */
+@media (min-width: 1024px) and (max-width: 1200px) {
+    .brand-mark-hindi {
+        display: none;
+    }
+}
+
+/* Narrow desktop (1024-1100px): stay single-line, tighten chrome. The
+   desktop layout starts at 1024px (see js/layout.js); anything narrower uses
+   the mobile layout below, so there is no tablet layout in between. */
+@media (min-width: 1024px) and (max-width: 1100px) {
     .header-content {
         gap: 8px;
         padding: 8px 12px;
@@ -179,47 +191,14 @@
     }
 }
 
-@media (max-width: 900px) {
-    .header-content > .format-toolbar {
-        padding-inline: 6px;
-        gap: 0;
-    }
-
-    .header-content > .format-toolbar .format-toolbar-sep {
-        margin-inline: 2px;
-    }
-
-    .header-left {
-        min-width: 176px;
-    }
-
-    .header-content > .format-toolbar button:not(.dictation-lang):not(.dictation-end):not(.dictation-mic) {
-        width: 26px;
-    }
-
-    .header-content > .format-toolbar button:not(.dictation-lang):not(.dictation-end) {
-        width: 28px;
-    }
-
-    .header-content > .format-toolbar .dictation-mic {
-        width: 32px;
-    }
-
-    .doc-name-cluster {
-        max-width: 200px;
-    }
-
-    .header-content {
-        gap: 6px;
-    }
-}
-
 /*
- * Mobile only (≤768px):
- *  [panel+logo LEFT] [spacer] [filename] [spacer] [PDF RIGHT]
- * Spacers share free width; PDF stays flush right like desktop header-right.
+ * Mobile layout (<1024px: phones and tablets alike):
+ *  [panel+logo LEFT] [ filename (fills the gap, centred) ] [PDF RIGHT]
+ * The name cluster takes all free width, so PDF stays flush right at every
+ * width. The formatting toolbar is not in the header: it docks above the
+ * keyboard (editor/js/editor/keyboard-dock.js).
  */
-@media (max-width: 768px) {
+@media (max-width: 1023px) {
     .header-content {
         --header-pad-x: 10px;
         position: relative;
@@ -238,13 +217,93 @@
         margin-block: 8px;
     }
 
-    /* The toolbar wraps to its own full-width row under the bar. */
+    /* Phones: the formatting bar is not part of the header. It docks flush
+       above the on-screen keyboard (bottom is set from visualViewport by
+       editor/keyboard-dock.js) and exists only while an editor has focus.
+       Same look as the desktop pill (white, navy icons, thin group rules),
+       with 40px touch targets and a rounded top edge. The row scrolls
+       sideways when the tiles do not all fit (narrow phones), with an edge
+       shadow showing there is more. */
     .header-content > .format-toolbar {
-        order: 10;
-        flex: 0 0 auto;
-        width: calc(100% + 2 * var(--header-pad-x));
-        margin-inline: calc(-1 * var(--header-pad-x));
+        --dock-tray: var(--brand-white);
+        --dock-key-w: 40px;
+        --dock-key-h: 40px;
+        display: none;
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 1100;
+        width: auto;
+        margin: 0;
         box-sizing: border-box;
+        justify-content: flex-start;
+        gap: 4px;
+        min-height: 0;
+        padding: 6px 4px;
+        overflow-x: auto;
+        overscroll-behavior-x: contain;
+        -webkit-overflow-scrolling: touch;
+        scroll-padding-inline: 4px;
+        border-radius: 14px 14px 0 0;
+        border-top: 1px solid rgba(26, 54, 93, 0.14);
+        box-shadow: 0 -2px 10px rgba(26, 54, 93, 0.12);
+        /* Tray-coloured covers (local) hide the scroll shadows at either end. */
+        background:
+            linear-gradient(to right, var(--dock-tray) 30%, transparent) left center / 20px 100% no-repeat local,
+            linear-gradient(to left, var(--dock-tray) 30%, transparent) right center / 20px 100% no-repeat local,
+            radial-gradient(farthest-side at 0 50%, rgba(0, 0, 0, 0.28), transparent) left center / 8px 100% no-repeat scroll,
+            radial-gradient(farthest-side at 100% 50%, rgba(0, 0, 0, 0.28), transparent) right center / 8px 100% no-repeat scroll,
+            var(--dock-tray);
+    }
+
+    /* Auto-margin spacers centre the keys when they fit and collapse to 0
+       when they do not, so the row then scrolls from its start. */
+    .header-content > .format-toolbar::before,
+    .header-content > .format-toolbar::after {
+        content: '';
+        flex: 0 0 auto;
+        margin: auto;
+    }
+
+    .header-content > .format-toolbar.is-docked {
+        display: flex;
+    }
+
+    /* Keep the caret clear of the bar when the page scrolls to it. */
+    .format-docked .main-content {
+        scroll-padding-bottom: 64px;
+    }
+
+    .header-content > .format-toolbar button:not(.dictation-lang):not(.dictation-end):not(.dictation-mic) {
+        flex: 0 0 var(--dock-key-w);
+        width: var(--dock-key-w);
+        height: var(--dock-key-h);
+        border-radius: 8px;
+        background: transparent;
+        box-shadow: none;
+        font-size: 15px;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    /* A key held down / a formatting that is on: filled like a pressed key. */
+    .header-content > .format-toolbar button:not(.dictation-lang):not(.dictation-end):not(.dictation-mic):active,
+    .header-content > .format-toolbar button:not(.dictation-lang):not(.dictation-end):not(.dictation-mic).is-active {
+        background: rgba(26, 54, 93, 0.16);
+        color: var(--brand-primary);
+        box-shadow: none;
+    }
+
+    .header-content > .format-toolbar button:disabled {
+        opacity: 0.45;
+    }
+
+    /* Groups are separated by the same thin rule as on desktop. */
+    .header-content > .format-toolbar .format-toolbar-sep {
+        width: 1px;
+        height: 20px;
+        margin: 0 6px;
+        background: rgba(26, 54, 93, 0.18);
     }
 
     .header-left,
@@ -266,20 +325,24 @@
         display: none;
     }
 
-    /* Leading spacer — free space after the brand */
+    /* Leading gap after the brand. The name cluster (below) takes all the free
+       width, so syncFilenameWidth() can size the box to the real space. */
     .header-content::before {
         content: '';
         order: 2;
-        flex: 1 1 0;
-        min-width: 4px;
-        max-width: 100%;
+        flex: 0 0 4px;
     }
 
+    /* Fills the free space between brand and PDF and centers the name box in
+       it. No max-width: a cap leaves dead space (PDF no longer flush right)
+       on wide mobile screens, and a small cap truncates names; the box
+       itself is limited to 420px by syncFilenameWidth(). */
     .doc-name-cluster {
         order: 3;
-        flex: 0 1 auto;
+        flex: 1 1 0;
         min-width: 0;
-        max-width: min(160px, 32vw);
+        max-width: none;
+        justify-content: center;
     }
 
     #langSegment {
@@ -290,13 +353,11 @@
         display: none !important;
     }
 
-    /* Trailing spacer — pushes PDF to the right edge */
+    /* Trailing gap before PDF */
     .header-content::after {
         content: '';
         order: 5;
-        flex: 1 1 0;
-        min-width: 4px;
-        max-width: 100%;
+        flex: 0 0 4px;
     }
 
     #exportBtn {
@@ -319,10 +380,6 @@
     .header-content {
         --header-pad-x: 8px;
         gap: 0 6px;
-    }
-
-    .doc-name-cluster {
-        max-width: min(120px, 28vw);
     }
 
 }

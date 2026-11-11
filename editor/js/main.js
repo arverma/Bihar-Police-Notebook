@@ -7,9 +7,20 @@ import {
     softDeleteDocument,
     softDeleteDocumentById,
     hardDeleteById,
+    trashDocumentById,
+    restoreDocumentById,
+    getTrashedDocuments,
+    listPendingSync,
+    deleteTrashedForever,
+    DocumentUnavailableError,
     previewText,
     backupStatus,
 } from './document-store.js';
+import { matchesQuery, searchableText } from './history-search.js';
+import { initTrashPanel } from './trash-panel.js';
+import { showActionToast } from './toast.js';
+import { createPopMenu, bindMenuTrigger } from './popmenu.js';
+import { MOBILE_QUERY } from './layout.js';
 import { initLetterSheet } from './letter-sheet.js';
 import {
     initDiarySheet,
@@ -37,6 +48,7 @@ import {
 } from './drive-sync.js';
 import { initPageScale } from './page-scale.js';
 import { initFormatToolbar } from './editor/toolbar.js';
+import { initKeyboardDock } from './editor/keyboard-dock.js';
 import { initTableControls } from './editor/table-controls.js';
 import { isSupportedContent, parseDoc, docHasContent } from './editor/doc-format.js';
 import { initUnsupportedDocs } from './unsupported-docs.js';
@@ -116,7 +128,7 @@ let diaryFilenameManual = false;
 
 /** When true, skip Hinglish transliteration (direct Devanagari typing). */
 let isHindiMode = false;
-const mobileInputMq = window.matchMedia('(max-width: 768px)');
+const mobileInputMq = window.matchMedia(MOBILE_QUERY);
 
 /** Hinglish transliteration is desktop/tablet only — mobile uses the OS keyboard. */
 function isTransliterationEnabled() {
@@ -206,13 +218,19 @@ function getActiveTemplate() {
 }
 
 function setTemplateSegmentUI(type) {
-    document.querySelectorAll('#templateSegment .segment-btn').forEach((btn) => {
+    const name = (t) => (t === 'diary' ? 'Diary' : 'Letter');
+    document.querySelectorAll('#templateSegment [data-template]').forEach((btn) => {
         const active = btn.dataset.template === type;
-        btn.classList.toggle('is-active', active);
-        btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+        btn.setAttribute('aria-checked', active ? 'true' : 'false');
     });
+    const switchBtn = document.getElementById('typeSwitchBtn');
+    if (switchBtn) {
+        const label = switchBtn.querySelector('.type-switch-label');
+        if (label) label.textContent = name(type);
+        switchBtn.setAttribute('aria-label', `Document type: ${name(type)}`);
+    }
     const newLabel = document.querySelector('.add-template-btn .new-doc-label');
-    if (newLabel) newLabel.textContent = type === 'diary' ? 'New diary' : 'New letter';
+    if (newLabel) newLabel.textContent = `New ${type}`;
 }
 
 /** Tooltip on the whole control says what the current state does and what a click does. */
@@ -241,9 +259,8 @@ function letterPlaceholder({ pageIndex }) {
     return 'यहाँ Hinglish में टाइप करें...';
 }
 
-/** Placeholder for every empty diary writing box. */
-function diaryPlaceholder({ col }) {
-    if (mobileInputMq.matches && col === 'left') return 'यहाँ टाइप करें...';
+/** Placeholder for every empty diary writing box (same on desktop and mobile). */
+function diaryPlaceholder() {
     return 'यहाँ विवरण लिखें...';
 }
 
@@ -296,6 +313,15 @@ async function flushSave() {
         updateDocumentTitle();
         if (loadHistoryFn) await loadHistoryFn();
     } catch (err) {
+        if (err instanceof DocumentUnavailableError) {
+            // The document was trashed or deleted elsewhere (another tab).
+            // Keep what was typed: detach from it so the edits save as a new
+            // document instead of being dropped.
+            currentDoc = { ...currentDoc, id: null };
+            localStorage.removeItem('lastActiveDocId');
+            scheduleSave();
+            return;
+        }
         console.error('Autosave failed:', err);
         setSaveStatus('saved');
     }
@@ -968,8 +994,12 @@ function initApp() {
         backupBtn.dataset.backup = state;
         const email = getConnectedEmail();
         const emailBit = email ? ` (${email})` : '';
+        // The footer shows this as text, so the state is never just a colour.
+        const labelEl = document.getElementById('backupLabel');
+        const setLabel = (text) => { if (labelEl) labelEl.textContent = text; };
 
         if (state === 'syncing') {
+            setLabel('Backing up…');
             backupBtn.classList.remove('is-sync-success');
             backupBtn.classList.add('is-busy');
             backupBtn.setAttribute('aria-busy', 'true');
@@ -984,18 +1014,21 @@ function initApp() {
         setBackupBusy(false);
 
         if (state === 'needs-auth') {
+            setLabel('Back up to Drive');
             backupBtn.classList.remove('is-sync-success');
             backupBtn.title = 'Connect to back up';
             backupBtn.setAttribute('aria-label', 'Connect to back up');
             backupBtn.setAttribute('aria-expanded', 'false');
             if (driveMenu) driveMenu.hidden = true;
         } else if (state === 'error') {
+            setLabel('Backup failed · retry');
             backupBtn.classList.remove('is-sync-success');
             backupBtn.title = errorMsg
                 ? `Backup error — click to retry: ${errorMsg}`
                 : 'Backup error — click to retry';
             backupBtn.setAttribute('aria-label', 'Backup error — click to retry');
         } else {
+            void refreshBackupLabel();
             backupBtn.title = email
                 ? `Backup connected as ${email}`
                 : 'Backup connected';
@@ -1012,6 +1045,19 @@ function initApp() {
                     backupBtn.classList.remove('is-sync-success');
                 }, 600);
             }
+        }
+    }
+
+    /** "Backed up" or "N not backed up" while connected and idle. */
+    async function refreshBackupLabel() {
+        const labelEl = document.getElementById('backupLabel');
+        if (!labelEl || backupBtn?.dataset.backup !== 'ready') return;
+        try {
+            const pending = (await listPendingSync()).length;
+            if (backupBtn.dataset.backup !== 'ready') return; // state moved on while reading
+            labelEl.textContent = pending ? `${pending} not backed up` : 'Backed up';
+        } catch (err) {
+            console.error('Could not count pending backups:', err);
         }
     }
 
@@ -1145,19 +1191,99 @@ function initApp() {
         return expanded;
     }
 
-    function renderHistory(unsorted = []) {
-        // Same order the app opens "the top of History" in on load.
-        const docs = newestFirst(unsorted);
-        const hadGroups = Boolean(historyList?.querySelector('.history-date-group'));
-        const expandedSnapshot = hadGroups ? snapshotExpandedHistoryGroups() : null;
+    // ── Sidebar search ──────────────────────────────────────────────
+    const historySearchInput = document.getElementById('historySearch');
+    const historySearchClear = document.getElementById('historySearchClear');
+    const historySearchStatus = document.getElementById('historySearchStatus');
+    /** Documents last loaded for the active template, so typing never hits IndexedDB. */
+    let historyDocs = [];
+    /** @type {ReturnType<typeof createPopMenu> | null} */
+    let rowMenu = null;
+    /** id → normalized searchable text; rebuilt on every load. */
+    let historyIndex = new Map();
+    let historyType = null;
+    /** Expanded day groups to restore when the search is cleared. */
+    let expandedBeforeSearch = null;
+    /** @type {ReturnType<typeof initTrashPanel> | null} */
+    let trashPanel = null;
 
+    const searchQuery = () => (historySearchInput?.value ?? '').trim();
+
+    function syncSearchChrome() {
+        const kind = getActiveTemplate() === 'diary' ? 'diaries' : 'letters';
+        if (historySearchInput) historySearchInput.placeholder = `Search ${kind}`;
+        if (historySearchClear) historySearchClear.hidden = !searchQuery();
+    }
+
+    function onSearchChange() {
+        const searching = Boolean(searchQuery());
+        if (searching && expandedBeforeSearch === null) {
+            expandedBeforeSearch = snapshotExpandedHistoryGroups();
+        }
+        syncSearchChrome();
+        renderHistory(historyDocs);
+    }
+
+    function clearSearch({ focus = false } = {}) {
+        if (!historySearchInput) return;
+        historySearchInput.value = '';
+        onSearchChange();
+        if (focus) historySearchInput.focus();
+    }
+
+    let searchDebounce = null;
+    historySearchInput?.addEventListener('input', () => {
+        syncSearchChrome();
+        clearTimeout(searchDebounce);
+        searchDebounce = setTimeout(onSearchChange, 120);
+    });
+    historySearchInput?.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && searchQuery()) {
+            e.preventDefault();
+            e.stopPropagation();
+            clearSearch();
+        }
+    });
+    historySearchClear?.addEventListener('click', () => clearSearch({ focus: true }));
+
+    function renderHistory(unsorted = []) {
+        const query = searchQuery();
+        const all = newestFirst(unsorted);
+        // Same order the app opens "the top of History" in on load.
+        const docs = query
+            ? all.filter((d) => matchesQuery(historyIndex.get(d.id) ?? '', query))
+            : all;
+        const hadGroups = Boolean(historyList?.querySelector('.history-date-group'));
+        let expandedSnapshot = hadGroups ? snapshotExpandedHistoryGroups() : null;
+        if (!query && expandedBeforeSearch !== null) {
+            expandedSnapshot = expandedBeforeSearch;
+        }
+        if (!query) expandedBeforeSearch = null;
+
+        rowMenu?.close(false);
         historyList.innerHTML = '';
+        if (historySearchStatus) {
+            historySearchStatus.textContent = query
+                ? `${docs.length} ${docs.length === 1 ? 'result' : 'results'}`
+                : '';
+        }
 
         if (!docs.length) {
             const empty = document.createElement('div');
             empty.className = 'history-empty';
             const kind = getActiveTemplate() === 'diary' ? 'diaries' : 'letters';
-            empty.innerHTML = `<strong>No ${kind} yet</strong><span>Start one with the New button above.</span>`;
+            if (query) {
+                empty.innerHTML = '<strong>No matches</strong><span>Try a different word, or clear the search.</span>';
+            } else {
+                const type = getActiveTemplate();
+                empty.innerHTML = `<strong>No ${kind} yet</strong><span>Your ${kind} are saved here automatically as you write.</span>`;
+                const cta = document.createElement('button');
+                cta.type = 'button';
+                cta.className = 'history-empty-cta';
+                cta.textContent = `Start a new ${type}`;
+                cta.addEventListener('click', () => { void requestNewDocument(type); });
+                empty.appendChild(cta);
+            }
             historyList.appendChild(empty);
             return;
         }
@@ -1182,9 +1308,13 @@ function initApp() {
             const groupHasActiveDoc = groups[dateKey].some(
                 (d) => currentDoc.id != null && d.id === currentDoc.id,
             );
-            const shouldExpand = expandedSnapshot !== null
-                ? (expandedSnapshot.has(dateKey) || groupHasActiveDoc)
-                : groupIndex === 0;
+            // While searching, show every match; the user's own day
+            // expand/collapse choices come back when the search is cleared.
+            const shouldExpand = query
+                ? true
+                : expandedSnapshot !== null
+                    ? (expandedSnapshot.has(dateKey) || groupHasActiveDoc)
+                    : groupIndex === 0;
 
             const header = document.createElement('div');
             header.className = 'date-header collapsible-header';
@@ -1212,10 +1342,10 @@ function initApp() {
                 const status = backupStatus(doc);
                 const connected = isConnected();
                 let leadingIcon = '';
-                if (connected) {
-                    if (status === 'synced') {
-                        leadingIcon = `<span class="history-sync-badge is-synced" title="Backed up to Drive"><i class="fas fa-cloud" aria-hidden="true"></i></span>`;
-                    } else if (status === 'error') {
+                // A fully backed-up list stays free of badges: the footer says
+                // "Backed up". Only rows that need attention carry one.
+                if (connected && status !== 'synced') {
+                    if (status === 'error') {
                         leadingIcon = `<span class="history-sync-badge is-error" title="${escapeHtml(doc.syncError || 'Backup failed')}"><i class="fas fa-cloud" aria-hidden="true"></i></span>`;
                     } else {
                         leadingIcon = `<span class="history-sync-badge is-pending" title="Not backed up yet"><i class="fas fa-cloud" aria-hidden="true"></i></span>`;
@@ -1242,8 +1372,7 @@ function initApp() {
                         ${previewHtml}
                     </div>
                     <div class="history-item-actions">
-                        ${supported ? `<button class="docx-btn" type="button" title="Download as Word (.docx)" aria-label="Download ${escapeHtml(doc.filename)} as Word (.docx)"><i class="fas fa-file-word" aria-hidden="true"></i></button>` : ''}
-                        <button class="delete-btn" type="button" title="Delete this document" aria-label="Delete this document"><i class="fas fa-trash"></i></button>
+                        <button class="row-menu-btn" type="button" title="Actions" aria-haspopup="menu" aria-expanded="false" aria-label="Actions for ${escapeHtml(doc.filename)}"><i class="fas fa-ellipsis" aria-hidden="true"></i></button>
                     </div>
                 `;
 
@@ -1264,22 +1393,11 @@ function initApp() {
                     await openItem();
                 });
 
-                const docxBtn = item.querySelector('.docx-btn');
-                if (docxBtn) {
-                    docxBtn.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        void exportHistoryDocx(doc, docxBtn);
-                    });
-                }
-
-                item.querySelector('.delete-btn').onclick = async (e) => {
+                const menuBtn = item.querySelector('.row-menu-btn');
+                menuBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    if (!confirm(`Delete "${doc.filename}" permanently? This cannot be undone.`)) return;
-                    const row = await deleteDocumentRow(doc, { purgeContent: !supported });
-                    if (!row) { alert('Failed to delete document.'); return; }
-                    showNotification('Document deleted.');
-                    await loadHistory();
-                };
+                    openRowMenu(menuBtn, doc, supported);
+                });
 
                 itemsContainer.appendChild(item);
             });
@@ -1300,12 +1418,136 @@ function initApp() {
         try {
             const type = getActiveTemplate();
             const docs = await getDocuments(type);
+            if (historyType !== null && historyType !== type && searchQuery()) {
+                // A query for diaries means nothing in the Letter list.
+                historySearchInput.value = '';
+                expandedBeforeSearch = null;
+            }
+            historyType = type;
+            historyDocs = docs;
+            historyIndex = new Map(docs.map((d) => [d.id, searchableText(d)]));
+            syncSearchChrome();
             renderHistory(docs);
+            void trashPanel?.refresh();
+            void refreshBackupLabel();
         } catch (err) {
             console.error('Failed to load history:', err);
         }
     }
     loadHistoryFn = loadHistory;
+
+    // ── Row "..." menu: one shared menu, placed next to the clicked button ──
+    const rowMenuEl = document.getElementById('rowMenu');
+    /** @type {{ doc: object, supported: boolean, btn: HTMLElement } | null} */
+    let rowTarget = null;
+
+    function placeRowMenu(trigger) {
+        if (!rowMenuEl) return;
+        const t = trigger.getBoundingClientRect();
+        const m = rowMenuEl.getBoundingClientRect();
+        const left = Math.max(8, Math.min(t.right - m.width, window.innerWidth - m.width - 8));
+        let top = t.bottom + 4;
+        if (top + m.height > window.innerHeight - 8) top = Math.max(8, t.top - m.height - 4);
+        rowMenuEl.style.left = `${left}px`;
+        rowMenuEl.style.top = `${top}px`;
+    }
+
+    rowMenu = rowMenuEl
+        ? createPopMenu(rowMenuEl, { onOpen: placeRowMenu, onClose: () => { rowTarget = null; } })
+        : null;
+
+    /**
+     * @param {HTMLElement} btn the "..." button
+     * @param {object} doc
+     * @param {boolean} supported can this version open the document?
+     */
+    function openRowMenu(btn, doc, supported) {
+        if (!rowMenuEl || !rowMenu) return;
+        rowTarget = { doc, supported, btn };
+        const docx = rowMenuEl.querySelector('[data-action="docx"]');
+        const trash = rowMenuEl.querySelector('[data-action="trash"]');
+        if (docx) docx.hidden = !supported;
+        if (trash) {
+            // Older-format documents cannot be restored, so they are deleted
+            // for real rather than trashed.
+            trash.querySelector('span').textContent = supported ? 'Move to Trash' : 'Delete';
+        }
+        rowMenu.toggle(btn);
+    }
+
+    rowMenuEl?.querySelector('[data-action="docx"]')?.addEventListener('click', () => {
+        const t = rowTarget;
+        if (t) void exportHistoryDocx(t.doc, t.btn);
+    });
+    rowMenuEl?.querySelector('[data-action="trash"]')?.addEventListener('click', () => {
+        const t = rowTarget;
+        if (!t) return;
+        if (t.supported) void moveToTrash(t.doc);
+        else void deleteUnsupportedRow(t.doc);
+    });
+    historyList?.addEventListener('scroll', () => rowMenu?.close(false), { passive: true });
+    window.addEventListener('resize', () => rowMenu?.close(false));
+
+    /** Older-format documents: confirm, then delete for real (no Trash, no restore). */
+    async function deleteUnsupportedRow(doc) {
+        if (!confirm(`Delete "${doc.filename}" permanently? This cannot be undone.`)) return;
+        const row = await deleteDocumentRow(doc, { purgeContent: true });
+        if (!row) { alert('Failed to delete document.'); return; }
+        showNotification('Document deleted.');
+        await loadHistory();
+    }
+
+    /**
+     * Move a document to Trash (no confirm — Undo and the Trash dialog make
+     * it recoverable). Flushes pending edits first so Trash holds the latest.
+     * @param {object} doc
+     */
+    async function moveToTrash(doc) {
+        const isOpen = currentDoc.id != null && currentDoc.id === doc.id;
+        try {
+            if (isOpen && saveTimer !== null) {
+                clearTimeout(saveTimer);
+                saveTimer = null;
+                await flushSave();
+            }
+            const row = await trashDocumentById(doc.type, doc.id);
+            if (!row) { alert('Failed to move document to Trash.'); return; }
+            if (isOpen) await startNewDocument(doc.type);
+            await loadHistory();
+            showActionToast({
+                message: `“${doc.filename}” moved to Trash.`,
+                actionLabel: 'Undo',
+                actionIcon: 'rotate-left',
+                onAction: async () => {
+                    const back = await restoreDocumentById(doc.type, doc.id);
+                    if (!back) { showNotification('Could not undo.'); return; }
+                    await loadHistory();
+                    showNotification('Document restored.');
+                },
+            });
+        } catch (err) {
+            console.error('Move to Trash failed:', err);
+            alert('Failed to move document to Trash.');
+        }
+    }
+
+    trashPanel = initTrashPanel({
+        activeType: getActiveTemplate,
+        list: getTrashedDocuments,
+        restore: async (doc) => {
+            const row = await restoreDocumentById(doc.type, doc.id);
+            if (row) await loadHistory();
+            return Boolean(row);
+        },
+        deleteForever: async (doc) => {
+            const row = await deleteTrashedForever(doc.type, doc.id, { connected: isConnected() });
+            return Boolean(row);
+        },
+        deleteWarning: (doc) => (doc.driveFileId
+            ? 'It will also be removed from your Drive backup on the next sync.'
+            : ''),
+        notify: showNotification,
+    });
 
     showUnopenableDocument = (doc, opts) => { void unsupportedDocs?.open(doc, null, opts); };
     unsupportedDocs = initUnsupportedDocs({
@@ -1371,6 +1613,7 @@ function initApp() {
 
     if (formatToolbarEl) {
         formatToolbar = initFormatToolbar(formatToolbarEl, () => activeSheet()?.editor ?? null);
+        initKeyboardDock(formatToolbarEl);
         const tableControls = initTableControls(() => activeSheet()?.editor ?? null);
         const syncToolbar = () => {
             formatToolbar?.sync();
@@ -1610,15 +1853,25 @@ function initApp() {
         setSidebarOpen(!isToggled);
     });
 
-    // Close history sidebar when clicking outside
+    // Close history sidebar when clicking outside. The row menu, the Trash
+    // dialog and the Undo toast are part of the panel's own flow even though
+    // they live outside the <aside>, so using them must not collapse it.
     document.addEventListener('click', function (e) {
-        if (isToggled && sidebar && !sidebar.contains(e.target) && switchBtn && !switchBtn.contains(e.target)) {
+        const panelOwned = e.target instanceof Element
+            && e.target.closest('.row-menu, .action-toast, dialog');
+        if (isToggled && sidebar && !panelOwned && !sidebar.contains(e.target) && switchBtn && !switchBtn.contains(e.target)) {
             setSidebarOpen(false);
         }
     });
     pageScale = initPageScale();
 
-    document.querySelectorAll('#templateSegment .segment-btn').forEach((btn) => {
+    // Diary/Letter switcher (a menu).
+    const typeSwitchBtn = document.getElementById('typeSwitchBtn');
+    const typeMenuEl = document.getElementById('templateSegment');
+    if (typeSwitchBtn && typeMenuEl) {
+        bindMenuTrigger(typeSwitchBtn, createPopMenu(typeMenuEl));
+    }
+    document.querySelectorAll('#templateSegment [data-template]').forEach((btn) => {
         btn.addEventListener('click', () => {
             switchTemplate(btn.dataset.template);
         });

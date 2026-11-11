@@ -3,11 +3,38 @@
  * Pagination / print geometry stay at unscaled A4 sizes.
  */
 
+import { MOBILE_QUERY } from './layout.js';
+
 const PAGE_W_PX = 794; // ~210mm at 96dpi
+/** Smallest scale a *manual* pinch-out can reach (never above the fit scale). */
 const MIN_SCALE = 0.45;
+/** Floor for the fit scale itself, only a guard against a degenerate stage width. */
+const FIT_FLOOR = 0.2;
 const MAX_SCALE = 1.5;
 const FIT_MAX = 1;
-const MOBILE_MQ = '(max-width: 768px)';
+const STAGE_PAD = 24;
+
+/**
+ * Scale at which a whole A4 page fits a stage `stageWidth` wide. Not bounded by
+ * MIN_SCALE: on a 360px phone the fit is ~0.42, and flooring it at 0.45 made
+ * the page 20px wider than the screen (cropped on the right).
+ * @param {number} stageWidth
+ */
+export function fitScaleFor(stageWidth) {
+    const available = Math.max(160, stageWidth - STAGE_PAD);
+    return Math.min(FIT_MAX, Math.max(FIT_FLOOR, available / PAGE_W_PX));
+}
+
+/**
+ * Clamp a manual (pinch / double-tap) scale. The lower bound never exceeds the
+ * fit scale, so "zoom out" can always get back to the whole page.
+ * @param {number} n
+ * @param {number} fit current fit scale
+ */
+export function clampManualScale(n, fit) {
+    return Math.min(MAX_SCALE, Math.max(Math.min(MIN_SCALE, fit), n));
+}
+const MOBILE_MQ = MOBILE_QUERY;
 const DOUBLE_TAP_MS = 280;
 const DOUBLE_TAP_PX = 24;
 
@@ -55,9 +82,7 @@ export function initPageScale() {
 
     function computeFitScale() {
         if (!stage) return 1;
-        const pad = 24;
-        const available = Math.max(160, stage.clientWidth - pad);
-        return Math.min(FIT_MAX, Math.max(MIN_SCALE, available / PAGE_W_PX));
+        return fitScaleFor(stage.clientWidth);
     }
 
     function clearScaleCollapse(el) {
@@ -102,7 +127,7 @@ export function initPageScale() {
     }
 
     function clampScale(n) {
-        return Math.min(MAX_SCALE, Math.max(MIN_SCALE, n));
+        return clampManualScale(n, fitScale);
     }
 
     function currentScaleValue() {

@@ -56,23 +56,6 @@ export function isBlankCell(cellNode) {
     return only.type.name === 'paragraph' && only.content.size === 0 && !only.attrs.cont;
 }
 
-/**
- * Locate the page/column/cell holding a document position.
- * @returns {{ page: PageInfo, cell: CellInfo } | null}
- */
-export function locate(doc, pos) {
-    const pages = collectPages(doc);
-    for (const page of pages) {
-        if (pos < page.pos || pos > page.pos + page.node.nodeSize) continue;
-        for (const cell of Object.values(page.cells)) {
-            const { start, end } = cellContentRange(cell);
-            if (pos >= start && pos <= end) return { page, cell };
-        }
-        return { page, cell: null };
-    }
-    return null;
-}
-
 /** Index of the page containing `pos`, clamped to a valid page. */
 export function pageIndexAt(doc, pos) {
     let idx = 0;

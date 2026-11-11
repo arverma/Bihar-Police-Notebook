@@ -219,7 +219,18 @@ export class DiaryPageView extends PageViewBase {
         if (this.headerEl) this.headerEl.hidden = !hasHeader;
         if (this.titlesRow) this.titlesRow.hidden = !hasHeader;
         if (this.toggleBtn) {
-            this.toggleBtn.textContent = hasHeader ? 'Hide header' : 'Show header';
+            const next = hasHeader ? 'hide' : 'show';
+            if (this.toggleBtn.dataset.state !== next) {
+                // Icon shows the action the button will take, like its label.
+                this.toggleBtn.dataset.state = next;
+                this.toggleBtn.replaceChildren();
+                const icon = document.createElement('i');
+                icon.className = `fas ${hasHeader ? 'fa-eye-slash' : 'fa-eye'}`;
+                icon.setAttribute('aria-hidden', 'true');
+                const label = document.createElement('span');
+                label.textContent = hasHeader ? 'Hide header' : 'Show header';
+                this.toggleBtn.append(icon, label);
+            }
             this.toggleBtn.setAttribute('aria-pressed', hasHeader ? 'true' : 'false');
             this.toggleBtn.title = hasHeader ? 'Hide page header' : 'Show page header';
         }

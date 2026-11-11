@@ -2,6 +2,7 @@
  * Dictation mic (right end of the format toolbar) + onboarding sheet UI.
  */
 
+import { MOBILE_QUERY } from './layout.js';
 import {
     getPref,
     setPref,
@@ -109,7 +110,7 @@ export function initDictation(hooks) {
     // Sync initial lang into engine
     void engine.setLanguage(currentLang);
 
-    const mobileMq = window.matchMedia('(max-width: 768px)');
+    const mobileMq = window.matchMedia(MOBILE_QUERY);
 
     function isMobileUi() {
         return mobileMq.matches;

@@ -4,7 +4,8 @@ import { readFile } from 'node:fs/promises';
 import { openFresh } from './pagination-helpers.js';
 
 /**
- * Word export from the History sidebar: every row has its own button, which
+ * Word export from the History sidebar: every row has a "..." menu with a Download
+ * Word item, which
  * downloads a real .docx — of the live editor for the open document, of the
  * stored copy (without opening it) for any other row.
  */
@@ -16,11 +17,12 @@ async function openSidebar(page) {
   await expect(page.locator('#sidebar')).toHaveClass(/open/);
 }
 
-/** Click a row's Word button and read the downloaded file. */
+/** Open a row's "..." menu, choose Download Word and read the downloaded file. */
 async function downloadDocx(page, row) {
+  await row.locator('.row-menu-btn').click();
   const [download] = await Promise.all([
     page.waitForEvent('download'),
-    row.locator('.docx-btn').click(),
+    page.locator('#rowMenu [data-action="docx"]').click(),
   ]);
   const zip = await JSZip.loadAsync(await readFile(await download.path()));
   return { name: download.suggestedFilename(), xml: await zip.file('word/document.xml').async('string') };
@@ -72,43 +74,47 @@ test('another row exports its own stored content and does not open it', async ({
   await expect(page.locator('input[data-field="fir_number"]').first()).toHaveValue('222/2026');
 });
 
-test('row actions are visible without hovering (touch and keyboard can reach them)', async ({ page }) => {
+test('row menu button is visible without hovering and offers Word and Trash', async ({ page }) => {
   await openFresh(page);
   await fillFir(page, '111/2026');
   await openSidebar(page);
   const row = page.locator('.history-item').first();
   await expect(row).toBeVisible({ timeout: 10_000 });
-  for (const sel of ['.docx-btn', '.delete-btn']) {
-    const btn = row.locator(sel);
-    await expect(btn).toBeVisible();
-    const box = await btn.boundingBox();
-    expect(box.width).toBeGreaterThanOrEqual(32);
-    expect(await btn.evaluate((el) => getComputedStyle(el.parentElement).opacity)).toBe('1');
-  }
+  const btn = row.locator('.row-menu-btn');
+  await expect(btn).toBeVisible();
+  const box = await btn.boundingBox();
+  expect(box.width).toBeGreaterThanOrEqual(32);
+  expect(box.height).toBeGreaterThanOrEqual(32);
+  expect(await btn.evaluate((el) => getComputedStyle(el.parentElement).opacity)).toBe('1');
+  // The old per-row icons are gone.
+  await expect(row.locator('.docx-btn, .delete-btn')).toHaveCount(0);
+
+  await btn.click();
+  const menu = page.locator('#rowMenu');
+  await expect(menu).toBeVisible();
+  await expect(menu.locator('[role="menuitem"]:visible')).toHaveText(['Move to Trash', 'Download Word']);
 });
 
-test('History header: no title or subtitle, a labeled New button, and a neutral sync button', async ({ page }) => {
+test('History panel: one New button, a type switcher, and a text backup status', async ({ page }) => {
   await openFresh(page);
   await openSidebar(page);
   await expect(page.locator('.sidebar-header h3, .sidebar-subtitle')).toHaveCount(0);
   await expect(page.locator('.add-template-btn')).toHaveText('New diary');
+  await expect(page.locator('#typeSwitchBtn')).toContainText('Diary');
+  await page.locator('#typeSwitchBtn').click();
   await page.locator('#templateSegment [data-template="letter"]').click();
   await expect(page.locator('.add-template-btn')).toHaveText('New letter');
+  await expect(page.locator('#typeSwitchBtn')).toContainText('Letter');
 
-  // The sync button keeps the same border as its neighbours in every sync state;
-  // state is the dot (::after) and the label, not the border.
-  const borders = await page.evaluate(() => {
+  // Backup state is words in the footer, not a coloured dot: every state has a label.
+  const labels = await page.evaluate(() => {
     const btn = document.getElementById('backupBtn');
-    const out = {};
-    for (const state of ['needs-auth', 'syncing', 'ready', 'error']) {
-      btn.dataset.backup = state;
-      out[state] = getComputedStyle(btn).borderColor;
-    }
-    out.dot = getComputedStyle(btn, '::after').backgroundColor;
-    return out;
+    const label = document.getElementById('backupLabel');
+    return { btnInFooter: Boolean(btn.closest('.sidebar-footer')), text: label.textContent.trim() };
   });
-  expect(new Set([borders['needs-auth'], borders.syncing, borders.ready, borders.error]).size).toBe(1);
-  expect(borders.dot).not.toBe('rgba(0, 0, 0, 0)');
+  expect(labels.btnInFooter).toBe(true);
+  expect(labels.text).toBe('Back up to Drive');
+  await expect(page.locator('#backupBtn')).toHaveAttribute('aria-label', 'Connect to back up');
 });
 
 test('the PDF button is unchanged', async ({ page }) => {

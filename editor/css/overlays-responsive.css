@@ -13,7 +13,7 @@
 }
 
 /* Mobile keyboards already expose a mic — hide in-app dictation chrome */
-@media (max-width: 768px) {
+@media (max-width: 1023px) {
     .dictation-fab,
     .dictation-interim,
     .punctuation-panel,
@@ -22,17 +22,6 @@
         display: none !important;
     }
 
-    .format-toolbar {
-        justify-content: flex-start;
-        min-height: 36px;
-        padding: 2px 8px;
-        border-radius: 0;
-        box-shadow: none;
-        border-top: 1px solid rgba(26, 54, 93, 0.12);
-    }
-
-    .format-toolbar button {
-        width: 34px;
-        height: 32px;
-    }
+    /* The phone formatting bar (docked above the keyboard) is styled in
+       header-responsive.css. */
 }

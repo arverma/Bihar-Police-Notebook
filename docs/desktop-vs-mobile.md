@@ -1,10 +1,25 @@
 # Desktop vs mobile
 
-Canonical breakpoint: **`max-width: 768px`** (phone layout). Wider viewports use desktop/tablet behavior. Extra header tightening uses 1100 / 900 / 420px; History nudge uses ≥1025px.
+There are exactly **two layouts**, split at **1024px**:
+
+- **Desktop** — viewport **≥ 1024px** (laptops and desktops, tablets in landscape).
+- **Mobile** — viewport **< 1024px** (phones, and tablets in portrait). There is **no separate tablet layout**.
+
+The boundary lives in one place for scripts, [`editor/js/layout.js`](../editor/js/layout.js) (`MOBILE_QUERY = (max-width: 1023px)`), and is written as `max-width: 1023px` / `min-width: 1024px` in the stylesheets. `layout.test.js` fails if a stylesheet adds any other layout breakpoint. The only other width rules are a 1100px tightening of the narrowest desktop header and 520 / 480 / 420px phone refinements *inside* the mobile layout.
+
+### Header at each size
+
+| | Desktop (≥1024px) | Mobile (<1024px) |
+|---|---|---|
+| Left | Panel toggle, logo (Hindi wordmark above 1100px), document name | Panel toggle, logo |
+| Centre | Formatting pill (with Hindi Typing toggle and mic) | Document name, centred in the gap |
+| Right | PDF (text label above 1100px) | PDF, always flush right |
+| Formatting toolbar | In the header | Not in the header — docks above the keyboard while an editor has focus |
+| Height | 77px | 57px |
 
 ## Feature matrix
 
-| Capability | Desktop / tablet | Phone (≤768px) |
+| Capability | Desktop (≥1024px) | Mobile (<1024px) |
 |------------|------------------|----------------|
 | Letter & Diary templates | Yes | Yes |
 | Document History | Yes (sidebar; slight workspace nudge on very wide screens) | Yes (overlay drawer) |
@@ -26,12 +41,12 @@ flowchart TB
     drive[Drive_backup]
     print[Print_PDF]
   end
-  subgraph desk [Desktop_tablet]
+  subgraph desk [Desktop]
     hinglish[Hindi_Typing_toggle]
     dict[Toolbar_mic]
     mainScroll[main-content_scroll]
   end
-  subgraph phone [Phone]
+  subgraph phone [Mobile]
     pinch[Pinch_and_Fit_chip]
     stageScroll[editor-stage_scroll]
     kbMic[OS_keyboard_mic]
@@ -50,6 +65,7 @@ flowchart TB
 
 ## Related code
 
+- The boundary: `editor/js/layout.js` (+ `layout.test.js`)
 - Header / lang hide: `editor/css/header-responsive.css`
 - Dictation hide: `editor/js/dictation-ui.js`, `editor/css/overlays-responsive.css`
 - Translit gate: `isTransliterationEnabled()` in `editor/js/main.js`

@@ -22,18 +22,17 @@ Runs on:
 - Every PR (any branch → any branch), unless only docs changed
 - Called internally by `deploy-staging.yml` and `pages.yml` via `workflow_call`
 
-Steps:
+Jobs (run in parallel, each on its own runner, so wall time is the slowest job rather than the sum):
 
-1. **Checkout** — `actions/checkout@v4`
-2. **Node 20 setup** — `actions/setup-node@v4` with npm cache
-3. **`npm ci`** — clean install from lockfile
-4. **Vendored bundle checks** — `npm run vendor:tiptap -- --check` (fails if `editor/vendor/tiptap/` no longer matches the pinned `@tiptap/*` versions) and `npm run vendor:docx -- --check` (same for `editor/vendor/docx/` and the pinned `docx`)
-5. **Unit tests** — `npm test` (Vitest)
-6. **Playwright browser install** — `npx playwright install --with-deps chromium webkit`
-7. **E2E tests** — `npm run test:e2e` (desktop, mobile, tablet viewports)
-8. **WebKit E2E** — `npm run test:webkit`
-9. **Visual regression** — `npm run test:visual` (Linux PNG baselines compared natively on the Ubuntu runner)
-10. **Upload Playwright report** — artifact retained 7 days, uploaded even on failure (`if: !cancelled()`)
+| Job | What it runs |
+|---|---|
+| **`unit`** | `npm ci`, the vendored-bundle checks (`vendor:tiptap -- --check`, `vendor:docx -- --check`; they fail if `editor/vendor/` no longer matches the pinned versions), then `npm test` (Vitest). No browser needed. |
+| **`e2e`** | Playwright desktop, mobile and tablet-width projects (tablets use the mobile layout), split into 3 shards (`--shard=N/3`). Installs Chromium only. |
+| **`webkit`** | `npm run test:webkit` on the editing, pagination and export specs. Installs WebKit only. |
+| **`visual`** | `npm run test:visual`; Linux PNG baselines compared natively on the Ubuntu runner. |
+| **`test`** (named "Unit + E2E") | Aggregate gate. Passes only when all four above succeed. `pages.yml` and `deploy-staging.yml` depend on it, and it keeps the original check name so branch-protection settings keep matching. |
+
+Each Playwright job uploads its own report artifact (7 days, also on failure). In CI Playwright uses 2 workers per runner and 1 retry.
 
 Concurrency: one run per `workflow + ref`; newer push cancels older.
 

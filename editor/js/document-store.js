@@ -104,7 +104,30 @@ function normalizeDoc(doc, type) {
 export async function getDocuments(type) {
     const rows = await withStore(type, 'readonly', (s) => s.getAll());
     return (rows || [])
-        .filter((doc) => !doc.deletedAt)
+        .filter((doc) => !doc.deletedAt && !doc.trashedAt)
+        .map((doc) => normalizeDoc(doc, type));
+}
+
+/**
+ * Thrown when a save targets a document that is in Trash or already deleted.
+ * A late autosave must never pull a trashed document back out of Trash.
+ */
+export class DocumentUnavailableError extends Error {
+    constructor(id) {
+        super(`Document ${id} is in Trash or deleted.`);
+        this.name = 'DocumentUnavailableError';
+    }
+}
+
+/**
+ * List documents in Trash (not yet permanently deleted) of a type.
+ * @param {'letter'|'diary'} type
+ * @returns {Promise<object[]>}
+ */
+export async function getTrashedDocuments(type) {
+    const rows = await withStore(type, 'readonly', (s) => s.getAll());
+    return (rows || [])
+        .filter((doc) => doc.trashedAt && !doc.deletedAt)
         .map((doc) => normalizeDoc(doc, type));
 }
 
@@ -149,6 +172,9 @@ export function previewText(doc) {
  * @returns {boolean}
  */
 export function needsBackup(doc) {
+    // Trash holds the document: nothing uploads (and no Drive copy is touched)
+    // until it is restored or permanently deleted.
+    if (doc.trashedAt && !doc.deletedAt) return false;
     if (doc.deletedAt) {
         return !doc.syncedAt || doc.syncedAt < doc.deletedAt || doc.syncedAt < doc.updated_at;
     }
@@ -184,6 +210,7 @@ export async function saveDocumentById(type, doc) {
 
         tx.oncomplete = () => resolve(resultId);
         tx.onerror = () => reject(tx.error);
+        // A rejection already issued (e.g. DocumentUnavailableError) wins.
         tx.onabort = () => reject(tx.error || new Error('Document save transaction aborted.'));
 
         if (doc.id != null) {
@@ -208,10 +235,15 @@ export async function saveDocumentById(type, doc) {
                     addReq.onerror = () => reject(addReq.error);
                     return;
                 }
+                if (existing.trashedAt || existing.deletedAt) {
+                    // Abort so a stale autosave cannot undo a trash or delete.
+                    reject(new DocumentUnavailableError(existing.id));
+                    tx.abort();
+                    return;
+                }
                 existing.filename = filename;
                 existing.content = content;
                 existing.updated_at = now;
-                existing.deletedAt = null;
                 if (!existing.uuid) existing.uuid = doc.uuid || newUuid();
                 // Content change invalidates sync until next push
                 existing.syncError = null;
@@ -238,16 +270,6 @@ export async function saveDocumentById(type, doc) {
         addReq.onsuccess = () => { resultId = addReq.result; };
         addReq.onerror = () => reject(addReq.error);
     });
-}
-
-/**
- * Save (upsert by filename) a document.
- * @param {'letter'|'diary'} type
- * @param {string} filename
- * @param {string} content
- */
-export async function saveDocument(type, filename, content) {
-    return saveDocumentById(type, { id: null, filename, content });
 }
 
 /**
@@ -282,6 +304,101 @@ export async function softDeleteDocumentById(type, id, opts = {}) {
         };
         findReq.onerror = () => reject(findReq.error);
     });
+}
+
+/**
+ * Update one row inside a transaction.
+ * @param {'letter'|'diary'} type
+ * @param {number} id
+ * @param {(row: object) => object|null} mutate return the row to store, or null to leave it
+ * @returns {Promise<object|null>} stored row, or null
+ */
+async function updateRow(type, id, mutate) {
+    const db = await openDb();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(type, 'readwrite');
+        const store = tx.objectStore(type);
+        const getReq = store.get(id);
+        getReq.onsuccess = () => {
+            const row = getReq.result;
+            const next = row ? mutate(row) : null;
+            if (!next) {
+                resolve(null);
+                return;
+            }
+            const putReq = store.put(next);
+            putReq.onsuccess = () => resolve({ ...next, type, _id: String(next.id) });
+            putReq.onerror = () => reject(putReq.error);
+        };
+        getReq.onerror = () => reject(getReq.error);
+    });
+}
+
+/**
+ * Move a live document to Trash. Content and Drive metadata are kept, and
+ * `updated_at` is untouched so the row never looks newer than its Drive copy.
+ * @param {'letter'|'diary'} type
+ * @param {number} id
+ * @returns {Promise<object|null>} the trashed row, or null if not a live doc
+ */
+export async function trashDocumentById(type, id) {
+    return updateRow(type, id, (row) => {
+        if (row.deletedAt || row.trashedAt) return null;
+        row.trashedAt = new Date().toISOString();
+        return row;
+    });
+}
+
+/**
+ * Bring a document back from Trash. Bumps `updated_at` so it backs up again.
+ * @param {'letter'|'diary'} type
+ * @param {number} id
+ * @returns {Promise<object|null>} the restored row, or null if not in Trash
+ */
+export async function restoreDocumentById(type, id) {
+    return updateRow(type, id, (row) => {
+        if (row.deletedAt || !row.trashedAt) return null;
+        row.trashedAt = null;
+        row.updated_at = new Date().toISOString();
+        row.syncError = null;
+        return row;
+    });
+}
+
+/**
+ * Permanently delete a trashed document: soft-delete (Drive tombstone) so the
+ * Drive copy is removed on the next sync. The caller hard-deletes instead when
+ * no Drive copy can exist (see `hasDriveCopy`).
+ * @param {'letter'|'diary'} type
+ * @param {number} id
+ * @returns {Promise<object|null>} the tombstone row, or null if not in Trash
+ */
+export async function purgeTrashedDocumentById(type, id) {
+    return updateRow(type, id, (row) => {
+        if (row.deletedAt || !row.trashedAt) return null;
+        const now = new Date().toISOString();
+        row.trashedAt = null;
+        row.deletedAt = now;
+        row.updated_at = now;
+        row.syncError = null;
+        return row;
+    });
+}
+
+/**
+ * "Delete forever" for a trashed document. Same rule as before Trash existed:
+ * a document that never reached Drive is removed outright, otherwise the
+ * tombstone stays until the next sync deletes the Drive copy.
+ * @param {'letter'|'diary'} type
+ * @param {number} id
+ * @param {{ connected: boolean }} opts whether Drive backup is connected
+ * @returns {Promise<object|null>} deleted row, or null if not in Trash
+ */
+export async function deleteTrashedForever(type, id, { connected }) {
+    const row = await purgeTrashedDocumentById(type, id);
+    if (!row) return null;
+    if (!connected && !row.driveFileId) await hardDeleteById(type, id);
+    return row;
 }
 
 /**
@@ -500,6 +617,9 @@ export async function upsertFromRemote(remote) {
                 row.created_at = row.created_at || createdAt;
                 row.uuid = remote.uuid;
                 row.deletedAt = deletedAt;
+                // A remote edit refreshes a trashed document but never restores
+                // it; a remote tombstone is a permanent delete and clears it.
+                if (deletedAt) row.trashedAt = null;
                 if (remote.driveFileId) row.driveFileId = remote.driveFileId;
                 row.syncedAt = updatedAt;
                 row.syncError = null;

@@ -17,23 +17,20 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
-    name: Unit + E2E
+  # The four suites are independent, so they run side by side on separate
+  # runners: wall time is the slowest one, not the sum. Each installs only the
+  # browser it needs.
+  unit:
+    name: Unit
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-
+    timeout-minutes: 10
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
-
-      - name: Install dependencies
-        run: npm ci
+      - run: npm ci
 
       # The editor bundle is committed (static hosting, no build step); fail if
       # it no longer matches the pinned @tiptap/* versions in package-lock.
@@ -45,28 +42,96 @@ jobs:
       - name: Unit tests (Vitest)
         run: npm test
 
-      - name: Install Playwright browsers (Chromium, WebKit)
-        run: npx playwright install --with-deps chromium webkit
-
-      # playwright.config.js starts its own static server (scripts/serve.py) on :8080.
-      - name: E2E tests (Playwright — desktop, mobile, tablet)
-        run: npm run test:e2e
-
-      # Safari's engine — what iOS / iPadOS users run — on the editing,
-      # pagination and export specs.
-      - name: E2E tests (Playwright — WebKit)
-        run: npm run test:webkit
-
-      # Baselines are Linux PNGs and this runner is Linux, so they are compared
-      # natively here. Locally, regenerate with `npm run test:visual:update`,
-      # which runs this same image in Docker.
-      - name: Visual regression
-        run: npm run test:visual
-
+  # Desktop, mobile and tablet projects. The biggest suite, so it is sharded;
+  # playwright.config.js starts its own static server (scripts/serve.py) per job.
+  e2e:
+    name: E2E (chromium ${{ matrix.shard }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ['1/3', '2/3', '3/3']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Install Playwright browsers (Chromium)
+        run: npx playwright install --with-deps chromium
+      - name: E2E tests (Playwright - desktop, mobile, tablet)
+        run: npm run test:e2e -- --shard=${{ matrix.shard }}
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
+          name: playwright-report-e2e-${{ strategy.job-index }}
           path: playwright-report/
           retention-days: 7
+
+  # Safari's engine (what iOS / iPadOS users run) on the editing, pagination
+  # and export specs.
+  webkit:
+    name: E2E (WebKit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Install Playwright browsers (WebKit)
+        run: npx playwright install --with-deps webkit
+      - run: npm run test:webkit
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-webkit
+          path: playwright-report/
+          retention-days: 7
+
+  # Baselines are Linux PNGs and this runner is Linux, so they are compared
+  # natively here. Locally, regenerate with `npm run test:visual:update`,
+  # which runs this same image in Docker.
+  visual:
+    name: Visual regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Install Playwright browsers (Chromium)
+        run: npx playwright install --with-deps chromium
+      - run: npm run test:visual
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-visual
+          path: playwright-report/
+          retention-days: 7
+
+  # Single status for branch protection and for pages.yml / deploy-staging.yml
+  # (`needs: test`). Keeps the original check name "Unit + E2E" so existing
+  # required-check settings keep matching.
+  test:
+    name: Unit + E2E
+    if: ${{ always() }}
+    needs: [unit, e2e, webkit, visual]
+    runs-on: ubuntu-latest
+    steps:
+      - name: All suites passed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "unit/e2e/webkit/visual: $RESULTS"
+          for r in $RESULTS; do [ "$r" = "success" ] || exit 1; done

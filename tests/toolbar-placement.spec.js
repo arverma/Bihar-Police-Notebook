@@ -1,21 +1,23 @@
 import { test, expect } from '@playwright/test';
 
 /**
- * The format toolbar lives in the header bar on desktop/tablet (a centred pill
- * with the dictation mic at its right end) and drops to its own row under the
- * bar on phones (<=768px, where the mic is withdrawn for the keyboard's own).
+ * The format toolbar lives in the header bar on desktop (>= 1024px; a centred pill
+ * with the dictation mic at its right end). On the mobile layout (<1024px) it leaves the
+ * header, docks above the keyboard while an editor has focus, and the mic is
+ * withdrawn for the keyboard's own (see responsive/toolbar-touch.spec.js).
  */
 
 async function open(page, width) {
   await page.setViewportSize({ width, height: 900 });
   await page.goto('/');
   await page.waitForFunction(() => window.__uxInitComplete);
-  await expect(page.locator('#formatToolbar')).toBeVisible();
+  // The mobile layout shows the toolbar only while an editor has focus.
+  if (width >= 1024) await expect(page.locator('#formatToolbar')).toBeVisible();
 }
 
 const box = (page, sel) => page.locator(sel).first().boundingBox();
 
-for (const width of [1440, 1100, 900, 769]) {
+for (const width of [1440, 1280, 1100, 1024]) {
   test(`${width}px: toolbar shares the top bar row with brand and PDF`, async ({ page }) => {
     await open(page, width);
     const [bar, tb, brand, pdf] = await Promise.all([
@@ -59,11 +61,15 @@ test('there is no floating mic any more', async ({ page }) => {
   expect(await page.locator('#dictationFab').evaluate((el) => el.closest('#formatToolbar') !== null)).toBe(true);
 });
 
-test('768px: toolbar is its own row under the bar and the mic is gone', async ({ page }) => {
-  await open(page, 768);
-  const [brand, tb] = await Promise.all([box(page, '.header-brand'), box(page, '#formatToolbar')]);
-  expect(tb.y).toBeGreaterThanOrEqual(brand.y + brand.height);
-  expect(tb.width).toBeGreaterThanOrEqual(767);
+test('1023px (tablet included): toolbar leaves the header, docks at the bottom once the editor has focus, and the mic is gone', async ({ page }) => {
+  await open(page, 1023);
+  const toolbar = page.locator('#formatToolbar');
+  await expect(toolbar).toBeHidden();
+  await page.locator('.editor-diary .bp-doc').first().click();
+  await expect(toolbar).toBeVisible();
+  const tb = await box(page, '#formatToolbar');
+  expect(tb.width).toBeGreaterThanOrEqual(1022);
+  expect(Math.abs(tb.y + tb.height - 900)).toBeLessThanOrEqual(1);
   await expect(page.locator('#dictationFab')).toBeHidden();
   await expect(page.locator('#punctuationToggle')).toBeHidden();
 });

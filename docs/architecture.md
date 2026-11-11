@@ -26,7 +26,7 @@ flowchart LR
 |-------|------|
 | [Editor site](components/editor-shell.md) | UI: header, History, Letter/Diary pages, overlays |
 | [IndexedDB](components/storage.md) | Local autosave on this device |
-| [Google Input Tools](components/typing.md) | Hinglish → Hindi suggestions (network; desktop/tablet) |
+| [Google Input Tools](components/typing.md) | Hinglish → Hindi suggestions (network; desktop) |
 | [Google Drive](components/drive-backup.md) | Manual backup / restore into your Drive folder |
 | [Print / PDF](components/templates.md) | Shared A4 print document → native print (desktop) or raster PDF (iOS/iPadOS) |
 
@@ -77,7 +77,7 @@ flowchart TB
 
 ## Phone vs computer
 
-Behavior changes at **768px** width. See [Desktop vs mobile](desktop-vs-mobile.md).
+Behavior changes at **1024px** width (two layouts: desktop and mobile). See [Desktop vs mobile](desktop-vs-mobile.md).
 
 ## Testing
 
@@ -97,5 +97,5 @@ See [tests/README.md](../tests/README.md).
 | Drive scope | `drive.file` (files the app creates) |
 | IndexedDB (docs) | `bp-writing-tool` |
 | IndexedDB (auth) | `bp-writing-tool-auth` |
-| Mobile breakpoint | `max-width: 768px` |
+| Mobile breakpoint | `max-width: 1023px` (desktop starts at 1024px; `editor/js/layout.js`) |
 | Autosave debounce | 600ms |
