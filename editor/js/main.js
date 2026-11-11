@@ -538,6 +538,30 @@ function dismissSuggestions() {
     suggestionSeq++;
     clearTimeout(typingTimer);
     suggestionsBox.style.display = 'none';
+    suggestionNav = null;
+}
+
+/**
+ * Keyboard state of the open popup: the highlighted row and how to accept it.
+ * Null whenever the popup is closed.
+ * @type {{ items: HTMLElement[], index: number, accept: (i: number) => void } | null}
+ */
+let suggestionNav = null;
+
+function suggestionsOpen() {
+    return suggestionsBox.style.display === 'block' && suggestionNav !== null;
+}
+
+function setActiveSuggestion(index) {
+    if (!suggestionNav) return;
+    const n = suggestionNav.items.length;
+    suggestionNav.index = (index + n) % n;
+    suggestionNav.items.forEach((row, i) => {
+        const on = i === suggestionNav.index;
+        row.classList.toggle('active', on);
+        row.setAttribute('aria-selected', String(on));
+        if (on) row.scrollIntoView({ block: 'nearest' });
+    });
 }
 
 /** Keys that commit or leave the word being typed. */
@@ -741,6 +765,19 @@ function attachTransliteration(el) {
     });
 
     el.addEventListener('keydown', async function (e) {
+        if (isForDocText(el, e.target) && !e.isComposing && suggestionsOpen()
+            && !e.ctrlKey && !e.metaKey && !e.altKey) {
+            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                e.preventDefault();
+                setActiveSuggestion(suggestionNav.index + (e.key === 'ArrowDown' ? 1 : -1));
+                return;
+            }
+            if (e.key === 'Enter' || e.key === 'Tab') {
+                e.preventDefault();
+                suggestionNav.accept(suggestionNav.index);
+                return;
+            }
+        }
         if (isForDocText(el, e.target) && !e.isComposing
             && (WORD_LEAVING_KEYS.has(e.key) || ((e.ctrlKey || e.metaKey) && e.key.length === 1))) {
             // Enter / navigation / paste / cut / undo: the word is no longer being typed.
@@ -752,6 +789,11 @@ function attachTransliteration(el) {
         if (e.isComposing) return;
         if (!isTransliterationEnabled()) return;
         e.preventDefault();
+        if (suggestionsOpen()) {
+            // Commit the highlighted option plus a space.
+            suggestionNav.accept(suggestionNav.index, ' ');
+            return;
+        }
         const value = getEditableText(el);
         const cursor = getEditableCaret(el);
         const [start, end] = getWordBoundaries(value, cursor - 1);
@@ -811,6 +853,7 @@ document.addEventListener('click', function (e) {
 
 function showSuggestions(suggestions, wordStart, wordEnd, targetEl) {
     suggestionsBox.innerHTML = '';
+    suggestionNav = null;
     if (!suggestions || suggestions.length === 0 || !targetEl) {
         suggestionsBox.style.display = 'none';
         return;
@@ -862,21 +905,30 @@ function showSuggestions(suggestions, wordStart, wordEnd, targetEl) {
     suggestionsBox.style.left = boxLeft + 'px';
     suggestionsBox.style.top = boxTop + 'px';
 
-    suggestions.forEach((suggestion) => {
+    const rows = [];
+    const accept = (i, suffix = '') => {
+        // Hide first so diary reflow is not skipped by translitOwnsInput().
+        dismissSuggestions();
+        replaceEditableRange(targetEl, wordStart, wordEnd, suggestions[i] + suffix);
+        if (!getFieldForEditor(targetEl)) {
+            targetEl.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+    };
+    suggestionsBox.setAttribute('role', 'listbox');
+    suggestions.forEach((suggestion, i) => {
         const div = document.createElement('div');
         div.className = 'suggestion';
+        div.setAttribute('role', 'option');
         div.textContent = suggestion;
-        div.onclick = () => {
-            // Hide first so diary reflow is not skipped by translitOwnsInput().
-            suggestionsBox.style.display = 'none';
-            replaceEditableRange(targetEl, wordStart, wordEnd, suggestion);
-            if (!getFieldForEditor(targetEl)) {
-                targetEl.dispatchEvent(new Event('input', { bubbles: true }));
-            }
-        };
+        // Keep focus (and the caret) in the editor while clicking.
+        div.onmousedown = (ev) => ev.preventDefault();
+        div.onclick = () => accept(i);
         div.title = `Insert “${suggestion}”`;
         suggestionsBox.appendChild(div);
+        rows.push(div);
     });
+    suggestionNav = { items: rows, index: 0, accept };
+    setActiveSuggestion(0);
     suggestionsBox.style.display = 'block';
 
     const boxRect = suggestionsBox.getBoundingClientRect();
