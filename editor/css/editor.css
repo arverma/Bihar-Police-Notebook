@@ -1179,6 +1179,7 @@ span.diary-dotted-flow:focus {
     white-space: nowrap;
 }
 
+.suggestion.active,
 .suggestion:hover {
     background: #f0f4ff;
     color: var(--brand-primary);
