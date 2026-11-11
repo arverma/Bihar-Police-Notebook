@@ -544,7 +544,7 @@ function dismissSuggestions() {
 /**
  * Keyboard state of the open popup: the highlighted row and how to accept it.
  * Null whenever the popup is closed.
- * @type {{ items: HTMLElement[], index: number, accept: (i: number) => void } | null}
+ * @type {{ items: HTMLElement[], index: number, navigated: boolean, accept: (i: number) => void } | null}
  */
 let suggestionNav = null;
 
@@ -764,20 +764,26 @@ function attachTransliteration(el) {
         }, doneTypingInterval);
     });
 
-    el.addEventListener('keydown', async function (e) {
-        if (isForDocText(el, e.target) && !e.isComposing && suggestionsOpen()
-            && !e.ctrlKey && !e.metaKey && !e.altKey) {
-            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-                e.preventDefault();
-                setActiveSuggestion(suggestionNav.index + (e.key === 'ArrowDown' ? 1 : -1));
-                return;
-            }
-            if (e.key === 'Enter' || e.key === 'Tab') {
-                e.preventDefault();
-                suggestionNav.accept(suggestionNav.index);
-                return;
-            }
+    // Capture phase: the editor's own Enter/Tab/arrow handling must not run first
+    // (Enter would split the line before the highlighted word is inserted).
+    el.addEventListener('keydown', function (e) {
+        if (!isForDocText(el, e.target) || e.isComposing || !suggestionsOpen()
+            || e.ctrlKey || e.metaKey || e.altKey) return;
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            e.preventDefault();
+            e.stopPropagation();
+            suggestionNav.navigated = true;
+            setActiveSuggestion(suggestionNav.index + (e.key === 'ArrowDown' ? 1 : -1));
+        } else if ((e.key === 'Enter' || e.key === 'Tab') && suggestionNav.navigated) {
+            // Only an explicit arrow choice is accepted. Untouched, Enter still ends
+            // the word and breaks the line (the bubble-phase handler closes the popup).
+            e.preventDefault();
+            e.stopPropagation();
+            suggestionNav.accept(suggestionNav.index);
         }
+    }, true);
+
+    el.addEventListener('keydown', async function (e) {
         if (isForDocText(el, e.target) && !e.isComposing
             && (WORD_LEAVING_KEYS.has(e.key) || ((e.ctrlKey || e.metaKey) && e.key.length === 1))) {
             // Enter / navigation / paste / cut / undo: the word is no longer being typed.
@@ -791,7 +797,7 @@ function attachTransliteration(el) {
         e.preventDefault();
         if (suggestionsOpen()) {
             // Commit the highlighted option plus a space.
-            suggestionNav.accept(suggestionNav.index, ' ');
+            suggestionNav.accept(suggestionNav.index, true);
             return;
         }
         const value = getEditableText(el);
@@ -906,10 +912,18 @@ function showSuggestions(suggestions, wordStart, wordEnd, targetEl) {
     suggestionsBox.style.top = boxTop + 'px';
 
     const rows = [];
-    const accept = (i, suffix = '') => {
+    /**
+     * Insert option `i` in place of the typed word, followed by a space so the
+     * next word can be typed at once. The space is skipped when whitespace already
+     * follows, unless the user pressed Space themselves. (Words are whitespace-
+     * delimited, so punctuation is part of the word and never follows it.)
+     */
+    const accept = (i, forceSpace = false) => {
+        const next = getEditableText(targetEl).charAt(wordEnd);
+        const addSpace = forceSpace || !(next && /\s/.test(next));
         // Hide first so diary reflow is not skipped by translitOwnsInput().
         dismissSuggestions();
-        replaceEditableRange(targetEl, wordStart, wordEnd, suggestions[i] + suffix);
+        replaceEditableRange(targetEl, wordStart, wordEnd, suggestions[i] + (addSpace ? ' ' : ''));
         if (!getFieldForEditor(targetEl)) {
             targetEl.dispatchEvent(new Event('input', { bubbles: true }));
         }
@@ -927,7 +941,7 @@ function showSuggestions(suggestions, wordStart, wordEnd, targetEl) {
         suggestionsBox.appendChild(div);
         rows.push(div);
     });
-    suggestionNav = { items: rows, index: 0, accept };
+    suggestionNav = { items: rows, index: 0, navigated: false, accept };
     setActiveSuggestion(0);
     suggestionsBox.style.display = 'block';
 
