@@ -13,10 +13,12 @@ export default defineConfig({
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
   forbidOnly: !!process.env.CI,
-  /* Retry on CI only */
-  retries: process.env.CI ? 2 : 0,
-  /* Opt out of parallel tests on CI. */
-  workers: process.env.CI ? 1 : undefined,
+  /* Retry on CI only. One retry still absorbs a runner hiccup; two just
+   * hid flakiness and tripled the cost of a real failure. */
+  retries: process.env.CI ? 1 : 0,
+  /* Two workers per runner (GitHub-hosted runners have 2+ cores); sharding
+   * across jobs in test.yml supplies the rest of the parallelism. */
+  workers: process.env.CI ? 2 : undefined,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   reporter: 'html',
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
@@ -49,12 +51,13 @@ export default defineConfig({
       testMatch: '**/responsive/**',
     },
     {
-      // Exactly on the breakpoint: `(max-width: 768px)` still matches here, so
-      // this pins the boundary that off-by-one CSS edits break.
+      // Exactly on the boundary: `(max-width: 1023px)` still matches here, so
+      // this pins the last mobile width, the one off-by-one CSS edits break.
+      // (A tablet gets the mobile layout; there is no tablet layout.)
       name: 'tablet',
       use: {
         ...devices['Desktop Chrome'],
-        viewport: { width: 768, height: 1024 },
+        viewport: { width: 1023, height: 1024 },
         hasTouch: true,
       },
       testMatch: '**/responsive/**',

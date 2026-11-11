@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test';
 
 /**
- * Runs under the `mobile` (393px) and `tablet` (768px) projects — both inside
- * the `(max-width: 768px)` branch that four modules key off and that nothing
+ * Runs under the `mobile` (393px) and `tablet` (1023px) projects — both inside
+ * the `(max-width: 1023px)` mobile layout that four modules key off and that nothing
  * covered before. Rendering and mobile layout are this repo's most-repaired
  * area, so these assert the branch's observable contract rather than pixels;
  * the pixel side lives in tests/visual/.

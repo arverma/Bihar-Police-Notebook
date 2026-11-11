@@ -48,7 +48,7 @@ body.app-shell {
 }
 
 /* Desktop: subtle workspace recentering when History is open */
-@media (min-width: 1025px) {
+@media (min-width: 1024px) {
     body.app-shell.sidebar-open .main-content {
         padding-left: calc(var(--layout-sidebar-nudge) + var(--safe-left));
     }
@@ -200,184 +200,277 @@ body.app-shell {
 
 .sidebar-content {
     flex: 1;
-    padding: 16px;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 12px 12px 0;
+    overflow: hidden;
+}
+
+/* Fixed above the scrolling list: New + search stay in reach. */
+.sidebar-top {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-bottom: 8px;
+}
+
+.sidebar-content > .history-list {
+    flex: 1;
+    min-height: 0;
     overflow-y: auto;
     overflow-x: hidden;
+    overscroll-behavior: contain;
+    margin-inline: -4px;
+    padding-inline: 4px;
 }
 
-.sidebar-header {
-    display: flex;
-    margin-bottom: 4px;
-}
-
-/* [ New document (fills the row) ] [ Drive sync ] */
-.sidebar-actions {
+/* Row 1: [ Diary v ] [ + New diary ]  — type switcher, then the one primary action */
+.sidebar-new-row {
     display: flex;
     align-items: center;
     gap: 8px;
-    width: 100%;
 }
 
-.sidebar-actions .drive-menu {
-    left: auto;
-    right: 0;
-}
-
-/* Shared chrome for History action icons — matches .switch-btn */
-.sidebar-actions #backupBtn,
-.sidebar-actions .add-template-btn {
-    appearance: none;
-    background: var(--brand-white);
-    color: var(--brand-primary);
-    border: 1px solid var(--color-border-light);
-    border-radius: 8px;
-    width: 36px;
-    height: 36px;
-    padding: 0;
-    margin: 0;
-    font-size: 0.9em;
-    cursor: pointer;
-    box-shadow: var(--shadow-light);
-    /* No color transition — status red/green should snap clearly */
-    transition: border-color 0.15s ease, background 0.15s ease,
-        box-shadow 0.15s ease, transform 0.15s ease;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-}
-
-.sidebar-actions #backupBtn:hover,
-.sidebar-actions .add-template-btn:hover {
-    background: var(--color-hover-brand);
-    box-shadow: var(--shadow-medium);
-    transform: translateY(-1px);
-}
-
-.sidebar-actions #backupBtn:active,
-.sidebar-actions .add-template-btn:active {
-    transform: translateY(0);
-}
-
-.sidebar-actions #backupBtn .btn-icon {
-    width: 20px;
-    height: 20px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.sidebar-actions #backupBtn .backup-glyph {
-    display: block;
-    width: 20px;
-    height: 20px;
-    background-color: currentColor;
-    -webkit-mask: url("../images/cloud-sync.svg") center / contain no-repeat;
-    mask: url("../images/cloud-sync.svg") center / contain no-repeat;
-}
-
-.sidebar-actions #backupBtn .backup-glyph[hidden],
-.sidebar-actions #backupBtn .backup-spinner[hidden] {
-    display: none !important;
-}
-
-.sidebar-actions #backupBtn .backup-spinner {
-    color: currentColor;
-    font-size: 16px;
-}
-
-/*
- * The sync state is a dot on the corner, not the border, so the button stays
- * the same chrome as its neighbours. Every state also changes the button's
- * title and aria-label (main.js), so colour is never the only signal.
- */
-.sidebar-actions #backupBtn {
-    position: relative;
-}
-
-.sidebar-actions #backupBtn::after {
-    content: '';
-    position: absolute;
-    top: -4px;
-    right: -4px;
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    border: 2px solid var(--brand-white);
-    background: var(--color-error);
-    box-sizing: border-box;
-    pointer-events: none;
-}
-
-/* Disconnected / error — red (the default dot) */
-
-/* Syncing — brand blue + spin */
-.sidebar-actions #backupBtn[data-backup="syncing"] {
-    cursor: wait;
-}
-
-.sidebar-actions #backupBtn[data-backup="syncing"]::after {
-    background: var(--brand-primary);
-}
-
-/* Connected & idle — green */
-.sidebar-actions #backupBtn[data-backup="ready"]::after {
-    background: #2e7d32;
-}
-
-.sidebar-actions #backupBtn[data-backup="ready"].is-sync-success {
-    animation: backup-ready-pulse 0.55s ease;
-}
-
-@keyframes backup-ready-pulse {
-    0% { transform: scale(1); box-shadow: var(--shadow-light); }
-    40% { transform: scale(1.08); box-shadow: 0 0 0 4px rgba(46, 125, 50, 0.22); }
-    100% { transform: scale(1); box-shadow: var(--shadow-light); }
-}
-
-.sidebar-actions .add-template-btn {
+.sidebar-new-row .add-template-btn {
     flex: 1 1 auto;
-    width: auto;
     min-width: 0;
+    height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     gap: 8px;
     padding: 0 14px;
+    border: 1px solid var(--brand-primary);
+    border-radius: 10px;
     background: var(--brand-primary);
-    border-color: var(--brand-primary);
     color: var(--brand-white);
     font: 600 14px/1 "Roboto", Helvetica, sans-serif;
+    cursor: pointer;
 }
 
-.sidebar-actions .add-template-btn:hover {
-    background: var(--brand-primary);
+.sidebar-new-row .add-template-btn:hover {
     filter: brightness(1.15);
 }
 
-.sidebar-actions .add-template-btn .new-doc-label {
+.sidebar-new-row .add-template-btn:focus-visible {
+    outline: 2px solid var(--brand-primary);
+    outline-offset: 2px;
+}
+
+.sidebar-new-row .add-template-btn .new-doc-label {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
-.sidebar-actions .add-template-btn .plus-icon {
+.sidebar-new-row .add-template-btn .plus-icon i {
+    color: currentColor;
+    font-size: 14px;
+}
+
+/* Row 2: search, full width */
+.sidebar-top .history-search {
+    width: 100%;
+    margin: 0;
+}
+
+.type-switch {
+    position: relative;
+    flex: none;
+}
+
+.type-switch-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 40px;
+    padding: 0 12px;
+    border: 1px solid var(--color-border-light);
+    border-radius: 10px;
+    background: var(--brand-white);
+    color: var(--brand-primary);
+    font: 500 14px/1 "Roboto", Helvetica, sans-serif;
+    cursor: pointer;
+}
+
+.type-switch-btn i {
+    font-size: 10px;
+}
+
+.type-switch-btn:hover {
+    background: var(--color-hover-brand);
+}
+
+.type-switch-btn:focus-visible {
+    outline: 2px solid var(--brand-primary);
+    outline-offset: 2px;
+}
+
+/* Shared popover menu (type switcher, row actions) */
+.pop-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 1200;
+    min-width: 160px;
+    padding: 4px;
+    display: flex;
+    flex-direction: column;
+    background: var(--brand-white);
+    border: 1px solid var(--color-border-light);
+    border-radius: 10px;
+    box-shadow: var(--shadow-medium);
+}
+
+.pop-menu[hidden] {
+    display: none !important;
+}
+
+.pop-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 40px;
+    padding: 8px 12px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--brand-primary);
+    font: 500 14px/1.2 "Roboto", Helvetica, sans-serif;
+    text-align: left;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.pop-menu-item i {
+    width: 16px;
+    text-align: center;
+    color: currentColor;
+}
+
+.pop-menu-item:hover,
+.pop-menu-item:focus-visible {
+    background: var(--color-hover-brand);
+    outline: none;
+}
+
+.pop-menu-item[aria-checked="true"] {
+    background: rgba(5, 35, 97, 0.08);
+    font-weight: 700;
+}
+
+.pop-menu-danger {
+    color: #b3261e;
+}
+
+/* The row menu is one shared element placed next to the clicked button. */
+.row-menu {
+    position: fixed;
+    top: 0;
+    left: 0;
+}
+
+/* Footer: backup status on the left, Trash on the right */
+.sidebar-footer {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px calc(6px + var(--safe-bottom, 0px));
+    border-top: 1px solid var(--color-border-lighter);
+}
+
+.sidebar-footer .drive-control {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.sidebar-footer .drive-menu {
+    top: auto;
+    bottom: calc(100% + 6px);
+    left: 0;
+    right: auto;
+}
+
+/* Backup status line: icon + words, never just a coloured dot. */
+.sidebar-footer #backupBtn {
+    width: 100%;
+    height: 40px;
+    padding: 0 10px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 8px;
+    border: none;
+    border-radius: 10px;
+    background: transparent;
+    box-shadow: none;
+    color: var(--color-text-secondary);
+    font: 500 13px/1.2 "Roboto", Helvetica, sans-serif;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.sidebar-footer #backupBtn:hover {
+    background: var(--color-hover-brand);
+    box-shadow: none;
+}
+
+.sidebar-footer #backupBtn:focus-visible {
+    outline: 2px solid var(--brand-primary);
+    outline-offset: -2px;
+}
+
+.sidebar-footer #backupBtn .btn-icon {
+    flex: none;
+    width: 18px;
+    height: 18px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    line-height: 1;
 }
 
-.sidebar-actions .add-template-btn .plus-icon i {
-    color: currentColor;
-    font-size: 15px;
+.sidebar-footer #backupBtn .backup-glyph {
+    width: 18px;
+    height: 18px;
+}
+
+.sidebar-footer #backupBtn .backup-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* State colours darkened to stay readable as small text on white. */
+.sidebar-footer #backupBtn[data-backup="needs-auth"],
+.sidebar-footer #backupBtn[data-backup="error"] {
+    color: #b3261e;
+    border: none;
+}
+
+.sidebar-footer #backupBtn[data-backup="syncing"] {
+    color: var(--brand-primary);
+    border: none;
+    cursor: wait;
+}
+
+.sidebar-footer #backupBtn[data-backup="ready"] {
+    color: #2e7d32;
+    border: none;
+}
+
+.sidebar-footer #backupBtn[data-backup="ready"].is-sync-success {
+    animation: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .sidebar-actions #backupBtn[data-backup="ready"].is-sync-success {
-        animation: none;
-    }
-
-    .sidebar-actions #backupBtn:hover,
-    .sidebar-actions .add-template-btn:hover {
-        transform: none;
+    .sidebar-new-row .add-template-btn:hover {
+        filter: none;
     }
 }
 

@@ -66,9 +66,13 @@ Every document row (both `letter` and `diary` stores) carries these fields along
 3. On next push: `uploadDocFile` sends a `PATCH /upload` to the existing Drive file id.
 4. `markSynced` updates `syncedAt` to now.
 
-### Document deleted locally (user presses delete)
+### Document moved to Trash
 
-1. `softDeleteDocumentById` sets `deletedAt = now`, `updated_at = now`, clears `syncError`. The row stays in IndexedDB as a **tombstone** — invisible to normal document lists (`getDocuments` filters `deletedAt` rows out).
+The History delete button sets `trashedAt`; the row is kept whole and `needsBackup` returns `false` for it. Nothing uploads and the Drive copy is untouched. **Restore** clears `trashedAt` and bumps `updated_at` (the document backs up again). A remote edit pulled in while trashed updates the content but keeps the row in Trash.
+
+### Document deleted locally ("Delete forever" in Trash)
+
+1. `purgeTrashedDocumentById` (via `deleteTrashedForever`) clears `trashedAt` and sets `deletedAt = now`, `updated_at = now`, clears `syncError`. The row stays in IndexedDB as a **tombstone** — invisible to normal document lists (`getDocuments` filters `deletedAt` rows out).
 2. `needsBackup` returns `true` (syncedAt < deletedAt).
 3. On next push: tombstone is uploaded to Drive with `deleted: true` in the JSON payload.
 4. After successful upload, `hardDeleteById` removes the row from IndexedDB — the tombstone is purged locally.

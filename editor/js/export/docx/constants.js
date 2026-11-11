@@ -4,7 +4,6 @@
  */
 
 export const TWIPS_PER_PX = 15;
-export const EMU_PER_PX = 9525;
 
 /** A4 with the editor's 12.7mm (0.5in) margins. */
 export const PAGE = { width: 11906, height: 16838, margin: 720 };

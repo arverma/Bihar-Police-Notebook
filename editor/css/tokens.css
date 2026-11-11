@@ -27,7 +27,7 @@
     --filename-max: 420px;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1023px) {
     :root {
         --layout-header-h-multi: 56px;
         --layout-header-h: var(--layout-header-h-multi);

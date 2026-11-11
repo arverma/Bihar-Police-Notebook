@@ -18,8 +18,8 @@ flowchart TB
 
 | Mode | Behavior |
 |------|----------|
-| Desktop / tablet | Auto fit-to-width; no pinch UI |
-| Mobile ≤768px | Pinch zoom, double-tap fit ↔ 100%, **Fit** chip when zoomed away from fit |
+| Desktop (≥1024px) | Auto fit-to-width; no pinch UI |
+| Mobile (<1024px, tablets included) | Pinch zoom, double-tap fit ↔ 100%, **Fit** chip when zoomed away from fit |
 | Print | Transform disabled; real A4 |
 
 Layout after scale uses a **negative margin** collapse (not a fixed clipped height), so multi-page diaries are not cut off mid-page.

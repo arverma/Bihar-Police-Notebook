@@ -21,7 +21,7 @@ Architecture and how the pieces fit together. For everyday use (opening the app,
 | [Drive backup](components/drive-backup.md) | Optional Google Drive sync |
 | [Hinglish typing](components/typing.md) | Transliteration suggestions |
 | Punctuation Panel | Toolbar dropdown of common Hindi/English punctuation; a click inserts the mark at the cursor (copies it when no field is focused) |
-| [Dictation](components/dictation.md) | In-app microphone (desktop/tablet) |
+| [Dictation](components/dictation.md) | In-app microphone (desktop) |
 | [Page preview](components/page-preview.md) | On-screen fit / pinch zoom |
 | [Diary pagination manual tests](manual-tests/diary-pagination.md) | Manual checklist to run locally after any pager change |
 | [Word export manual tests](manual-tests/word-export.md) | Manual checklist (real Word) after any exporter change |

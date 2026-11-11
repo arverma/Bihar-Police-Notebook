@@ -1,6 +1,6 @@
 # Voice dictation (बोलकर लिखें)
 
-In-app microphone for desktop and tablet, at the right end of the format toolbar in the top bar. On phones (**≤768px**) it is hidden — use the keyboard’s microphone instead.
+In-app microphone for the desktop layout, at the right end of the format toolbar in the top bar. On the mobile layout (**<1024px**, tablets included) it is hidden — use the keyboard’s microphone instead.
 
 Modules: `editor/js/dictation.js` (engine), `dictation-ui.js` (toolbar mic / sheets).
 

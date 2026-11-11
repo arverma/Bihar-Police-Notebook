@@ -34,10 +34,10 @@
     </script>
     <link rel="icon" type="image/png" sizes="32x32" href="images/favicon.png">
     <link rel="apple-touch-icon" sizes="128x128" href="images/icon128.png">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;500;700&display=swap"
         rel="stylesheet">
+    <link rel="stylesheet" href="css/icons.css">
     <link rel="stylesheet" href="css/editor.css">
     <link rel="stylesheet" href="css/tokens.css">
     <link rel="stylesheet" href="css/layout-shell.css">
@@ -54,7 +54,7 @@
                 <div class="header-brand">
                     <button class="switch-btn" type="button" title="Show document history"
                         aria-label="Show document history" aria-pressed="false">
-                        <span class="switch-icon" aria-hidden="true"></span>
+                        <i class="fas fa-panel-left switch-icon" aria-hidden="true"></i>
                     </button>
                     <img src="images/bihar-police-logo.svg" alt="Bihar Police logo" class="bihar-police-logo-header" width="32"
                         height="32">
@@ -153,51 +153,91 @@
     <div class="app-body">
         <aside class="sidebar" id="sidebar" aria-hidden="true">
             <div class="sidebar-content">
-                <div class="segmented sidebar-doc-type" id="templateSegment" role="group" aria-label="Document type">
-                    <button type="button" class="segment-btn" data-template="letter" title="Letter layout"
-                        aria-pressed="false">Letter</button>
-                    <button type="button" class="segment-btn is-active" data-template="diary" title="Diary layout"
-                        aria-pressed="true">Diary</button>
-                </div>
-                <div class="sidebar-header">
-                    <div class="sidebar-actions">
+                <div class="sidebar-top">
+                    <!-- Row 1: document type switcher, then the one primary action. -->
+                    <div class="sidebar-new-row">
+                        <div class="type-switch">
+                            <button type="button" class="type-switch-btn" id="typeSwitchBtn" aria-controls="templateSegment"
+                                aria-label="Document type: Diary">
+                                <span class="type-switch-label">Diary</span>
+                                <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                            </button>
+                            <div class="pop-menu" id="templateSegment" role="menu" aria-label="Document type" hidden>
+                                <button type="button" role="menuitemradio" aria-checked="false" class="pop-menu-item"
+                                    data-template="letter" title="Letter layout"><i class="fas fa-envelope" aria-hidden="true"></i><span>Letter</span></button>
+                                <button type="button" role="menuitemradio" aria-checked="true" class="pop-menu-item"
+                                    data-template="diary" title="Diary layout"><i class="fas fa-book-open" aria-hidden="true"></i><span>Diary</span></button>
+                            </div>
+                        </div>
                         <button class="add-template-btn" type="button" title="Start a new document">
                             <span class="plus-icon"><i class="fas fa-plus" aria-hidden="true"></i></span>
                             <span class="new-doc-label">New diary</span>
                         </button>
-                        <div class="drive-control" id="driveControl">
-                            <button type="button" class="action-btn backup-btn" id="backupBtn" data-backup="needs-auth"
-                                title="Connect to back up" aria-label="Connect to back up" aria-haspopup="true"
-                                aria-expanded="false">
-                                <span class="btn-icon">
-                                    <span class="backup-glyph" aria-hidden="true"></span>
-                                    <i class="fas fa-spinner backup-spinner" hidden aria-hidden="true"></i>
-                                </span>
-                            </button>
-                            <div class="drive-menu" id="driveMenu" hidden>
-                                <div class="drive-menu-email" id="driveEmailLabel" hidden></div>
-                                <button type="button" class="drive-menu-item" id="driveSyncNewBtn">
-                                    Sync new
-                                </button>
-                                <button type="button" class="drive-menu-item" id="driveSyncNowBtn">
-                                    Sync all
-                                </button>
-                                <button type="button" class="drive-menu-item" id="driveDisconnectBtn">
-                                    Disconnect
-                                </button>
-                            </div>
-                        </div>
+                    </div>
+
+                    <!-- Row 2: search. -->
+                    <div class="history-search" role="search">
+                        <i class="fas fa-search history-search-icon" aria-hidden="true"></i>
+                        <input type="search" id="historySearch" class="history-search-input" autocomplete="off"
+                            placeholder="Search diaries" aria-label="Search documents"
+                            aria-controls="historyList">
+                        <button type="button" class="history-search-clear" id="historySearchClear" hidden
+                            aria-label="Clear search"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+                    </div>
+                    <p class="visually-hidden" id="historySearchStatus" role="status" aria-live="polite"></p>
+                </div>
+                <div class="history-list" id="historyList" role="region" aria-label="Document history"></div>
+            </div>
+
+            <!-- Quiet footer: backup status (opens the same sync menu) and Trash. -->
+            <div class="sidebar-footer">
+                <div class="drive-control" id="driveControl">
+                    <button type="button" class="action-btn backup-btn" id="backupBtn" data-backup="needs-auth"
+                        title="Connect to back up" aria-label="Connect to back up" aria-haspopup="true"
+                        aria-expanded="false">
+                        <span class="btn-icon">
+                            <i class="fas fa-cloud-arrow-up backup-glyph" aria-hidden="true"></i>
+                            <i class="fas fa-spinner backup-spinner" hidden aria-hidden="true"></i>
+                        </span>
+                        <span class="backup-label" id="backupLabel">Back up to Drive</span>
+                    </button>
+                    <div class="drive-menu" id="driveMenu" hidden>
+                        <div class="drive-menu-email" id="driveEmailLabel" hidden></div>
+                        <button type="button" class="drive-menu-item has-icon" id="driveSyncNewBtn">
+                            <i class="fas fa-cloud-arrow-up" aria-hidden="true"></i><span>Sync new</span>
+                        </button>
+                        <button type="button" class="drive-menu-item has-icon" id="driveSyncNowBtn">
+                            <i class="fas fa-rotate" aria-hidden="true"></i><span>Sync all</span>
+                        </button>
+                        <button type="button" class="drive-menu-item has-icon" id="driveDisconnectBtn">
+                            <i class="fas fa-right-from-bracket" aria-hidden="true"></i><span>Disconnect</span>
+                        </button>
                     </div>
                 </div>
-                <div class="history-list" role="region" aria-label="Document history"></div>
+                <button type="button" class="trash-trigger" id="trashBtn" aria-haspopup="dialog" aria-label="Trash, 0 items">
+                    <i class="fas fa-trash-can" aria-hidden="true"></i>
+                    <span>Trash</span>
+                    <span class="trash-count" id="trashCount" hidden>0</span>
+                </button>
             </div>
+
         </aside>
+
+        <!-- One shared menu for every History row's "..." button. -->
+        <div class="pop-menu row-menu" id="rowMenu" role="menu" aria-label="Document actions" hidden>
+            <button type="button" role="menuitem" class="pop-menu-item pop-menu-danger" data-action="trash">
+                <i class="fas fa-trash" aria-hidden="true"></i><span>Move to Trash</span>
+            </button>
+            <button type="button" role="menuitem" class="pop-menu-item" data-action="docx">
+                <i class="fas fa-file-word" aria-hidden="true"></i><span>Download Word</span>
+            </button>
+        </div>
 
         <main class="main-content">
             <div class="editor-stage" id="editorStage">
-                <button type="button" class="page-fit-chip" id="pageFitChip" hidden title="Fit page to width"
+                <button type="button" class="page-fit-chip has-icon" id="pageFitChip" hidden title="Fit page to width"
                     aria-label="Fit page to width">
-                    Fit
+                    <i class="fas fa-expand" aria-hidden="true"></i><span>Fit</span>
                 </button>
                 <div class="editor-scale" id="editorScale">
                     <!-- Letter Editor (hidden by default) — A4 page cards -->
@@ -242,8 +282,7 @@
     <template id="diaryPageTemplate">
         <div class="diary-page">
             <div class="diary-page-chrome screen-only">
-                <button type="button" class="diary-header-toggle" aria-pressed="true" title="Hide page header">Hide
-                    header</button>
+                <button type="button" class="diary-header-toggle has-icon" aria-pressed="true" title="Hide page header"><i class="fas fa-eye-slash" aria-hidden="true"></i><span>Hide header</span></button>
                 <button type="button" class="diary-page-delete" title="Delete this page" aria-label="Delete this page">
                     <i class="fas fa-trash"></i>
                 </button>
@@ -336,14 +375,26 @@
 
     <div id="suggestions" class="suggestions-box"></div>
 
+    <dialog id="trashDialog" class="trash-dialog" aria-labelledby="trashTitle">
+        <div class="trash-header">
+            <h2 id="trashTitle">Trash</h2>
+            <button type="button" class="trash-close" data-action="close" aria-label="Close Trash"><i class="fas fa-xmark" aria-hidden="true"></i></button>
+        </div>
+        <p class="trash-description">Documents stay here until you delete them forever.</p>
+        <input type="search" data-role="search" class="trash-search" autocomplete="off"
+            placeholder="Search deleted documents" aria-label="Search Trash">
+        <p class="visually-hidden" data-role="status" role="status" aria-live="polite"></p>
+        <ul class="trash-list" data-role="list" aria-label="Deleted documents"></ul>
+    </dialog>
+
     <dialog id="unsupportedDocDialog" class="unsupported-dialog" aria-labelledby="unsupportedDocTitle">
         <h2 id="unsupportedDocTitle">Older document format</h2>
         <p data-role="name"></p>
         <p class="unsupported-dialog-hint">Deleting removes it from this device and from Drive backup.</p>
         <div class="unsupported-dialog-actions">
-            <button type="button" class="unsupported-dialog-keep" data-action="keep">Keep</button>
+            <button type="button" class="unsupported-dialog-keep has-icon" data-action="keep"><i class="fas fa-check" aria-hidden="true"></i><span>Keep</span></button>
             <button type="button" class="unsupported-dialog-danger" data-action="delete-all" hidden></button>
-            <button type="button" class="unsupported-dialog-danger" data-action="delete">Delete document</button>
+            <button type="button" class="unsupported-dialog-danger has-icon" data-action="delete"><i class="fas fa-trash" aria-hidden="true"></i><span>Delete document</span></button>
         </div>
     </dialog>
     <script type="module" src="js/main.js"></script>

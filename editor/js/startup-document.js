@@ -20,6 +20,9 @@ export function newestFirst(docs) {
     return [...docs].sort((a, b) => historyDate(b) - historyDate(a));
 }
 
+/** A document that is neither deleted nor in Trash. */
+const isLive = (d) => !d.deletedAt && !d.trashedAt;
+
 /**
  * @param {object} p
  * @param {'letter'|'diary'} p.lastType   template in use last time (default diary)
@@ -29,9 +32,9 @@ export function newestFirst(docs) {
  * @returns {{ open: object } | { create: 'letter'|'diary' }}
  */
 export function pickStartupDocument({ lastType, lastDoc, historyDocs, canOpen }) {
-    if (lastDoc && !lastDoc.deletedAt && lastDoc.type === lastType && canOpen(lastDoc)) {
+    if (lastDoc && isLive(lastDoc) && lastDoc.type === lastType && canOpen(lastDoc)) {
         return { open: lastDoc };
     }
-    const top = newestFirst(historyDocs).find((d) => !d.deletedAt && canOpen(d));
+    const top = newestFirst(historyDocs).find((d) => isLive(d) && canOpen(d));
     return top ? { open: top } : { create: lastType };
 }

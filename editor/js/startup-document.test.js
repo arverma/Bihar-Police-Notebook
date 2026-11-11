@@ -24,6 +24,11 @@ describe('pickStartupDocument', () => {
         expect(pickStartupDocument({ lastType: 'diary', lastDoc: old, historyDocs: [old, ...history], canOpen }).open.id).toBe(2);
     });
 
+    test('a trashed last document is not reopened', () => {
+        const trashed = doc(9, '2026-10-02T10:00:00Z', { trashedAt: '2026-10-02T11:00:00Z' });
+        expect(pickStartupDocument({ lastType: 'diary', lastDoc: trashed, historyDocs: [trashed, ...history], canOpen }).open.id).toBe(2);
+    });
+
     test('skips documents this version cannot open', () => {
         const newestOld = doc(7, '2026-12-01T10:00:00Z', { unopenable: true });
         expect(pickStartupDocument({ lastType: 'diary', lastDoc: null, historyDocs: [newestOld, ...history], canOpen }).open.id).toBe(2);
