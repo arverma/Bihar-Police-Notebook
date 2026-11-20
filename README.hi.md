@@ -8,7 +8,7 @@
 **ऐप खोलें:** [https://bpdiary.arverma.dev/](https://bpdiary.arverma.dev/)  
 (*bpdiary* बिहार पुलिस नोटबुक का वेब पता है।)
 
-बनाया [Aman Ranjan Verma](https://arverma.dev) ने। यह भी देखें: [ConText Editor](https://editor.arverma.dev)।
+[Aman Ranjan Verma](https://arverma.dev) द्वारा बनाया गया। यह भी देखें: [ConText Editor](https://editor.arverma.dev)।
 
 ## आप क्या कर सकते हैं
 
