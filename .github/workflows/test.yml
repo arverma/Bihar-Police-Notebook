@@ -47,6 +47,9 @@ jobs:
   e2e:
     name: E2E (chromium ${{ matrix.shard }})
     runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.62.1-noble
+      options: --user 1001
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -59,8 +62,6 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - name: Install Playwright browsers (Chromium)
-        run: npx playwright install --with-deps chromium
       - name: E2E tests (Playwright - desktop, mobile, tablet)
         run: npm run test:e2e -- --shard=${{ matrix.shard }}
       - name: Upload Playwright report
@@ -76,6 +77,9 @@ jobs:
   webkit:
     name: E2E (WebKit)
     runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.62.1-noble
+      options: --user 1001
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -84,8 +88,6 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - name: Install Playwright browsers (WebKit)
-        run: npx playwright install --with-deps webkit
       - run: npm run test:webkit
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
@@ -101,6 +103,9 @@ jobs:
   visual:
     name: Visual regression
     runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.62.1-noble
+      options: --user 1001
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -109,8 +114,6 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - name: Install Playwright browsers (Chromium)
-        run: npx playwright install --with-deps chromium
       - run: npm run test:visual
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
