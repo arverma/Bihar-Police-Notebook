@@ -3,10 +3,16 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Hindi](https://img.shields.io/badge/ह-Hindi%20Documentation-orange.svg)](README.hi.md)
 
-**Bihar Police Notebook** helps you write Hindi letters and FIR case diaries in the browser. Type in everyday Romanized Hindi (Hinglish) on a computer, or use your phone’s keyboard. Your work is saved on this device; you can optionally back it up to your own Google Drive.
+**Bihar Police Notebook** (also called BP Diary) is a free, independent browser tool that helps you write Hindi letters and FIR case diaries. Type in everyday Romanized Hindi (Hinglish) on a computer, or use your phone's keyboard. Your work is saved on this device; you can optionally back it up to your own Google Drive.
+
+**This is not an official Bihar Police product.** It is a free independent tool built to help investigating officers.
 
 **Open the app:** [https://bpdiary.arverma.dev/](https://bpdiary.arverma.dev/)  
 (*bpdiary* is just the web address for Bihar Police Notebook.)
+
+**Guides:**
+- [How to write a case diary in Hindi](https://bpdiary.arverma.dev/guide/case-diary-kaise-likhein) (हिंदी में)
+- [Bihar Police case diary format](https://bpdiary.arverma.dev/guide/bihar-police-case-diary-format) (English)
 
 Made by [Aman Ranjan Verma](https://arverma.dev). Also see [ConText Editor](https://editor.arverma.dev).
 

@@ -4,10 +4,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BP Diary — Hindi Case Diary &amp; Letter Writing Tool</title>
+    <title>BP Diary: Bihar Police case diary writing in Hindi</title>
     <meta name="description"
-        content="BP Diary is a free, browser-based Hindi case diary and official letter writing tool for Bihar Police Investigating Officers (sub-inspectors and inspectors), with A4 printing, PDF export, and optional Google Drive backup.">
+        content="BP Diary is a free browser tool to write Bihar Police case diaries and letters in Hindi, with A4 print, PDF export and local saving.">
     <link rel="canonical" href="https://bpdiary.arverma.dev/">
+    <meta property="og:locale" content="hi_IN">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://bpdiary.arverma.dev/">
     <meta property="og:title" content="BP Diary — Hindi Case Diary &amp; Letter Writing Tool">
@@ -23,17 +24,83 @@
     <script type="application/ld+json">
         {
             "@context": "https://schema.org",
-            "@type": "SoftwareApplication",
-            "name": "BP Diary",
-            "description": "A browser-based Hindi case diary and official letter writing tool for Bihar Police Investigating Officers.",
-            "applicationCategory": "BusinessApplication",
-            "operatingSystem": "Web browser",
-            "url": "https://bpdiary.arverma.dev/",
-            "offers": {
-                "@type": "Offer",
-                "price": "0",
-                "priceCurrency": "INR"
-            }
+            "@graph": [
+                {
+                    "@type": "WebApplication",
+                    "name": "BP Diary",
+                    "description": "A browser-based Hindi case diary and official letter writing tool for Bihar Police Investigating Officers.",
+                    "applicationCategory": "BusinessApplication",
+                    "url": "https://bpdiary.arverma.dev/",
+                    "inLanguage": ["hi", "en"],
+                    "isAccessibleForFree": true,
+                    "offers": {
+                        "@type": "Offer",
+                        "price": "0",
+                        "priceCurrency": "INR"
+                    },
+                    "author": {
+                        "@type": "Person",
+                        "@id": "https://arverma.dev/#person",
+                        "name": "Aman Ranjan Verma",
+                        "url": "https://arverma.dev/"
+                    },
+                    "sameAs": [
+                        "https://github.com/arverma/Bihar-Police-Notebook",
+                        "https://arverma.dev/projects/bihar-police-notebook/"
+                    ]
+                },
+                {
+                    "@type": "WebSite",
+                    "@id": "https://bpdiary.arverma.dev/#website",
+                    "url": "https://bpdiary.arverma.dev/",
+                    "name": "BP Diary"
+                },
+                {
+                    "@type": "FAQPage",
+                    "mainEntity": [
+                        {
+                            "@type": "Question",
+                            "name": "What is BP Diary?",
+                            "acceptedAnswer": {
+                                "@type": "Answer",
+                                "text": "BP Diary is a free browser tool to write Bihar Police case diaries and letters in Hindi, with A4 print, PDF export and local saving."
+                            }
+                        },
+                        {
+                            "@type": "Question",
+                            "name": "Is BP Diary free?",
+                            "acceptedAnswer": {
+                                "@type": "Answer",
+                                "text": "Yes, BP Diary is completely free to use with no hidden charges."
+                            }
+                        },
+                        {
+                            "@type": "Question",
+                            "name": "Is BP Diary an official Bihar Police product?",
+                            "acceptedAnswer": {
+                                "@type": "Answer",
+                                "text": "No, BP Diary is an independent tool. Official work is done in CCTNS. For official services, visit the CCTNS citizen portal."
+                            }
+                        },
+                        {
+                            "@type": "Question",
+                            "name": "Where is my data stored?",
+                            "acceptedAnswer": {
+                                "@type": "Answer",
+                                "text": "Your data is stored on your device. Google Drive backup is optional and goes to your personal Google Drive."
+                            }
+                        },
+                        {
+                            "@type": "Question",
+                            "name": "How do I write a case diary in Hindi?",
+                            "acceptedAnswer": {
+                                "@type": "Answer",
+                                "text": "Use Hinglish typing (type in English letters to get Hindi suggestions), or use voice typing on desktop. The app provides Hindi punctuation and formatting tools."
+                            }
+                        }
+                    ]
+                }
+            ]
         }
     </script>
     <link rel="icon" type="image/png" sizes="32x32" href="images/favicon.png">
@@ -260,16 +327,50 @@
                 </summary>
                 <div class="seo-intro-content">
                     <h1>BP Diary: Hindi case diary and letter writing</h1>
+                    <p lang="hi">बिहार पुलिस केस डायरी और पत्र हिंदी में लिखें</p>
                     <p>
-                        BP Diary is a browser-based writing tool for Bihar Police case diaries and official letters.
-                        Write in Hindi using Romanized Hindi or your device keyboard, format your document, and keep
-                        your work saved on your device.
+                        BP Diary is a free browser tool to write Bihar Police case diaries and letters in Hindi, 
+                        with A4 print, PDF export and local saving. Write in Hindi using Hinglish typing or 
+                        voice typing, format your document, and keep your work saved on your device.
                     </p>
+                    
+                    <h2>What BP Diary does</h2>
+                    <ul>
+                        <li><strong>Hindi typing via Hinglish</strong>: Type in English letters and get Hindi suggestions instantly</li>
+                        <li><strong>Voice typing on desktop</strong>: Speak in Hindi and see it typed automatically</li>
+                        <li><strong>A4 print and PDF</strong>: Export print-ready case diaries and letters in standard A4 format</li>
+                        <li><strong>Local saving with optional Google Drive backup</strong>: Your data stays on your device, with optional cloud backup to your personal Google Drive</li>
+                    </ul>
+
+                    <h2>Questions people ask</h2>
+                    <dl>
+                        <dt><strong>What is BP Diary? / BP Diary क्या है?</strong></dt>
+                        <dd>BP Diary is a free browser tool to write Bihar Police case diaries and letters in Hindi, with A4 print, PDF export and local saving. / BP Diary बिहार पुलिस केस डायरी और पत्र हिंदी में लिखने का एक मुफ्त ब्राउज़र टूल है।</dd>
+                        
+                        <dt><strong>Is BP Diary free? / क्या BP Diary मुफ्त है?</strong></dt>
+                        <dd>Yes, BP Diary is completely free to use with no hidden charges. / हाँ, BP Diary पूरी तरह से मुफ्त है, कोई छुपा हुआ शुल्क नहीं है।</dd>
+                        
+                        <dt><strong>Is it an official Bihar Police product? / क्या यह आधिकारिक बिहार पुलिस उत्पाद है?</strong></dt>
+                        <dd>No, BP Diary is an independent tool. Official work is done in CCTNS. For official services, visit the <a href="https://citizen.cctnsservices.in/" rel="noopener" target="_blank">CCTNS citizen portal</a>. / नहीं, BP Diary एक स्वतंत्र टूल है। आधिकारिक काम CCTNS में होता है।</dd>
+                        
+                        <dt><strong>Where is my data stored? / मेरा डेटा कहाँ सेव होता है?</strong></dt>
+                        <dd>Your data is stored on your device. Google Drive backup is optional and goes to your personal Google Drive. / आपका डेटा आपके डिवाइस पर सेव होता है। Google Drive बैकअप वैकल्पिक है।</dd>
+                        
+                        <dt><strong>How do I write a case diary in Hindi? / केस डायरी हिंदी में कैसे लिखें?</strong></dt>
+                        <dd>Use Hinglish typing (type in English letters to get Hindi suggestions), or use voice typing on desktop. The app provides Hindi punctuation and formatting tools. See our <a href="/guide/case-diary-kaise-likhein">Hindi guide</a> for details. / Hinglish टाइपिंग का उपयोग करें या डेस्कटॉप पर आवाज़ से लिखें।</dd>
+                    </dl>
+                    
                     <p>
-                        Prepare A4-ready documents, print them or save them as PDFs, and optionally back up copies to
-                        your own Google Drive. Click on <a class="seo-help-link" href="/help"
-                            aria-label="Open BP Diary help">?</a> to know more details.
+                        <strong>Not an official Bihar Police product.</strong> For official services, visit the 
+                        <a href="https://citizen.cctnsservices.in/" rel="noopener" target="_blank">CCTNS citizen portal</a>.
                     </p>
+                    
+                    <p>
+                        Learn more: <a href="/guide/case-diary-kaise-likhein">Hindi guide on writing case diaries</a> | 
+                        <a href="/guide/bihar-police-case-diary-format">Bihar Police case diary format</a> | 
+                        <a href="/help">Help and privacy</a>
+                    </p>
+                    
                     <div class="seo-links" aria-label="Project links">
                         <a class="seo-site-link" href="https://arverma.dev/">https://arverma.dev</a>
                         <a class="seo-github-link" href="https://github.com/arverma/Bihar-Police-Notebook"
