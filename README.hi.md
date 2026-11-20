@@ -8,6 +8,8 @@
 **ऐप खोलें:** [https://bpdiary.arverma.dev/](https://bpdiary.arverma.dev/)  
 (*bpdiary* बिहार पुलिस नोटबुक का वेब पता है।)
 
+बनाया [Aman Ranjan Verma](https://arverma.dev) ने। यह भी देखें: [ConText Editor](https://editor.arverma.dev)।
+
 ## आप क्या कर सकते हैं
 
 - **पत्र** और **केस-डायरी** लिखें जो A4 जैसे प्रिंट हों

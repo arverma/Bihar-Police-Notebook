@@ -8,6 +8,8 @@
 **Open the app:** [https://bpdiary.arverma.dev/](https://bpdiary.arverma.dev/)  
 (*bpdiary* is just the web address for Bihar Police Notebook.)
 
+Made by [Aman Ranjan Verma](https://arverma.dev). Also see [ConText Editor](https://editor.arverma.dev).
+
 ## What you can do
 
 - Write **letters** and **case diaries** that print like A4 paper
